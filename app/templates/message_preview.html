@@ -1,6 +1,184 @@
 {% extends 'base.html' %}
+
 {% block page_name %}Проверка{% endblock %}
+
 {% block content %}
-<div class='hero-title'><h1>Проверка данных</h1><p class='subtitle'>Проверка</p></div>
-<div class='grid two-grid'><div class='panel'><h2>Распознано</h2><p><b>Адрес:</b> {{ parsed.address }}</p><p><b>Квартира:</b> {{ parsed.apartment }}</p><p><b>Телефоны:</b> {{ parsed.phones }}</p><p><b>Ключи:</b> {{ parsed.key_numbers }}</p></div><div class='panel'><h2>Панели</h2>{% if panels %}<table><tr><th>Адрес</th><th>Панель</th><th>MAC</th></tr>{% for p in panels %}<tr><td>{{ p.address }}</td><td>{{ p.name }}</td><td>{{ p.mac }}</td></tr>{% endfor %}</table>{% else %}<p class='warn'>Панели по адресу не найдены.</p>{% endif %}</div></div><div class='panel'><h2>Ключи</h2><table><tr><th>Номер</th><th>HEX</th><th>Статус</th></tr>{% for k in keys %}<tr><td>{{ k.number }}</td><td>{{ k.item.hex_value if k.item else '—' }}</td><td>{% if k.item %}<span class='badge success'>Найден</span>{% else %}<span class='badge error'>Не найден</span>{% endif %}</td></tr>{% endfor %}</table></div><div class='panel'><form method='post' action='/message/write'><input type='hidden' name='address' value='{{ parsed.address }}'><input type='hidden' name='apartment' value='{{ parsed.apartment }}'><input type='hidden' name='key_numbers' value='{{ parsed.key_numbers|join(" ") }}'><button type='submit'>Прописать в CRM</button><a class='btn' href='/message'>Назад</a></form></div>
+<div class="hero-title">
+    <h1>Проверка данных</h1>
+    <p class="subtitle">
+        Проверьте распознанные данные и выберите панели для записи
+    </p>
+</div>
+
+<div class="message-preview-grid">
+
+    <div class="panel preview-summary">
+        <h2>Распознано</h2>
+
+        <div class="key-info-list">
+            <div class="key-info-row">
+                <span>Адрес</span>
+                <b>{{ parsed.address or '—' }}</b>
+            </div>
+
+            <div class="key-info-row">
+                <span>Квартира</span>
+                <b>{{ parsed.apartment or '—' }}</b>
+            </div>
+
+            <div class="key-info-row">
+                <span>Телефоны</span>
+                <b>{{ parsed.phones|join(', ') if parsed.phones else '—' }}</b>
+            </div>
+
+            <div class="key-info-row">
+                <span>Ключи</span>
+                <b>{{ parsed.key_numbers|join(', ') if parsed.key_numbers else '—' }}</b>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel panels-select">
+        <div class="panels-head">
+            <div>
+                <h2>Панели</h2>
+                <p class="subtitle">Выберите панели для записи ключей</p>
+            </div>
+
+            {% if panels %}
+            <div class="panel-actions">
+                <button type="button" class="btn-small" id="select-all-panels">
+                    Выбрать все
+                </button>
+                <button type="button" class="btn-small btn-ghost" id="clear-all-panels">
+                    Снять все
+                </button>
+            </div>
+            {% endif %}
+        </div>
+
+        {% if panels %}
+        <div class="panel-list preview-panel-list">
+            {% for p in panels %}
+            <label class="panel-option">
+                <input
+                    type="checkbox"
+                    name="panel_ids_preview"
+                    value="{{ p.id }}"
+                    checked
+                >
+
+                <span class="panel-option-body">
+                    <span class="panel-option-title">
+                        {{ p.entrance or '—' }}
+                    </span>
+
+                    <span class="panel-option-meta">
+                        {{ p.address }}
+                    </span>
+
+                    <span class="panel-option-mac">
+                        {{ p.mac }}
+                    </span>
+                </span>
+            </label>
+            {% endfor %}
+        </div>
+        {% else %}
+            <p class="warn">Панели по адресу не найдены.</p>
+        {% endif %}
+    </div>
+
+</div>
+
+<div class="panel preview-keys-panel">
+    <h2>Ключи</h2>
+
+    <div class="table-scroll small-scroll">
+        <table>
+            <thead>
+            <tr>
+                <th>Номер</th>
+                <th>HEX</th>
+                <th>Статус</th>
+            </tr>
+            </thead>
+
+            <tbody>
+            {% for k in keys %}
+            <tr>
+                <td>{{ k.number }}</td>
+                <td>{{ k.item.hex_value if k.item else '—' }}</td>
+                <td>
+                    {% if k.item %}
+                        <span class="badge success">Найден</span>
+                    {% else %}
+                        <span class="badge error">Не найден</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="panel preview-actions-panel">
+    <form method="post" action="/message/write" id="messageWriteForm">
+        <input type="hidden" name="address" value="{{ parsed.address }}">
+        <input type="hidden" name="apartment" value="{{ parsed.apartment }}">
+        <input type="hidden" name="key_numbers" value="{{ parsed.key_numbers|join(' ') }}">
+
+        <div id="selectedPanelsContainer"></div>
+
+        <button type="submit">
+            Прописать на выбранные панели
+        </button>
+
+        <a class="btn" href="/message">
+            Назад
+        </a>
+    </form>
+</div>
+
+<script>
+    const selectAllBtn = document.getElementById("select-all-panels");
+    const clearAllBtn = document.getElementById("clear-all-panels");
+    const form = document.getElementById("messageWriteForm");
+    const selectedPanelsContainer = document.getElementById("selectedPanelsContainer");
+
+    function getPanelCheckboxes() {
+        return Array.from(document.querySelectorAll('input[name="panel_ids_preview"]'));
+    }
+
+    function setPanelCheckboxes(value) {
+        getPanelCheckboxes().forEach((checkbox) => {
+            checkbox.checked = value;
+        });
+    }
+
+    if (selectAllBtn) {
+        selectAllBtn.addEventListener("click", () => setPanelCheckboxes(true));
+    }
+
+    if (clearAllBtn) {
+        clearAllBtn.addEventListener("click", () => setPanelCheckboxes(false));
+    }
+
+    if (form) {
+        form.addEventListener("submit", function () {
+            selectedPanelsContainer.innerHTML = "";
+
+            getPanelCheckboxes()
+                .filter((checkbox) => checkbox.checked)
+                .forEach((checkbox) => {
+                    const input = document.createElement("input");
+                    input.type = "hidden";
+                    input.name = "panel_ids";
+                    input.value = checkbox.value;
+                    selectedPanelsContainer.appendChild(input);
+                });
+        });
+    }
+</script>
 {% endblock %}

@@ -10,107 +10,184 @@
     </p>
 </div>
 
-<div class="panel form-card">
-    <form method="post" action="/search">
-        <label>Что ищем</label>
-        <input
-            name="query"
-            value="{{ result.query if result else '' }}"
-            placeholder="39107, 363FFAD7, Санаторная 50Б, кв 47"
-            required
-        >
+<div class="search-layout">
 
-        <button type="submit">Найти</button>
-    </form>
+    <div class="panel search-form-panel">
+        <h2>Что ищем</h2>
+
+        <form method="post" action="/search">
+            <input
+                name="query"
+                value="{{ result.query if result else '' }}"
+                placeholder="39107, 363FFAD7, Тепличная 65, кв 10"
+                required
+            >
+
+            <button type="submit">
+                Найти
+            </button>
+        </form>
+    </div>
+
+    <div class="panel search-help-panel">
+        <h2>Можно искать</h2>
+
+        <div class="help-list">
+            <div>
+                <b>По ключу</b>
+                <span>39107 или 363FFAD7</span>
+            </div>
+
+            <div>
+                <b>По адресу</b>
+                <span>Тепличная 65</span>
+            </div>
+
+            <div>
+                <b>По квартире</b>
+                <span>10 или кв. 10</span>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 {% if result and result.key %}
-<div class="panel">
-    <h2>Ключ найден</h2>
+<div class="search-result-grid">
 
-    <table>
-        <tr>
-            <th>Номер</th>
-            <th>HEX</th>
-            <th>Адрес</th>
-            <th>Квартира</th>
-        </tr>
+    <div class="panel key-summary">
+        <div class="key-summary-head">
+            <div>
+                <h2>Ключ найден</h2>
+                <p class="subtitle">Последняя известная запись</p>
+            </div>
 
-        <tr>
-            <td>{{ result.key.number }}</td>
-            <td>{{ result.key.hex_value }}</td>
+            <div class="key-icon">
+                <svg viewBox="0 0 24 24">
+                    <circle cx="7.5" cy="14.5" r="4.5"></circle>
+                    <path d="m11 11 9-9M16 6l3 3M14 8l2 2"></path>
+                </svg>
+            </div>
+        </div>
 
-            {% if result.last_operation %}
-                <td>{{ result.last_operation.address }}</td>
-                <td>{{ result.last_operation.apartment or result.last_operation.flat_num }}</td>
-            {% else %}
-                <td>Нет записей</td>
-                <td>—</td>
-            {% endif %}
-        </tr>
+        <div class="key-info-list">
+            <div class="key-info-row">
+                <span>Номер</span>
+                <b>{{ result.key.number or 'HEX вручную' }}</b>
+            </div>
 
-    </table>
-</div>
-{% endif %}
+            <div class="key-info-row">
+                <span>HEX</span>
+                <b>{{ result.key.hex_value }}</b>
+            </div>
 
-{% if result and result.history %}
-<div class="panel">
-    <h2>История ключа</h2>
+            <div class="key-info-row">
+                <span>Адрес</span>
+                <b>{{ result.last_operation.address if result.last_operation else 'Нет записей' }}</b>
+            </div>
 
-    <table>
-        <tr>
-            <th>Дата</th>
-            <th>Адрес</th>
-            <th>Квартира</th>
-            <th>Панель</th>
-            <th>Статус</th>
-        </tr>
+            <div class="key-info-row">
+                <span>Квартира</span>
+                <b>
+                    {% if result.last_operation %}
+                        {{ result.last_operation.apartment or result.last_operation.flat_num or '—' }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </b>
+            </div>
+        </div>
+    </div>
 
-        {% for row in result.history %}
-        <tr>
-            <td>{{ row.created_at }}</td>
-            <td>{{ row.address }}</td>
-            <td>{{ row.apartment or row.flat_num }}</td>
-            <td>{{ row.panel_name }}</td>
-            <td>{{ row.status }}</td>
-        </tr>
-        {% endfor %}
-    </table>
+    {% if result.history %}
+    <div class="panel">
+        <h2>История ключа</h2>
+
+        <div class="table-scroll search-scroll">
+            <table>
+                <thead>
+                <tr>
+                    <th>Дата</th>
+                    <th>Адрес</th>
+                    <th>Квартира</th>
+                    <th>Панель</th>
+                    <th>Статус</th>
+                </tr>
+                </thead>
+
+                <tbody>
+                {% for row in result.history %}
+                <tr>
+                    <td>{{ row.created_at }}</td>
+                    <td>{{ row.address or '—' }}</td>
+                    <td>{{ row.apartment or row.flat_num or '—' }}</td>
+                    <td>{{ row.panel_name or '—' }}</td>
+                    <td>
+                        {% if row.status == 'DRY_RUN' %}
+                            <span class="badge">DRY_RUN</span>
+                        {% elif row.status == 'ERROR' or row.status == 'NO_COOKIE' %}
+                            <span class="badge error">{{ row.status }}</span>
+                        {% else %}
+                            <span class="badge success">{{ row.status }}</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
 </div>
 {% endif %}
 
 {% if result and result.address_results %}
-<div class="panel">
+<div class="panel search-address-panel">
     <h2>Найдено по адресу / квартире</h2>
 
-    <table>
-        <tr>
-            <th>Дата</th>
-            <th>Ключ</th>
-            <th>HEX</th>
-            <th>Адрес</th>
-            <th>Квартира</th>
-            <th>Панель</th>
-            <th>Статус</th>
-        </tr>
+    <div class="table-scroll search-scroll">
+        <table>
+            <thead>
+            <tr>
+                <th>Дата</th>
+                <th>Ключ</th>
+                <th>HEX</th>
+                <th>Адрес</th>
+                <th>Квартира</th>
+                <th>Панель</th>
+                <th>Статус</th>
+            </tr>
+            </thead>
 
-        {% for row in result.address_results %}
-        <tr>
-            <td>{{ row.created_at }}</td>
-            <td>{{ row.printed_number }}</td>
-            <td>{{ row.hex_value }}</td>
-            <td>{{ row.address }}</td>
-            <td>{{ row.apartment or row.flat_num }}</td>
-            <td>{{ row.panel_name }}</td>
-            <td>{{ row.status }}</td>
-        </tr>
-        {% endfor %}
-    </table>
+            <tbody>
+            {% for row in result.address_results %}
+            <tr>
+                <td>{{ row.created_at }}</td>
+                <td>{{ row.printed_number or '—' }}</td>
+                <td>{{ row.hex_value or '—' }}</td>
+                <td>{{ row.address or '—' }}</td>
+                <td>{{ row.apartment or row.flat_num or '—' }}</td>
+                <td>{{ row.panel_name or '—' }}</td>
+                <td>
+                    {% if row.status == 'DRY_RUN' %}
+                        <span class="badge">DRY_RUN</span>
+                    {% elif row.status == 'ERROR' or row.status == 'NO_COOKIE' %}
+                        <span class="badge error">{{ row.status }}</span>
+                    {% else %}
+                        <span class="badge success">{{ row.status }}</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
 {% endif %}
 
 {% if result and not result.key and not result.history and not result.address_results %}
-<div class="panel">
+<div class="panel compact-alert">
     <h2 class="warn">Ничего не найдено</h2>
     <p>Проверь номер ключа, HEX, адрес или квартиру.</p>
 </div>

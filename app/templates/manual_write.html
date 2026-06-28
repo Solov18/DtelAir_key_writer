@@ -4,41 +4,72 @@
 
 {% block content %}
 <div class="hero-title">
-    <h1>Обычная запись ключа</h1>
-    <p class="subtitle">Введите номер ключа, HEX или полный код 000000HEX</p>
+    <h1>Обычная запись</h1>
+    <p class="subtitle">
+        Быстрая запись ключа по номеру, HEX или полному коду 000000HEX
+    </p>
 </div>
 
-<div class="panel form-card">
-    <form method="post" action="/write/manual/preview">
-        <label>Номер ключа или HEX</label>
-        <input
-            name="key_query"
-            value="{{ query }}"
-            placeholder="Например: 39107 или 363FFAD7"
-            required
-        >
+<div class="manual-form-grid">
 
-        <label>Адрес</label>
-        <input
-            name="address"
-            value="{{ address }}"
-            placeholder="Например: Санаторная 50Б Лит А"
-            required
-        >
+    <div class="panel manual-form-panel">
+        <h2>Данные для записи</h2>
 
-        <label>Квартира</label>
-        <input
-            name="apartment"
-            value="{{ apartment }}"
-            placeholder="Например: 47"
-        >
+        <form method="post" action="/write/manual/preview">
+            <label>Номер ключа или HEX</label>
+            <input
+                name="key_query"
+                value="{{ query }}"
+                placeholder="39107 или 363FFAD7"
+                required
+            >
 
-        <button type="submit">Проверить</button>
-    </form>
+            <label>Адрес</label>
+            <input
+                name="address"
+                value="{{ address }}"
+                placeholder="Санаторная 50Б Лит А"
+                required
+            >
+
+            <label>Квартира</label>
+            <input
+                name="apartment"
+                value="{{ apartment }}"
+                placeholder="47"
+            >
+
+            <button type="submit">
+                Проверить
+            </button>
+        </form>
+    </div>
+
+    <div class="panel manual-help-panel">
+        <h2>Как пользоваться</h2>
+
+        <div class="help-list">
+            <div>
+                <b>1. Введите ключ</b>
+                <span>Можно номер, HEX или полный код 000000HEX</span>
+            </div>
+
+            <div>
+                <b>2. Укажите адрес</b>
+                <span>Например: Тепличная 65 или Санаторная 50Б</span>
+            </div>
+
+            <div>
+                <b>3. Выберите панели</b>
+                <span>После проверки можно снять лишние панели</span>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 {% if error %}
-<div class="panel">
+<div class="panel compact-alert">
     <h2 class="warn">Проверьте данные</h2>
     <p>{{ error }}</p>
 </div>
@@ -51,7 +82,7 @@
         <div class="key-summary-head">
             <div>
                 <h2>Ключ найден</h2>
-                <p class="subtitle">Проверьте данные перед записью</p>
+                <p class="subtitle">Проверьте перед записью</p>
             </div>
 
             <div class="key-icon">
@@ -79,6 +110,11 @@
             </div>
 
             <div class="key-info-row">
+                <span>Адрес</span>
+                <b>{{ address or '—' }}</b>
+            </div>
+
+            <div class="key-info-row">
                 <span>Квартира</span>
                 <b>{{ apartment or '—' }}</b>
             </div>
@@ -88,14 +124,18 @@
     <div class="panel panels-select">
         <div class="panels-head">
             <div>
-                <h2>Панели по адресу</h2>
+                <h2>Панели</h2>
                 <p class="subtitle">Выберите панели для записи ключа</p>
             </div>
 
             {% if panels %}
             <div class="panel-actions">
-                <button type="button" class="btn-small" id="select-all-panels">Выбрать все</button>
-                <button type="button" class="btn-small btn-ghost" id="clear-all-panels">Снять все</button>
+                <button type="button" class="btn-small" id="select-all-panels">
+                    Выбрать все
+                </button>
+                <button type="button" class="btn-small btn-ghost" id="clear-all-panels">
+                    Снять все
+                </button>
             </div>
             {% endif %}
         </div>
@@ -107,7 +147,7 @@
             <input type="hidden" name="apartment" value="{{ apartment }}">
             <input type="hidden" name="inner" value="1">
 
-            <div class="panel-list">
+            <div class="panel-list preview-panel-list">
                 {% for p in panels %}
                 <label class="panel-option">
                     <input
@@ -119,11 +159,11 @@
 
                     <span class="panel-option-body">
                         <span class="panel-option-title">
-                            {{ p.entrance or p.name }}
+                            {{ p.entrance or '—' }}
                         </span>
 
                         <span class="panel-option-meta">
-                            {{ p.name }}
+                            {{ p.address }}
                         </span>
 
                         <span class="panel-option-mac">

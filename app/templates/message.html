@@ -1,6 +1,74 @@
 {% extends 'base.html' %}
+
 {% block page_name %}Из сообщения{% endblock %}
+
 {% block content %}
-<div class='hero-title'><h1>Из сообщения</h1><p class='subtitle'>Из сообщения</p></div>
-<div class='panel form-card'><form method='post' action='/message/preview'><label>Текст сообщения</label><textarea name='text' placeholder='Вставьте сюда сообщение из чата...' required></textarea><button type='submit'>Разобрать сообщение</button></form></div>
+<div class="message-page">
+
+    <div class="home-hero">
+        <div>
+            <h1>Из сообщения</h1>
+            <p class="subtitle">
+                Вставьте сообщение из чата — система найдёт адрес, квартиру и номера ключей
+            </p>
+        </div>
+    </div>
+
+    <div class="message-grid">
+
+        <div class="panel message-input-panel">
+            <h2>Текст сообщения</h2>
+
+            <form method="post" action="/message/preview">
+                <textarea
+                    name="text"
+                    class="message-textarea"
+                    placeholder="Например: Прописать 2 ключа №39107, №39300&#10;Тепличная улица д.65 кв 10&#10;+7 999 000-00-00"
+                    required
+                ></textarea>
+
+                <button type="submit">
+                    Разобрать сообщение
+                </button>
+            </form>
+        </div>
+
+        <div class="panel message-help-panel">
+            <h2>Что распознаётся</h2>
+
+            <div class="help-list">
+                <div>
+                    <b>Адрес</b>
+                    <span>улица, дом, корпус, литер</span>
+                </div>
+
+                <div>
+                    <b>Квартира</b>
+                    <span>кв. 10, квартира 10</span>
+                </div>
+
+                <div>
+                    <b>Ключи</b>
+                    <span>39107, 39300, 001101</span>
+                </div>
+
+                <div>
+                    <b>Телефон</b>
+                    <span>сохраняется для проверки</span>
+                </div>
+            </div>
+
+            <div class="message-example">
+                <b>Пример</b>
+                <p>
+                    Прописать 2 ключа платно стандарт №39107, №39300<br>
+                    Сочи, Тепличная улица д.65 кв.10<br>
+                    +7 999 000-00-00
+                </p>
+            </div>
+        </div>
+
+    </div>
+
+</div>
 {% endblock %}

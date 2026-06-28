@@ -48,8 +48,17 @@ def message_preview(request: Request, text: str = Form(...)):
     return templates.TemplateResponse('message_preview.html', {'request': request, 'text': text, 'parsed': parsed, 'keys': keys, 'panels': panels})
 
 @app.post('/message/write', response_class=HTMLResponse)
-def message_write(request: Request, address: str = Form(''), apartment: str = Form(''), key_numbers: str = Form('')):
-    panels = find_panels_by_address(address)
+def message_write(
+    request: Request,
+    address: str = Form(""),
+    apartment: str = Form(""),
+    key_numbers: str = Form(""),
+    panel_ids: list[int] = Form([]),
+):
+    if panel_ids:
+        panels = get_panels(panel_ids=panel_ids)
+    else:
+        panels = find_panels_by_address(address)
     all_results = []
     for n in [x.strip() for x in key_numbers.replace(',', ' ').split() if x.strip()]:
         item = find_key(n)

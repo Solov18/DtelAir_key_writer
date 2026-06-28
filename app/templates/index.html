@@ -1,37 +1,141 @@
 {% extends 'base.html' %}
+
 {% block page_name %}Главная{% endblock %}
+
 {% block content %}
-<div class="hero-title"><h1>Управление доступом</h1><p class="subtitle">Система управления ключами и панелями</p></div>
-<div class="grid actions-grid">
-  <div class="card action-card"><div class="icon-ring"><svg viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M8 9h8M8 13h5"/></svg></div><div><h2>1. Из сообщения</h2><p>Разобрать текст из чата и прописать ключи жильцу.</p></div><a class="btn" href="/message">Открыть</a></div>
-  <div class="card action-card"><div class="icon-ring"><svg viewBox="0 0 24 24"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg></div><div><h2>2. Сотрудники</h2><p>Записать ключ сотрудника на все панели или выборочно.</p></div><a class="btn" href="/employees">Открыть</a></div>
-  <div class="card action-card"><div class="icon-ring"><svg viewBox="0 0 24 24"><path d="M4 22V3h10v19M14 8h6v14"/><path d="M8 7h2M8 11h2M8 15h2M17 12h1M17 16h1"/></svg></div><div><h2>3. Управляющие компании</h2><p>Создать набор домов/входов для УК и писать ключи только туда.</p></div><a class="btn" href="/uk">Открыть</a></div>
-  <div class="card action-card">
-    <div class="icon-ring">
-        <svg viewBox="0 0 24 24"><circle cx="7.5" cy="14.5" r="4.5"/><path d="m11 11 9-9M16 6l3 3M14 8l2 2"/></svg>
-    </div>
+<div class="home-hero">
     <div>
-        <h2>Обычная запись</h2>
-        <p>Прописать ключ вручную по номеру или HEX-коду.</p>
+        <h1>Управление доступом</h1>
+        <p class="subtitle">Рабочее место оператора для записи ключей и управления панелями</p>
     </div>
-    <a class="btn" href="/write/manual">Открыть</a>
+
+    <div class="home-status">
+        <span class="dot green"></span>
+        <div>
+            <b>Система готова</b>
+            <small>Можно выполнять операции</small>
+        </div>
+    </div>
 </div>
 
-<div class="card action-card">
-    <div class="icon-ring">
-        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4.5 4.5"/></svg>
+<div class="home-main-grid">
+
+    <a class="home-action primary" href="/message">
+        <div class="home-action-icon">
+            <svg viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M8 9h8M8 13h5"/></svg>
+        </div>
+        <div>
+            <h2>Из сообщения</h2>
+            <p>Разобрать текст из чата и прописать ключи жильцу.</p>
+        </div>
+        <span>Открыть →</span>
+    </a>
+
+    <a class="home-action primary" href="/write/manual">
+        <div class="home-action-icon">
+            <svg viewBox="0 0 24 24"><circle cx="7.5" cy="14.5" r="4.5"/><path d="m11 11 9-9M16 6l3 3M14 8l2 2"/></svg>
+        </div>
+        <div>
+            <h2>Обычная запись</h2>
+            <p>Прописать ключ вручную по номеру или HEX-коду.</p>
+        </div>
+        <span>Открыть →</span>
+    </a>
+
+    <a class="home-action" href="/search">
+        <div class="home-action-icon">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4.5 4.5"/></svg>
+        </div>
+        <div>
+            <h2>Поиск ключа</h2>
+            <p>По номеру, HEX, адресу или квартире.</p>
+        </div>
+        <span>Открыть →</span>
+    </a>
+
+    <a class="home-action" href="/employees">
+        <div class="home-action-icon">
+            <svg viewBox="0 0 24 24"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+        <div>
+            <h2>Сотрудники</h2>
+            <p>Запись ключей на все панели или выборочно.</p>
+        </div>
+        <span>Открыть →</span>
+    </a>
+
+    <a class="home-action" href="/uk">
+        <div class="home-action-icon">
+            <svg viewBox="0 0 24 24"><path d="M4 22V3h10v19M14 8h6v14"/><path d="M8 7h2M8 11h2M8 15h2M17 12h1M17 16h1"/></svg>
+        </div>
+        <div>
+            <h2>Управляющие компании</h2>
+            <p>Группы домов и входов для УК.</p>
+        </div>
+        <span>Открыть →</span>
+    </a>
+
+    <a class="home-action" href="/panels">
+        <div class="home-action-icon">
+            <svg viewBox="0 0 24 24"><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg>
+        </div>
+        <div>
+            <h2>Панели / Адреса</h2>
+            <p>База адресов, входов и MAC-панелей.</p>
+        </div>
+        <span>Открыть →</span>
+    </a>
+
+</div>
+
+<div class="home-stats-grid">
+    <div class="home-stat">
+        <span>Ключей в базе</span>
+        <b>{{ stats['keys'] }}</b>
     </div>
-    <div>
-        <h2>Поиск ключа</h2>
-        <p>Найти ключ по номеру, HEX или полному коду 000000HEX.</p>
+
+    <div class="home-stat">
+        <span>Панелей в базе</span>
+        <b>{{ stats['panels'] }}</b>
     </div>
-    <a class="btn" href="/search">Открыть</a>
+
+    <div class="home-stat">
+        <span>Операций</span>
+        <b>{{ stats['logs'] }}</b>
+    </div>
 </div>
+
+<div class="home-bottom-grid">
+    <div class="panel home-panel">
+        <div class="panel-head">
+            <h2>Последние операции</h2>
+            <a class="btn btn-small" href="/log">Журнал</a>
+        </div>
+
+        <div class="operation-row">
+            <span class="dot green"></span>
+            <div>
+                <b>Готово к работе</b>
+                <p>Операции появятся после записи ключей.</p>
+            </div>
+            <span>Сегодня</span>
+            <span class="badge success">Активно</span>
+        </div>
+    </div>
+
+    <div class="panel home-panel">
+        <div class="panel-head">
+            <h2>Быстрые действия</h2>
+        </div>
+
+        <div class="home-quick-grid">
+            <a href="/keys">Импорт ключей</a>
+            <a href="/panels">Импорт панелей</a>
+            <a href="/panels">Добавить панель</a>
+            <a href="/employees">Сотрудники</a>
+            <a href="/uk">Группа УК</a>
+            <a href="/log">Журнал</a>
+        </div>
+    </div>
 </div>
-<div class="grid stats-grid">
-  <div class="card stat-card"><div class="icon-ring"><svg viewBox="0 0 24 24"><circle cx="7.5" cy="14.5" r="4.5"/><path d="m11 11 9-9M16 6l3 3M14 8l2 2"/></svg></div><div class="stat-text"><span>Ключей в базе</span><strong>{{ stats['keys'] }}</strong></div><div class="sparkline"></div></div>
-  <div class="card stat-card"><div class="icon-ring"><svg viewBox="0 0 24 24"><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg></div><div class="stat-text"><span>Панелей в базе</span><strong>{{ stats['panels'] }}</strong></div><div class="sparkline"></div></div>
-  <div class="card stat-card"><div class="icon-ring"><svg viewBox="0 0 24 24"><path d="M8 3h8l2 3v15H6V6z"/><path d="M9 11h6M9 15h6M9 19h3"/></svg></div><div class="stat-text"><span>Операций в журнале</span><strong>{{ stats['logs'] }}</strong></div><div class="sparkline"></div></div>
-</div>
-<div class="grid two-grid"><div class="panel"><div class="panel-head"><h2>Последние операции</h2><a class="btn" href="/log">Перейти в журнал</a></div><div class="operation-row"><span class="dot green"></span><div><b>Готово к работе</b><p>Операции появятся после записи ключей.</p></div><span>Сегодня</span><span class="badge success">Активно</span></div></div><div class="panel"><div class="panel-head"><h2>Быстрые действия</h2></div><div class="quick-grid"><a class="quick-action" href="/keys"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 8l5-5 5 5M5 21h14"/></svg><span>Импорт ключей</span></a><a class="quick-action" href="/panels"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 8l5-5 5 5M5 21h14"/></svg><span>Импорт панелей</span></a><a class="quick-action" href="/panels"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Добавить панель</span></a><a class="quick-action" href="/employees"><svg viewBox="0 0 24 24"><path d="M16 21a6 6 0 0 0-12 0"/><circle cx="10" cy="8" r="4"/><path d="M19 8v6M16 11h6"/></svg><span>Сотрудник</span></a><a class="quick-action" href="/uk"><svg viewBox="0 0 24 24"><path d="M4 22V3h10v19M14 8h6v14M18 13v6M15 16h6"/></svg><span>Группа УК</span></a><a class="quick-action" href="/log"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg><span>Журнал</span></a></div></div></div>
 {% endblock %}
