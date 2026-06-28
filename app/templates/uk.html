@@ -1,6 +1,184 @@
 {% extends 'base.html' %}
+
 {% block page_name %}УК{% endblock %}
+
 {% block content %}
-<div class='hero-title'><h1>Управляющие компании</h1><p class='subtitle'>УК</p></div>
-<div class='grid two-grid'><div class='panel'><h2>Создать / обновить группу УК</h2><form method='post' action='/uk/group'><label>Название УК</label><input name='name' required><label>Комментарий</label><input name='note'><table><tr><th></th><th>Адрес</th><th>Панель</th><th>MAC</th></tr>{% for p in panels %}<tr><td><input type='checkbox' name='panel_ids' value='{{ p.id }}'></td><td>{{ p.address }}</td><td>{{ p.name }}</td><td>{{ p.mac }}</td></tr>{% endfor %}</table><button type='submit'>Сохранить группу</button></form></div><div class='panel'><h2>Прописать ключ УК</h2><form method='post' action='/uk/write'><label>Группа УК</label><select name='group_id' required>{% for g in groups %}<option value='{{ g.id }}'>{{ g.name }}</option>{% endfor %}</select><label>Номера ключей</label><input name='key_values' required><label>flatNum</label><input name='flat_num' value='0'><label>inner</label><select name='inner'><option value='0'>0</option><option value='1'>1</option></select><button type='submit'>Прописать ключ УК</button></form><h2>Группы</h2><table><tr><th>ID</th><th>Название</th><th>Комментарий</th></tr>{% for g in groups %}<tr><td>{{ g.id }}</td><td>{{ g.name }}</td><td>{{ g.note }}</td></tr>{% endfor %}</table></div></div>
+<div class="hero-title">
+    <h1>Управляющие компании</h1>
+    <p class="subtitle">Группы панелей для управляющих компаний</p>
+</div>
+
+<div class="uk-layout">
+
+    <div class="panel uk-group-panel">
+        <h2>Создать / обновить группу</h2>
+
+        <form method="post" action="/uk/group">
+            <label>Название УК</label>
+            <input
+                name="name"
+                placeholder="Например: УК Ясногорская"
+                required
+            >
+
+            <label>Комментарий</label>
+            <input
+                name="note"
+                placeholder="Описание или примечание"
+            >
+
+            <div class="panels-head">
+                <div>
+                    <h2>Панели группы</h2>
+                    <p class="subtitle">Выберите дома и входы для этой УК</p>
+                </div>
+
+                <div class="panel-actions">
+                    <button type="button" class="btn-small" id="select-all-panels">
+                        Выбрать все
+                    </button>
+                    <button type="button" class="btn-small btn-ghost" id="clear-all-panels">
+                        Снять все
+                    </button>
+                </div>
+            </div>
+
+            <div class="panel-search uk-search">
+                <input
+                    type="text"
+                    id="ukPanelSearch"
+                    placeholder="Поиск по адресу, входу или MAC..."
+                    autocomplete="off"
+                >
+            </div>
+
+            <div class="panel-list uk-panel-list" id="ukPanelList">
+                {% for p in panels %}
+                <label class="panel-option">
+                    <input
+                        type="checkbox"
+                        name="panel_ids"
+                        value="{{ p.id }}"
+                    >
+
+                    <span class="panel-option-body">
+                        <span class="panel-option-title">
+                            {{ p.entrance or '—' }}
+                        </span>
+
+                        <span class="panel-option-meta">
+                            {{ p.address }}
+                        </span>
+
+                        <span class="panel-option-mac">
+                            {{ p.mac }}
+                        </span>
+                    </span>
+                </label>
+                {% endfor %}
+            </div>
+
+            <button type="submit" class="wide-action">
+                Сохранить группу
+            </button>
+        </form>
+    </div>
+
+    <div class="uk-side">
+
+        <div class="panel uk-write-panel">
+            <h2>Прописать ключ УК</h2>
+
+            <form method="post" action="/uk/write">
+                <label>Группа УК</label>
+                <select name="group_id" required>
+                    {% for g in groups %}
+                    <option value="{{ g.id }}">{{ g.name }}</option>
+                    {% endfor %}
+                </select>
+
+                <label>Номера ключей</label>
+                <input
+                    name="key_values"
+                    placeholder="39068, 39139"
+                    required
+                >
+
+                <label>Квартира / flatNum</label>
+                <input name="flat_num" value="0">
+
+                <input type="hidden" name="inner" value="0">
+
+                <button type="submit">
+                    Прописать ключ УК
+                </button>
+            </form>
+        </div>
+
+        <div class="panel uk-groups-panel">
+            <h2>Группы УК</h2>
+
+            <div class="table-scroll small-scroll">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Название</th>
+                        <th>Комментарий</th>
+                    </tr>
+                    </thead>
+
+                    <tbody>
+                    {% for g in groups %}
+                    <tr>
+                        <td>{{ g.id }}</td>
+                        <td>{{ g.name }}</td>
+                        <td>{{ g.note or '—' }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+    const selectAllBtn = document.getElementById("select-all-panels");
+    const clearAllBtn = document.getElementById("clear-all-panels");
+    const searchInput = document.getElementById("ukPanelSearch");
+    const panelList = document.getElementById("ukPanelList");
+
+    function getPanelCheckboxes() {
+        return Array.from(document.querySelectorAll('input[name="panel_ids"]'));
+    }
+
+    function setPanelCheckboxes(value) {
+        getPanelCheckboxes().forEach((checkbox) => {
+            checkbox.checked = value;
+        });
+    }
+
+    if (selectAllBtn) {
+        selectAllBtn.addEventListener("click", () => setPanelCheckboxes(true));
+    }
+
+    if (clearAllBtn) {
+        clearAllBtn.addEventListener("click", () => setPanelCheckboxes(false));
+    }
+
+    if (searchInput && panelList) {
+        searchInput.addEventListener("input", function () {
+            const query = this.value.toLowerCase().trim();
+
+            panelList.querySelectorAll(".panel-option").forEach((row) => {
+                row.style.display = row.innerText.toLowerCase().includes(query)
+                    ? ""
+                    : "none";
+            });
+        });
+    }
+</script>
 {% endblock %}

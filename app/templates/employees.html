@@ -1,6 +1,134 @@
 {% extends 'base.html' %}
+
 {% block page_name %}Сотрудники{% endblock %}
+
 {% block content %}
-<div class='hero-title'><h1>Сотрудники</h1><p class='subtitle'>Сотрудники</p></div>
-<div class='panel form-card'><form method='post' action='/employees/write'><label>Номер ключа / несколько номеров</label><input name='key_values' placeholder='39068, 39139' required><label>Куда прописывать</label><select name='scope'><option value='all'>На все панели</option><option value='employee_tag'>Только панели с тегом employee</option><option value='selected'>Выбрать панели вручную</option></select><label>Квартира / flatNum</label><input name='flat_num' value='0'><label>inner</label><select name='inner'><option value='0'>0</option><option value='1'>1</option></select><div class='panel'><h2>Выборочные панели</h2><table><tr><th></th><th>Адрес</th><th>Панель</th><th>MAC</th></tr>{% for p in panels %}<tr><td><input type='checkbox' name='panel_ids' value='{{ p.id }}'></td><td>{{ p.address }}</td><td>{{ p.name }}</td><td>{{ p.mac }}</td></tr>{% endfor %}</table></div><button type='submit'>Прописать сотруднику</button></form></div>
+<div class="hero-title">
+    <h1>Сотрудники</h1>
+    <p class="subtitle">Запись ключей сотрудников на все панели или выборочно</p>
+</div>
+
+<div class="employee-layout">
+
+    <div class="panel employee-form-panel">
+        <h2>Данные ключа</h2>
+
+        <form method="post" action="/employees/write">
+            <label>Номер ключа / несколько номеров</label>
+            <input
+                name="key_values"
+                placeholder="39068, 39139"
+                required
+            >
+
+            <label>Куда прописывать</label>
+            <select name="scope">
+                <option value="all">На все панели</option>
+                <option value="employee_tag">Только панели с тегом employee</option>
+                <option value="selected">Выбрать панели вручную</option>
+            </select>
+
+            <label>Квартира / flatNum</label>
+            <input name="flat_num" value="0">
+
+            <label>inner</label>
+            <select name="inner">
+                <option value="0">0</option>
+                <option value="1">1</option>
+            </select>
+
+            <button type="submit">
+                Прописать сотруднику
+            </button>
+    </div>
+
+    <div class="panel panels-select employee-panels-panel">
+        <div class="panels-head">
+            <div>
+                <h2>Выборочные панели</h2>
+                <p class="subtitle">Используется только при режиме “Выбрать панели вручную”</p>
+            </div>
+
+            <div class="panel-actions">
+                <button type="button" class="btn-small" id="select-all-panels">Выбрать все</button>
+                <button type="button" class="btn-small btn-ghost" id="clear-all-panels">Снять все</button>
+            </div>
+        </div>
+
+        <div class="panel-search employee-search">
+            <input
+                type="text"
+                id="employeePanelSearch"
+                placeholder="Поиск по адресу, входу или MAC..."
+                autocomplete="off"
+            >
+        </div>
+
+        <div class="panel-list employee-panel-list" id="employeePanelList">
+            {% for p in panels %}
+            <label class="panel-option">
+                <input
+                    type="checkbox"
+                    name="panel_ids"
+                    value="{{ p.id }}"
+                >
+
+                <span class="panel-option-body">
+                    <span class="panel-option-title">
+                        {{ p.entrance or '—' }}
+                    </span>
+
+                    <span class="panel-option-meta">
+                        {{ p.address }}
+                    </span>
+
+                    <span class="panel-option-mac">
+                        {{ p.mac }}
+                    </span>
+                </span>
+            </label>
+            {% endfor %}
+        </div>
+    </div>
+
+        </form>
+
+</div>
+
+<script>
+    const selectAllBtn = document.getElementById("select-all-panels");
+    const clearAllBtn = document.getElementById("clear-all-panels");
+    const searchInput = document.getElementById("employeePanelSearch");
+    const panelList = document.getElementById("employeePanelList");
+
+    function getPanelCheckboxes() {
+        return Array.from(document.querySelectorAll('input[name="panel_ids"]'));
+    }
+
+    function setPanelCheckboxes(value) {
+        getPanelCheckboxes().forEach((checkbox) => {
+            checkbox.checked = value;
+        });
+    }
+
+    if (selectAllBtn) {
+        selectAllBtn.addEventListener("click", () => setPanelCheckboxes(true));
+    }
+
+    if (clearAllBtn) {
+        clearAllBtn.addEventListener("click", () => setPanelCheckboxes(false));
+    }
+
+    if (searchInput && panelList) {
+        searchInput.addEventListener("input", function () {
+            const query = this.value.toLowerCase().trim();
+
+            panelList.querySelectorAll(".panel-option").forEach((row) => {
+                row.style.display = row.innerText.toLowerCase().includes(query)
+                    ? ""
+                    : "none";
+            });
+        });
+    }
+</script>
 {% endblock %}

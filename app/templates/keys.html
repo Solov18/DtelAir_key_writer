@@ -1,6 +1,129 @@
 {% extends 'base.html' %}
+
 {% block page_name %}База ключей{% endblock %}
+
 {% block content %}
-<div class='hero-title'><h1>База ключей</h1><p class='subtitle'>База ключей</p></div>
-<div class='panel form-card'><h2>Импорт Excel / CSV</h2><form method='post' action='/keys/import' enctype='multipart/form-data'><label>Файл с ключами</label><input type='file' name='file' required><button type='submit'>Импортировать ключи</button></form></div><div class='panel'><h2>Последние ключи</h2><table><tr><th>ID</th><th>Номер</th><th>HEX</th><th>Тип</th></tr>{% for k in keys %}<tr><td>{{ k.id }}</td><td>{{ k.number }}</td><td>{{ k.hex_value }}</td><td>{{ k.type }}</td></tr>{% endfor %}</table></div>
+<div class="hero-title">
+    <h1>База ключей</h1>
+    <p class="subtitle">Импорт и поиск ключей в локальной базе</p>
+</div>
+
+<div class="keys-layout">
+
+    <div class="panel keys-import-panel">
+        <h2>Импорт ключей</h2>
+
+        <p class="panels-help">
+            Загрузите Excel или CSV с колонками:
+            <b>номер</b>, <b>HEX</b>, <b>тип</b>.
+        </p>
+
+        <form method="post" action="/keys/import" enctype="multipart/form-data">
+            <label>Файл с ключами</label>
+
+            <input
+                type="file"
+                name="file"
+                accept=".xlsx,.xls,.xlsm,.csv"
+                required
+            >
+
+            <button type="submit">
+                Импортировать ключи
+            </button>
+        </form>
+    </div>
+
+    <div class="panel keys-help-panel">
+        <h2>Формат</h2>
+
+        <div class="help-list">
+            <div>
+                <b>Номер</b>
+                <span>39107 или 001101</span>
+            </div>
+
+            <div>
+                <b>HEX</b>
+                <span>363FFAD7</span>
+            </div>
+
+            <div>
+                <b>Тип</b>
+                <span>простой, бесплатный, стикер</span>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div class="panel keys-list-panel">
+    <div class="panel-list-head">
+        <div>
+            <h2>Последние ключи</h2>
+            <p class="subtitle">
+                Всего показано: <span id="keysFound">{{ keys|length }}</span>
+            </p>
+        </div>
+
+        <div class="panel-search">
+            <input
+                type="text"
+                id="keysSearch"
+                placeholder="Поиск по номеру, HEX или типу..."
+                autocomplete="off"
+            >
+        </div>
+    </div>
+
+    <div class="table-scroll">
+        <table id="keysTable">
+            <thead>
+            <tr>
+                <th>ID</th>
+                <th>Номер</th>
+                <th>HEX</th>
+                <th>Тип</th>
+            </tr>
+            </thead>
+
+            <tbody>
+            {% for k in keys %}
+            <tr>
+                <td>{{ k.id }}</td>
+                <td>{{ k.number }}</td>
+                <td>{{ k.hex_value }}</td>
+                <td>{{ k.key_type or '—' }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    const keysSearch = document.getElementById("keysSearch");
+    const keysTable = document.getElementById("keysTable");
+    const keysFound = document.getElementById("keysFound");
+
+    if (keysSearch && keysTable && keysFound) {
+        const rows = Array.from(keysTable.querySelectorAll("tbody tr"));
+
+        keysSearch.addEventListener("input", function () {
+            const query = this.value.toLowerCase().trim();
+            let visible = 0;
+
+            rows.forEach((row) => {
+                const match = row.innerText.toLowerCase().includes(query);
+                row.style.display = match ? "" : "none";
+
+                if (match) {
+                    visible += 1;
+                }
+            });
+
+            keysFound.textContent = visible;
+        });
+    }
+</script>
 {% endblock %}

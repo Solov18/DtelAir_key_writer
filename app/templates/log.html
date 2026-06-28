@@ -1,6 +1,99 @@
 {% extends 'base.html' %}
+
 {% block page_name %}Журнал{% endblock %}
+
 {% block content %}
-<div class='hero-title'><h1>Журнал операций</h1><p class='subtitle'>Журнал</p></div>
-<div class='panel'><table><tr><th>ID</th><th>Дата</th><th>Тип</th><th>Ключ</th><th>Панель</th><th>Статус</th><th>Ответ</th></tr>{% for r in rows %}<tr><td>{{ r.id }}</td><td>{{ r.created_at }}</td><td>{{ r.operation_type }}</td><td>{{ r.key_number }}</td><td>{{ r.panel_mac }}</td><td>{{ r.status }}</td><td>{{ r.message }}</td></tr>{% endfor %}</table></div>
+<div class="hero-title">
+    <h1>Журнал операций</h1>
+    <p class="subtitle">История записи ключей на панели</p>
+</div>
+
+<div class="panel log-panel">
+
+    <div class="panel-list-head">
+        <div>
+            <h2>Операции</h2>
+            <p class="subtitle">
+                Найдено: <span id="logFound">{{ rows|length }}</span>
+            </p>
+        </div>
+
+        <div class="panel-search">
+            <input
+                type="text"
+                id="logSearch"
+                placeholder="Поиск по ключу, адресу, квартире, панели..."
+                autocomplete="off"
+            >
+        </div>
+    </div>
+
+    <div class="table-scroll log-scroll">
+        <table id="logTable">
+            <thead>
+            <tr>
+                <th>ID</th>
+                <th>Дата</th>
+                <th>Тип</th>
+                <th>Ключ</th>
+                <th>HEX</th>
+                <th>Адрес</th>
+                <th>Квартира</th>
+                <th>Панель</th>
+                <th>Статус</th>
+            </tr>
+            </thead>
+
+            <tbody>
+            {% for r in rows %}
+            <tr>
+                <td>{{ r.id }}</td>
+                <td>{{ r.created_at }}</td>
+                <td>{{ r.mode or '—' }}</td>
+                <td>{{ r.printed_number or '—' }}</td>
+                <td>{{ r.hex_value or '—' }}</td>
+                <td>{{ r.address or '—' }}</td>
+                <td>{{ r.apartment or r.flat_num or '—' }}</td>
+                <td>{{ r.panel_name or r.mac or '—' }}</td>
+                <td>
+                    {% if r.status == 'DRY_RUN' %}
+                        <span class="badge dry-run">Тест</span>
+                    {% elif r.status == 'ERROR' or r.status == 'NO_COOKIE' %}
+                        <span class="badge error">{{ r.status }}</span>
+                    {% else %}
+                        <span class="badge success">{{ r.status }}</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    const logSearch = document.getElementById("logSearch");
+    const logTable = document.getElementById("logTable");
+    const logFound = document.getElementById("logFound");
+
+    if (logSearch && logTable && logFound) {
+        const rows = Array.from(logTable.querySelectorAll("tbody tr"));
+
+        logSearch.addEventListener("input", function () {
+            const query = this.value.toLowerCase().trim();
+            let visible = 0;
+
+            rows.forEach((row) => {
+                const match = row.innerText.toLowerCase().includes(query);
+                row.style.display = match ? "" : "none";
+
+                if (match) {
+                    visible += 1;
+                }
+            });
+
+            logFound.textContent = visible;
+        });
+    }
+</script>
 {% endblock %}
