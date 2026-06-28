@@ -1,0 +1,6 @@
+{% extends 'base.html' %}
+{% block page_name %}База ключей{% endblock %}
+{% block content %}
+<div class='hero-title'><h1>База ключей</h1><p class='subtitle'>База ключей</p></div>
+<div class='panel form-card'><h2>Импорт Excel / CSV</h2><form method='post' action='/keys/import' enctype='multipart/form-data'><label>Файл с ключами</label><input type='file' name='file' required><button type='submit'>Импортировать ключи</button></form></div><div class='panel'><h2>Последние ключи</h2><table><tr><th>ID</th><th>Номер</th><th>HEX</th><th>Тип</th></tr>{% for k in keys %}<tr><td>{{ k.id }}</td><td>{{ k.number }}</td><td>{{ k.hex_value }}</td><td>{{ k.type }}</td></tr>{% endfor %}</table></div>
+{% endblock %}

@@ -1,0 +1,169 @@
+{% extends 'base.html' %}
+
+{% block page_name %}Обычная запись{% endblock %}
+
+{% block content %}
+<div class="hero-title">
+    <h1>Обычная запись ключа</h1>
+    <p class="subtitle">Введите номер ключа, HEX или полный код 000000HEX</p>
+</div>
+
+<div class="panel form-card">
+    <form method="post" action="/write/manual/preview">
+        <label>Номер ключа или HEX</label>
+        <input
+            name="key_query"
+            value="{{ query }}"
+            placeholder="Например: 39107 или 363FFAD7"
+            required
+        >
+
+        <label>Адрес</label>
+        <input
+            name="address"
+            value="{{ address }}"
+            placeholder="Например: Санаторная 50Б Лит А"
+            required
+        >
+
+        <label>Квартира</label>
+        <input
+            name="apartment"
+            value="{{ apartment }}"
+            placeholder="Например: 47"
+        >
+
+        <button type="submit">Проверить</button>
+    </form>
+</div>
+
+{% if error %}
+<div class="panel">
+    <h2 class="warn">Проверьте данные</h2>
+    <p>{{ error }}</p>
+</div>
+{% endif %}
+
+{% if key %}
+<div class="manual-layout">
+
+    <div class="panel key-summary">
+        <div class="key-summary-head">
+            <div>
+                <h2>Ключ найден</h2>
+                <p class="subtitle">Проверьте данные перед записью</p>
+            </div>
+
+            <div class="key-icon">
+                <svg viewBox="0 0 24 24">
+                    <circle cx="7.5" cy="14.5" r="4.5"></circle>
+                    <path d="m11 11 9-9M16 6l3 3M14 8l2 2"></path>
+                </svg>
+            </div>
+        </div>
+
+        <div class="key-info-list">
+            <div class="key-info-row">
+                <span>Номер</span>
+                <b>{{ key.number or 'HEX вручную' }}</b>
+            </div>
+
+            <div class="key-info-row">
+                <span>HEX</span>
+                <b>{{ key.hex_value }}</b>
+            </div>
+
+            <div class="key-info-row">
+                <span>Тип</span>
+                <b>{{ key.key_type or 'Не указан' }}</b>
+            </div>
+
+            <div class="key-info-row">
+                <span>Квартира</span>
+                <b>{{ apartment or '—' }}</b>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel panels-select">
+        <div class="panels-head">
+            <div>
+                <h2>Панели по адресу</h2>
+                <p class="subtitle">Выберите панели для записи ключа</p>
+            </div>
+
+            {% if panels %}
+            <div class="panel-actions">
+                <button type="button" class="btn-small" id="select-all-panels">Выбрать все</button>
+                <button type="button" class="btn-small btn-ghost" id="clear-all-panels">Снять все</button>
+            </div>
+            {% endif %}
+        </div>
+
+        {% if panels %}
+        <form method="post" action="/write/manual/write">
+            <input type="hidden" name="key_query" value="{{ query }}">
+            <input type="hidden" name="address" value="{{ address }}">
+            <input type="hidden" name="apartment" value="{{ apartment }}">
+            <input type="hidden" name="inner" value="1">
+
+            <div class="panel-list">
+                {% for p in panels %}
+                <label class="panel-option">
+                    <input
+                        type="checkbox"
+                        name="panel_ids"
+                        value="{{ p.id }}"
+                        checked
+                    >
+
+                    <span class="panel-option-body">
+                        <span class="panel-option-title">
+                            {{ p.entrance or p.name }}
+                        </span>
+
+                        <span class="panel-option-meta">
+                            {{ p.name }}
+                        </span>
+
+                        <span class="panel-option-mac">
+                            {{ p.mac }}
+                        </span>
+                    </span>
+                </label>
+                {% endfor %}
+            </div>
+
+            <button type="submit" class="wide-action">
+                Прописать на выбранные панели
+            </button>
+        </form>
+        {% else %}
+            <p class="warn">Панели не найдены</p>
+        {% endif %}
+    </div>
+
+</div>
+
+<script>
+    const selectAllBtn = document.getElementById("select-all-panels");
+    const clearAllBtn = document.getElementById("clear-all-panels");
+
+    function setPanelCheckboxes(value) {
+        document
+            .querySelectorAll('input[name="panel_ids"]')
+            .forEach((checkbox) => {
+                checkbox.checked = value;
+            });
+    }
+
+    if (selectAllBtn) {
+        selectAllBtn.addEventListener("click", () => setPanelCheckboxes(true));
+    }
+
+    if (clearAllBtn) {
+        clearAllBtn.addEventListener("click", () => setPanelCheckboxes(false));
+    }
+</script>
+{% endif %}
+{% endblock %}

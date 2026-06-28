@@ -1,0 +1,6 @@
+{% extends 'base.html' %}
+{% block page_name %}Панели / Адреса{% endblock %}
+{% block content %}
+<div class='hero-title'><h1>Панели / Адреса</h1><p class='subtitle'>Панели / Адреса</p></div>
+<div class='grid two-grid'><div class='panel'><h2>Добавить панель</h2><form method='post' action='/panels/add'><label>Адрес</label><input name='address' required><label>Название панели</label><input name='name' required><label>MAC</label><input name='mac' required><label>Вход / подъезд</label><input name='entrance'><label>Теги</label><input name='tags'><button type='submit'>Сохранить</button></form></div><div class='panel'><h2>Импорт CSV</h2><form method='post' action='/panels/import' enctype='multipart/form-data'><label>CSV-файл</label><input type='file' name='file' required><button type='submit'>Импортировать панели</button></form></div></div><div class='panel'><h2>Список панелей</h2><table><tr><th>ID</th><th>Адрес</th><th>Вход</th><th>Панель</th><th>MAC</th><th>Теги</th></tr>{% for p in panels %}<tr><td>{{ p.id }}</td><td>{{ p.address }}</td><td>{{ p.entrance }}</td><td>{{ p.name }}</td><td>{{ p.mac }}</td><td>{{ p.tags }}</td></tr>{% endfor %}</table></div>
+{% endblock %}

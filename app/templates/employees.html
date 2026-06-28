@@ -1,0 +1,6 @@
+{% extends 'base.html' %}
+{% block page_name %}Сотрудники{% endblock %}
+{% block content %}
+<div class='hero-title'><h1>Сотрудники</h1><p class='subtitle'>Сотрудники</p></div>
+<div class='panel form-card'><form method='post' action='/employees/write'><label>Номер ключа / несколько номеров</label><input name='key_values' placeholder='39068, 39139' required><label>Куда прописывать</label><select name='scope'><option value='all'>На все панели</option><option value='employee_tag'>Только панели с тегом employee</option><option value='selected'>Выбрать панели вручную</option></select><label>Квартира / flatNum</label><input name='flat_num' value='0'><label>inner</label><select name='inner'><option value='0'>0</option><option value='1'>1</option></select><div class='panel'><h2>Выборочные панели</h2><table><tr><th></th><th>Адрес</th><th>Панель</th><th>MAC</th></tr>{% for p in panels %}<tr><td><input type='checkbox' name='panel_ids' value='{{ p.id }}'></td><td>{{ p.address }}</td><td>{{ p.name }}</td><td>{{ p.mac }}</td></tr>{% endfor %}</table></div><button type='submit'>Прописать сотруднику</button></form></div>
+{% endblock %}

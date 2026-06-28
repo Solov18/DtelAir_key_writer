@@ -1,0 +1,118 @@
+{% extends 'base.html' %}
+
+{% block page_name %}Универсальный поиск{% endblock %}
+
+{% block content %}
+<div class="hero-title">
+    <h1>Универсальный поиск</h1>
+    <p class="subtitle">
+        Поиск по номеру ключа, HEX, адресу или квартире
+    </p>
+</div>
+
+<div class="panel form-card">
+    <form method="post" action="/search">
+        <label>Что ищем</label>
+        <input
+            name="query"
+            value="{{ result.query if result else '' }}"
+            placeholder="39107, 363FFAD7, Санаторная 50Б, кв 47"
+            required
+        >
+
+        <button type="submit">Найти</button>
+    </form>
+</div>
+
+{% if result and result.key %}
+<div class="panel">
+    <h2>Ключ найден</h2>
+
+    <table>
+        <tr>
+            <th>Номер</th>
+            <th>HEX</th>
+            <th>Адрес</th>
+            <th>Квартира</th>
+        </tr>
+
+        <tr>
+            <td>{{ result.key.number }}</td>
+            <td>{{ result.key.hex_value }}</td>
+
+            {% if result.last_operation %}
+                <td>{{ result.last_operation.address }}</td>
+                <td>{{ result.last_operation.apartment or result.last_operation.flat_num }}</td>
+            {% else %}
+                <td>Нет записей</td>
+                <td>—</td>
+            {% endif %}
+        </tr>
+
+    </table>
+</div>
+{% endif %}
+
+{% if result and result.history %}
+<div class="panel">
+    <h2>История ключа</h2>
+
+    <table>
+        <tr>
+            <th>Дата</th>
+            <th>Адрес</th>
+            <th>Квартира</th>
+            <th>Панель</th>
+            <th>Статус</th>
+        </tr>
+
+        {% for row in result.history %}
+        <tr>
+            <td>{{ row.created_at }}</td>
+            <td>{{ row.address }}</td>
+            <td>{{ row.apartment or row.flat_num }}</td>
+            <td>{{ row.panel_name }}</td>
+            <td>{{ row.status }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+{% endif %}
+
+{% if result and result.address_results %}
+<div class="panel">
+    <h2>Найдено по адресу / квартире</h2>
+
+    <table>
+        <tr>
+            <th>Дата</th>
+            <th>Ключ</th>
+            <th>HEX</th>
+            <th>Адрес</th>
+            <th>Квартира</th>
+            <th>Панель</th>
+            <th>Статус</th>
+        </tr>
+
+        {% for row in result.address_results %}
+        <tr>
+            <td>{{ row.created_at }}</td>
+            <td>{{ row.printed_number }}</td>
+            <td>{{ row.hex_value }}</td>
+            <td>{{ row.address }}</td>
+            <td>{{ row.apartment or row.flat_num }}</td>
+            <td>{{ row.panel_name }}</td>
+            <td>{{ row.status }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+{% endif %}
+
+{% if result and not result.key and not result.history and not result.address_results %}
+<div class="panel">
+    <h2 class="warn">Ничего не найдено</h2>
+    <p>Проверь номер ключа, HEX, адрес или квартиру.</p>
+</div>
+{% endif %}
+{% endblock %}

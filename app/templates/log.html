@@ -1,0 +1,6 @@
+{% extends 'base.html' %}
+{% block page_name %}Журнал{% endblock %}
+{% block content %}
+<div class='hero-title'><h1>Журнал операций</h1><p class='subtitle'>Журнал</p></div>
+<div class='panel'><table><tr><th>ID</th><th>Дата</th><th>Тип</th><th>Ключ</th><th>Панель</th><th>Статус</th><th>Ответ</th></tr>{% for r in rows %}<tr><td>{{ r.id }}</td><td>{{ r.created_at }}</td><td>{{ r.operation_type }}</td><td>{{ r.key_number }}</td><td>{{ r.panel_mac }}</td><td>{{ r.status }}</td><td>{{ r.message }}</td></tr>{% endfor %}</table></div>
+{% endblock %}

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>{% block title %}Key Writer Simple{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand"><img src="/static/img/logo.png" alt="DTEL AIR"></div>
+    <nav class="sidebar-nav">
+      <a class="nav-item" href="/"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V21a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg><span>Главная</span></a>
+      <a class="nav-item" href="/message"><svg viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M8 9h8M8 13h5"/></svg><span>Из сообщения</span></a>
+      <a class="nav-item" href="/write/manual">
+    <svg viewBox="0 0 24 24"><circle cx="7.5" cy="14.5" r="4.5"/><path d="m11 11 9-9M16 6l3 3M14 8l2 2"/></svg>
+    <span>Обычная запись</span>
+</a>
+
+<a class="nav-item" href="/search">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4.5 4.5"/></svg>
+    <span>Универсальный поиск</span>
+</a>
+      <a class="nav-item" href="/employees"><svg viewBox="0 0 24 24"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg><span>Сотрудники</span></a>
+      <a class="nav-item" href="/uk"><svg viewBox="0 0 24 24"><path d="M4 22V3h10v19M14 8h6v14"/><path d="M8 7h2M8 11h2M8 15h2M17 12h1M17 16h1"/></svg><span>Управляющие компании</span></a>
+      <a class="nav-item" href="/panels"><svg viewBox="0 0 24 24"><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg><span>Панели / Адреса</span></a>
+      <a class="nav-item" href="/keys"><svg viewBox="0 0 24 24"><circle cx="7.5" cy="14.5" r="4.5"/><path d="m11 11 9-9M16 6l3 3M14 8l2 2"/></svg><span>База ключей</span></a>
+      <a class="nav-item" href="/log"><svg viewBox="0 0 24 24"><path d="M8 3h8l2 3v15H6V6z"/><path d="M9 11h6M9 15h6M9 19h3"/></svg><span>Журнал операций</span></a>
+    </nav>
+    <div class="sidebar-footer"><div>© DTEL AIR</div><div>Key Writer Simple</div><div>v2.0.0</div></div>
+  </aside>
+  <main class="main">
+    <header class="topbar">
+      <div class="topbar-left"><div class="burger"><span></span><span></span><span></span></div><div class="top-title">{% block page_name %}Главная{% endblock %}</div></div>
+      <div class="topbar-right">
+        <div class="top-info"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span id="live-time">--:--:--</span></div>
+        <div class="top-info"><svg viewBox="0 0 24 24"><path d="M4 5h16v16H4zM8 3v4M16 3v4M4 10h16"/></svg><span id="live-date">--.--.----</span></div>
+        <div class="notify"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 7h18s-3 0-3-7"/><path d="M10 21h4"/></svg><i></i></div>
+        <div class="user-pill"><svg viewBox="0 0 24 24"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg><span>Администратор</span></div>
+      </div>
+    </header>
+    <section class="content">{% block content %}{% endblock %}</section>
+  </main>
+</div>
+<script>
+function updateClock(){const n=new Date();document.getElementById('live-time').textContent=n.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit',second:'2-digit'});document.getElementById('live-date').textContent=n.toLocaleDateString('ru-RU')}updateClock();setInterval(updateClock,1000);const path=window.location.pathname;document.querySelectorAll('.nav-item').forEach(a=>{const h=a.getAttribute('href');if((h==='/'&&path==='/')||(h!=='/'&&path.startsWith(h)))a.classList.add('active')});
+</script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+{% extends 'base.html' %}
+{% block page_name %}Из сообщения{% endblock %}
+{% block content %}
+<div class='hero-title'><h1>Из сообщения</h1><p class='subtitle'>Из сообщения</p></div>
+<div class='panel form-card'><form method='post' action='/message/preview'><label>Текст сообщения</label><textarea name='text' placeholder='Вставьте сюда сообщение из чата...' required></textarea><button type='submit'>Разобрать сообщение</button></form></div>
+{% endblock %}

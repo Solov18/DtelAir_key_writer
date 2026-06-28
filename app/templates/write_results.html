@@ -1,0 +1,6 @@
+{% extends 'base.html' %}
+{% block page_name %}Результат{% endblock %}
+{% block content %}
+<div class='hero-title'><h1>{{ title }}</h1><p class='subtitle'>Результат</p></div>
+{% for block in all_results %}<div class='panel'><h2>Ключ {{ block.key.number }} → {{ block.key.hex_value }}</h2>{% if block.results %}<table><tr><th>Панель</th><th>MAC</th><th>Статус</th><th>Ответ</th></tr>{% for r in block.results %}<tr><td>{{ r.panel.name if r.panel else '' }}</td><td>{{ r.panel.mac if r.panel else '' }}</td><td>{% if r.ok %}<span class='badge success'>Успешно</span>{% else %}<span class='badge error'>Ошибка</span>{% endif %}</td><td>{{ r.message }}</td></tr>{% endfor %}</table>{% else %}<p class='warn'>Нет результатов.</p>{% endif %}</div>{% endfor %}<a class='btn' href='/'>На главную</a>
+{% endblock %}
