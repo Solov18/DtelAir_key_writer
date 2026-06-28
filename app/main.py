@@ -4,7 +4,15 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
 from .db import init_db, db
-from .services import parse_message, find_key, find_panels_by_address, write_key_to_panels, import_keys_file, import_panels_csv, get_panels
+from .services import (
+    parse_message,
+    find_key,
+    find_panels_by_address,
+    write_key_to_panels,
+    import_keys_file,
+    import_panels_excel,
+    get_panels,
+)
 from .settings import settings
 
 app = FastAPI(title='Key Writer Simple')
@@ -293,8 +301,12 @@ def panels_add(address: str = Form(...), name: str = Form(...), mac: str = Form(
 
 @app.post('/panels/import')
 async def panels_import(file: UploadFile = File(...)):
-    count = import_panels_csv(await file.read())
-    return RedirectResponse(f'/panels?imported={count}', status_code=303)
+    result = import_panels_excel(file.filename, await file.read())
+
+    return RedirectResponse(
+        f"/panels?added={result['added']}&updated={result['updated']}&skipped={result['skipped']}&errors={result['errors']}",
+        status_code=303,
+    )
 
 @app.get('/keys', response_class=HTMLResponse)
 def keys_page(request: Request):

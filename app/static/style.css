@@ -898,3 +898,403 @@ tr:hover td {
         flex-direction: column;
     }
 }
+/* Scroll tables inside panels */
+
+.table-scroll {
+    width: 100%;
+    max-height: 520px;
+    overflow: auto;
+    border-radius: 14px;
+    border: 1px solid rgba(0, 170, 255, 0.18);
+}
+
+.table-scroll table {
+    border: none;
+    border-radius: 0;
+}
+
+.table-scroll thead,
+.table-scroll tr:first-child {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+.table-scroll th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+}
+
+.table-scroll::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+.table-scroll::-webkit-scrollbar-track {
+    background: rgba(0, 10, 20, 0.55);
+    border-radius: 10px;
+}
+
+.table-scroll::-webkit-scrollbar-thumb {
+    background: rgba(0, 170, 255, 0.55);
+    border-radius: 10px;
+}
+
+.table-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 170, 255, 0.8);
+}
+/* Panels page cleanup */
+
+.import-stats-panel {
+    padding: 18px;
+}
+
+.import-stats-panel h2 {
+    margin-bottom: 14px;
+    font-size: 20px;
+}
+
+.import-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+}
+
+.import-stat {
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(0, 170, 255, 0.25);
+    background: rgba(0, 10, 20, 0.32);
+}
+
+.import-stat span {
+    display: block;
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 4px;
+}
+
+.import-stat b {
+    display: block;
+    font-size: 22px;
+    line-height: 1;
+}
+
+.panels-top-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+    align-items: stretch;
+}
+
+.panels-top-grid .panel {
+    min-height: 0;
+}
+
+.panels-top-grid h2 {
+    font-size: 20px;
+    margin-bottom: 14px;
+}
+
+.panels-top-grid label {
+    font-size: 14px;
+    margin-bottom: 6px;
+}
+
+.panels-top-grid input {
+    min-height: 40px;
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    font-size: 14px;
+}
+
+.panels-top-grid button {
+    min-height: 40px;
+    padding: 0 20px;
+    font-size: 14px;
+}
+
+.panels-help {
+    margin-bottom: 14px;
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--muted);
+}
+
+.panels-list-panel {
+    padding: 18px;
+}
+
+.panels-list-panel h2 {
+    font-size: 20px;
+    margin-bottom: 14px;
+}
+
+.panels-list-panel .table-scroll {
+    max-height: 430px;
+}
+
+.panels-list-panel table {
+    font-size: 14px;
+}
+
+.panels-list-panel th,
+.panels-list-panel td {
+    padding: 10px 12px;
+}
+
+@media (max-width: 1100px) {
+    .panels-top-grid,
+    .import-stats-grid {
+        grid-template-columns: 1fr;
+    }
+}
+.panel-search{
+
+    margin:18px 0;
+
+}
+
+.panel-search input{
+
+    width:100%;
+
+    height:46px;
+
+    padding:0 18px;
+
+    font-size:15px;
+
+    border-radius:10px;
+
+    background:rgba(0,10,20,.75);
+
+    border:1px solid rgba(0,170,255,.25);
+
+}
+
+.panel-search input:focus{
+
+    border-color:#00aaff;
+
+    box-shadow:0 0 18px rgba(0,170,255,.2);
+
+}
+/* Panels search */
+
+.panel-list-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 16px;
+}
+
+.panel-list-head h2 {
+    margin-bottom: 6px;
+}
+
+.panel-search {
+    width: 420px;
+    max-width: 100%;
+    flex: 0 0 auto;
+}
+
+.panel-search input {
+    margin: 0;
+    width: 100%;
+    min-height: 42px;
+    padding: 0 16px;
+    font-size: 14px;
+}
+
+@media (max-width: 900px) {
+    .panel-list-head {
+        flex-direction: column;
+    }
+
+    .panel-search {
+        width: 100%;
+    }
+}
+/* ---------- COMPACT UI v2 ---------- */
+
+:root{
+    --sidebar-width:230px;
+}
+
+/* Левая панель */
+
+.sidebar{
+    width:var(--sidebar-width);
+}
+
+.brand{
+    height:70px;
+    padding:14px 18px;
+}
+
+.brand img{
+    max-width:165px;
+}
+
+.sidebar-nav{
+    padding:14px 10px;
+    gap:6px;
+}
+
+.nav-item{
+    min-height:48px;
+    padding:10px 14px;
+    font-size:14px;
+    gap:12px;
+}
+
+.nav-item svg{
+    width:22px;
+    height:22px;
+}
+
+/* Верхняя панель */
+
+.topbar{
+    height:70px;
+    padding:0 22px 0 28px;
+}
+
+.top-title{
+    font-size:20px;
+}
+
+.top-info{
+    font-size:15px;
+}
+
+.user-pill{
+    height:42px;
+    padding:0 16px;
+    font-size:14px;
+}
+
+/* Контент */
+
+.content{
+    max-width:1200px;
+    padding:28px 34px 42px;
+}
+
+/* Заголовки */
+
+h1{
+    font-size:40px;
+}
+
+.hero-title{
+    margin-bottom:18px;
+}
+
+.subtitle{
+    font-size:15px;
+}
+
+/* Панели */
+
+.panel{
+    padding:18px;
+    border-radius:12px;
+}
+
+.card{
+    border-radius:12px;
+}
+
+.panel h2,
+.card h2{
+    font-size:18px;
+    margin-bottom:14px;
+}
+
+/* Формы */
+
+label{
+    font-size:13px;
+    margin-bottom:4px;
+}
+
+input,
+textarea,
+select{
+    min-height:38px;
+    padding:8px 12px;
+    font-size:14px;
+    margin-bottom:10px;
+}
+
+textarea{
+    min-height:170px;
+}
+
+/* Кнопки */
+
+button,
+.btn{
+    min-height:38px;
+    padding:0 18px;
+    font-size:14px;
+}
+
+/* Таблицы */
+
+th,
+td{
+    padding:9px 10px;
+    font-size:13px;
+}
+
+.table-scroll{
+    max-height:430px;
+}
+
+/* Карточки статистики */
+
+.import-stats-grid{
+    gap:8px;
+}
+
+.import-stat{
+    padding:8px 10px;
+}
+
+.import-stat span{
+    font-size:12px;
+}
+
+.import-stat b{
+    font-size:18px;
+}
+
+/* Карточки */
+
+.actions-grid,
+.stats-grid{
+    gap:16px;
+}
+
+.action-card{
+    min-height:180px;
+}
+
+.stat-card{
+    min-height:92px;
+}
+
+/* Отступы между блоками */
+
+.grid{
+    gap:18px;
+}
+
+.panels-top-grid{
+    gap:18px;
+}

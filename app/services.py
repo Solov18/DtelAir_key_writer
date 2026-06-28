@@ -282,3 +282,133 @@ def universal_search(query: str):
         ]
 
     return result
+def split_panel_address(full_address: str) -> tuple[str, str]:
+    text = (full_address or "").strip()
+    text = re.sub(r"\s+", " ", text)
+
+    if "," not in text:
+        return text, ""
+
+    parts = [p.strip() for p in text.split(",") if p.strip()]
+
+    address = parts[0]
+    entrance = ", ".join(parts[1:])
+
+    return address, entrance
+
+
+def import_panels_excel(filename: str, content: bytes) -> dict:
+    result = {
+        "added": 0,
+        "updated": 0,
+        "skipped": 0,
+        "errors": 0,
+    }
+
+    if not filename.lower().endswith((".xlsx", ".xlsm", ".xls")):
+        result["errors"] += 1
+        return result
+
+    wb = load_workbook(io.BytesIO(content), data_only=True)
+
+    rows = []
+
+    for ws in wb.worksheets:
+        header_row = next(ws.iter_rows(min_row=1, max_row=1, values_only=True))
+        headers = [str(h or "").strip().lower() for h in header_row]
+
+        address_idx = None
+        mac_idx = None
+
+        for i, h in enumerate(headers):
+            if h in ("адрес", "address"):
+                address_idx = i
+            if h in ("mac", "мас", "мак"):
+                mac_idx = i
+
+        if address_idx is None or mac_idx is None:
+            continue
+
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            raw_address = str(row[address_idx] or "").strip()
+            raw_mac = str(row[mac_idx] or "").strip().upper()
+
+            mac = raw_mac.replace(" ", "")
+
+            if not raw_address or not mac:
+                result["skipped"] += 1
+                continue
+
+            if not re.fullmatch(r"[0-9A-F]{2}(:[0-9A-F]{2}){5}", mac):
+                result["errors"] += 1
+                continue
+
+            address, entrance = split_panel_address(raw_address)
+            name = f"{address} {entrance}".strip()
+
+            rows.append(
+                {
+                    "address": address,
+                    "entrance": entrance,
+                    "name": name,
+                    "mac": mac,
+                    "tags": "",
+                }
+            )
+
+    with db() as conn:
+        for item in rows:
+            existing = conn.execute(
+                "SELECT * FROM panels WHERE mac = ?",
+                (item["mac"],),
+            ).fetchone()
+
+            if existing:
+                old = dict(existing)
+
+                changed = (
+                    old.get("address") != item["address"]
+                    or old.get("entrance") != item["entrance"]
+                    or old.get("name") != item["name"]
+                )
+
+                conn.execute(
+                    """
+                    UPDATE panels
+                    SET address = ?,
+                        entrance = ?,
+                        name = ?,
+                        tags = ?
+                    WHERE mac = ?
+                    """,
+                    (
+                        item["address"],
+                        item["entrance"],
+                        item["name"],
+                        item["tags"],
+                        item["mac"],
+                    ),
+                )
+
+                if changed:
+                    result["updated"] += 1
+                else:
+                    result["skipped"] += 1
+            else:
+                conn.execute(
+                    """
+                    INSERT INTO panels(address, entrance, name, mac, tags)
+                    VALUES(?,?,?,?,?)
+                    """,
+                    (
+                        item["address"],
+                        item["entrance"],
+                        item["name"],
+                        item["mac"],
+                        item["tags"],
+                    ),
+                )
+
+                result["added"] += 1
+
+    return result

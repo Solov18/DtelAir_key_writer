@@ -1,6 +1,200 @@
 {% extends 'base.html' %}
+
 {% block page_name %}Панели / Адреса{% endblock %}
+
 {% block content %}
-<div class='hero-title'><h1>Панели / Адреса</h1><p class='subtitle'>Панели / Адреса</p></div>
-<div class='grid two-grid'><div class='panel'><h2>Добавить панель</h2><form method='post' action='/panels/add'><label>Адрес</label><input name='address' required><label>Название панели</label><input name='name' required><label>MAC</label><input name='mac' required><label>Вход / подъезд</label><input name='entrance'><label>Теги</label><input name='tags'><button type='submit'>Сохранить</button></form></div><div class='panel'><h2>Импорт CSV</h2><form method='post' action='/panels/import' enctype='multipart/form-data'><label>CSV-файл</label><input type='file' name='file' required><button type='submit'>Импортировать панели</button></form></div></div><div class='panel'><h2>Список панелей</h2><table><tr><th>ID</th><th>Адрес</th><th>Вход</th><th>Панель</th><th>MAC</th><th>Теги</th></tr>{% for p in panels %}<tr><td>{{ p.id }}</td><td>{{ p.address }}</td><td>{{ p.entrance }}</td><td>{{ p.name }}</td><td>{{ p.mac }}</td><td>{{ p.tags }}</td></tr>{% endfor %}</table></div>
+
+<div class="hero-title">
+    <h1>Панели / Адреса</h1>
+    <p class="subtitle">
+        База домофонных панелей и адресов
+    </p>
+</div>
+
+{% if request.query_params.get('added') %}
+<div class="panel import-stats-panel">
+
+    <h2>Результат импорта</h2>
+
+    <div class="import-stats-grid">
+
+        <div class="import-stat">
+            <span>Добавлено</span>
+            <b>{{ request.query_params.get('added') }}</b>
+        </div>
+
+        <div class="import-stat">
+            <span>Обновлено</span>
+            <b>{{ request.query_params.get('updated') }}</b>
+        </div>
+
+        <div class="import-stat">
+            <span>Без изменений</span>
+            <b>{{ request.query_params.get('skipped') }}</b>
+        </div>
+
+        <div class="import-stat">
+            <span>Ошибок</span>
+            <b>{{ request.query_params.get('errors') }}</b>
+        </div>
+
+    </div>
+
+</div>
+{% endif %}
+
+
+<div class="panels-top-grid">
+
+    <div class="panel">
+
+        <h2>Добавить панель вручную</h2>
+
+        <form method="post" action="/panels/add">
+
+            <label>Адрес</label>
+            <input
+                name="address"
+                placeholder="ул. Тепличная 65"
+                required
+            >
+
+            <label>Вход / Подъезд</label>
+            <input
+                name="entrance"
+                placeholder="калитка / под.1 / КПП"
+            >
+
+            <label>Название панели</label>
+            <input
+                name="name"
+                placeholder="Тепличная 65 калитка"
+                required
+            >
+
+            <label>MAC-адрес</label>
+            <input
+                name="mac"
+                placeholder="08:13:CD:00:1D:C2"
+                required
+            >
+
+            <label>Теги</label>
+            <input
+                name="tags"
+                placeholder="employee, uk"
+            >
+
+            <button type="submit">
+                Сохранить
+            </button>
+
+        </form>
+
+    </div>
+
+
+    <div class="panel">
+
+        <h2>Импорт панелей</h2>
+
+        <p class="panels-help">
+            Выберите Excel-файл (.xlsx).<br>
+            Программа автоматически обновит существующие панели
+            и добавит новые.
+        </p>
+
+        <form
+            method="post"
+            action="/panels/import"
+            enctype="multipart/form-data"
+        >
+
+            <label>Excel-файл</label>
+
+            <input
+                type="file"
+                name="file"
+                accept=".xlsx,.xls,.xlsm"
+                required
+            >
+
+            <button type="submit">
+                Импортировать панели
+            </button>
+
+        </form>
+
+    </div>
+
+</div>
+
+
+<div class="panel panels-list-panel">
+
+    <div class="panel-list-head">
+        <div>
+            <h2>Список панелей</h2>
+            <p class="subtitle">
+                Всего: <span id="panelsTotal">{{ panels|length }}</span>,
+                найдено: <span id="panelsFound">{{ panels|length }}</span>
+            </p>
+        </div>
+
+        <div class="panel-search">
+            <input
+                type="text"
+                id="panelSearch"
+                placeholder="Поиск по адресу, входу, MAC или тегам..."
+                autocomplete="off"
+            >
+        </div>
+    </div>
+
+    <div class="table-scroll">
+
+        <table id="panelsTable">
+
+            <thead>
+
+            <tr>
+                <th>ID</th>
+                <th>Адрес</th>
+                <th>Вход</th>
+                <th>MAC</th>
+                <th>Теги</th>
+            </tr>
+
+            </thead>
+
+            <tbody>
+
+            {% for p in panels %}
+
+            <tr>
+
+                <td>{{ p.id }}</td>
+
+                <td>{{ p.address }}</td>
+
+                <td>{{ p.entrance or '—' }}</td>
+
+                <td>{{ p.mac }}</td>
+
+                <td>{{ p.tags or '—' }}</td>
+
+            </tr>
+
+            {% endfor %}
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+</div>
+
+<script src="/static/js/panels.js?v=1"></script>
+
 {% endblock %}
