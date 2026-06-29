@@ -5,15 +5,62 @@
 {% block content %}
 <div class="hero-title">
     <h1>Сотрудники</h1>
-    <p class="subtitle">Запись ключей сотрудников на все панели или выборочно</p>
+    <p class="subtitle">База сотрудников и запись служебных ключей</p>
 </div>
 
-<div class="employee-layout">
+<div class="employees-page-grid">
+
+    <div class="panel">
+        <h2>Добавить сотрудника</h2>
+
+        <form method="post" action="/employees/add">
+            <label>ФИО сотрудника</label>
+            <input
+                name="full_name"
+                placeholder="Иванов Иван Иванович"
+                required
+            >
+
+            <label>Комментарий</label>
+            <input
+                name="note"
+                placeholder="Отдел, должность или примечание"
+            >
+
+            <button type="submit">
+                Добавить сотрудника
+            </button>
+        </form>
+    </div>
 
     <div class="panel employee-form-panel">
-        <h2>Данные ключа</h2>
+        <h2>Записать ключ сотруднику</h2>
 
-        <form method="post" action="/employees/write">
+        <form method="post" action="/employees/write" id="employeeWriteForm">
+
+            <label>Сотрудник</label>
+
+            <input
+                type="text"
+                id="employeeWriteSearch"
+                name="employee_name"
+                placeholder="Начните вводить ФИО сотрудника..."
+                autocomplete="off"
+                required
+            >
+
+            <div class="employee-picker" id="employeePicker">
+                {% for e in employees %}
+                <button
+                    type="button"
+                    class="employee-picker-item"
+                    data-name="{{ e.full_name }}"
+                >
+                    {{ e.full_name }}
+                </button>
+                {% endfor %}
+            </div>
+
             <label>Номер ключа / несколько номеров</label>
             <input
                 name="key_values"
@@ -31,15 +78,64 @@
             <label>Квартира / flatNum</label>
             <input name="flat_num" value="0">
 
-            <label>inner</label>
-            <select name="inner">
-                <option value="0">0</option>
-                <option value="1">1</option>
-            </select>
+            <input type="hidden" name="inner" value="0">
 
             <button type="submit">
                 Прописать сотруднику
             </button>
+        </form>
+    </div>
+
+</div>
+
+<div class="employee-layout">
+
+    <div class="panel employees-list-panel">
+        <div class="panel-list-head">
+            <div>
+                <h2>Список сотрудников</h2>
+                <p class="subtitle">
+                    Всего: <span id="employeesFound">{{ employees|length }}</span>
+                </p>
+            </div>
+
+            <div class="panel-search">
+                <input
+                    type="text"
+                    id="employeesSearch"
+                    placeholder="Поиск по ФИО или комментарию..."
+                    autocomplete="off"
+                >
+            </div>
+        </div>
+
+        <div class="employees-cards" id="employeesCards">
+            {% for e in employees %}
+            <div class="employee-card">
+                <div class="employee-card-main">
+                    <b>{{ e.full_name }}</b>
+                    <span>{{ e.note or 'Без комментария' }}</span>
+                </div>
+
+                <div class="employee-card-actions">
+                    <button
+                        type="button"
+                        class="btn-small"
+                        data-employee-select="{{ e.full_name }}"
+                    >
+                        Выбрать
+                    </button>
+
+                    <form method="post" action="/employees/delete">
+                        <input type="hidden" name="employee_id" value="{{ e.id }}">
+                        <button type="submit" class="danger-btn small-danger">
+                            Удалить
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
     </div>
 
     <div class="panel panels-select employee-panels-panel">
@@ -50,8 +146,12 @@
             </div>
 
             <div class="panel-actions">
-                <button type="button" class="btn-small" id="select-all-panels">Выбрать все</button>
-                <button type="button" class="btn-small btn-ghost" id="clear-all-panels">Снять все</button>
+                <button type="button" class="btn-small" id="select-all-panels">
+                    Выбрать все
+                </button>
+                <button type="button" class="btn-small btn-ghost" id="clear-all-panels">
+                    Снять все
+                </button>
             </div>
         </div>
 
@@ -71,6 +171,7 @@
                     type="checkbox"
                     name="panel_ids"
                     value="{{ p.id }}"
+                    form="employeeWriteForm"
                 >
 
                 <span class="panel-option-body">
@@ -91,44 +192,7 @@
         </div>
     </div>
 
-        </form>
-
 </div>
 
-<script>
-    const selectAllBtn = document.getElementById("select-all-panels");
-    const clearAllBtn = document.getElementById("clear-all-panels");
-    const searchInput = document.getElementById("employeePanelSearch");
-    const panelList = document.getElementById("employeePanelList");
-
-    function getPanelCheckboxes() {
-        return Array.from(document.querySelectorAll('input[name="panel_ids"]'));
-    }
-
-    function setPanelCheckboxes(value) {
-        getPanelCheckboxes().forEach((checkbox) => {
-            checkbox.checked = value;
-        });
-    }
-
-    if (selectAllBtn) {
-        selectAllBtn.addEventListener("click", () => setPanelCheckboxes(true));
-    }
-
-    if (clearAllBtn) {
-        clearAllBtn.addEventListener("click", () => setPanelCheckboxes(false));
-    }
-
-    if (searchInput && panelList) {
-        searchInput.addEventListener("input", function () {
-            const query = this.value.toLowerCase().trim();
-
-            panelList.querySelectorAll(".panel-option").forEach((row) => {
-                row.style.display = row.innerText.toLowerCase().includes(query)
-                    ? ""
-                    : "none";
-            });
-        });
-    }
-</script>
+<script src="/static/js/employees.js?v=1"></script>
 {% endblock %}

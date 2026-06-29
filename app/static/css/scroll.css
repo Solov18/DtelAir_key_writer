@@ -1,0 +1,13 @@
+.custom-scroll, .table-scroll, .employee-panel-list, .employees-cards-grid, .employee-panel-list-grid, .preview-panel-list, .uk-panel-list {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0,170,255,.55) rgba(0,10,20,.45);
+}
+.custom-scroll::-webkit-scrollbar, .table-scroll::-webkit-scrollbar, .employee-panel-list::-webkit-scrollbar, .employees-cards-grid::-webkit-scrollbar, .employee-panel-list-grid::-webkit-scrollbar, .preview-panel-list::-webkit-scrollbar, .uk-panel-list::-webkit-scrollbar { width: 8px; height: 8px; }
+.custom-scroll::-webkit-scrollbar-track, .table-scroll::-webkit-scrollbar-track, .employee-panel-list::-webkit-scrollbar-track, .employees-cards-grid::-webkit-scrollbar-track, .employee-panel-list-grid::-webkit-scrollbar-track, .preview-panel-list::-webkit-scrollbar-track, .uk-panel-list::-webkit-scrollbar-track { background: rgba(0,10,20,.45); border-radius: 10px; }
+.custom-scroll::-webkit-scrollbar-thumb, .table-scroll::-webkit-scrollbar-thumb, .employee-panel-list::-webkit-scrollbar-thumb, .employees-cards-grid::-webkit-scrollbar-thumb, .employee-panel-list-grid::-webkit-scrollbar-thumb, .preview-panel-list::-webkit-scrollbar-thumb, .uk-panel-list::-webkit-scrollbar-thumb { background: rgba(0,170,255,.55); border-radius: 10px; }
+.custom-scroll::-webkit-scrollbar-thumb:hover, .table-scroll::-webkit-scrollbar-thumb:hover, .employee-panel-list::-webkit-scrollbar-thumb:hover, .employees-cards-grid::-webkit-scrollbar-thumb:hover, .employee-panel-list-grid::-webkit-scrollbar-thumb:hover, .preview-panel-list::-webkit-scrollbar-thumb:hover, .uk-panel-list::-webkit-scrollbar-thumb:hover { background: rgba(0,184,255,.75); }
+
+.table-scroll { width: 100%; max-height: 430px; overflow: auto; border-radius: 14px; border: 1px solid rgba(0,170,255,.18); }
+.table-scroll table { border: none; border-radius: 0; }
+.table-scroll th { position: sticky; top: 0; z-index: 3; }
+.small-scroll { max-height: 260px; }

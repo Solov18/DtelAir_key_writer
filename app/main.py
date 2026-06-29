@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request, Form, UploadFile, File
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
@@ -249,25 +249,113 @@ def search_result(request: Request, query: str = Form(...)):
 @app.get('/employees', response_class=HTMLResponse)
 def employees(request: Request):
     panels = get_panels()
-    return templates.TemplateResponse('employees.html', {'request': request, 'panels': panels})
+
+    with db() as conn:
+        employees_rows = [
+            dict(r)
+            for r in conn.execute(
+                """
+                SELECT *
+                FROM employees
+                WHERE enabled = 1
+                ORDER BY full_name
+                """
+            )
+        ]
+
+    return templates.TemplateResponse(
+        'employees.html',
+        {
+            'request': request,
+            'panels': panels,
+            'employees': employees_rows,
+        },
+    )
+
+@app.post("/employees/add")
+def employees_add(
+    full_name: str = Form(...),
+    note: str = Form(""),
+):
+    with db() as conn:
+        conn.execute(
+            """
+            INSERT INTO employees(full_name, note)
+            VALUES(?, ?)
+            """,
+            (
+                full_name.strip(),
+                note.strip(),
+            ),
+        )
+
+    return RedirectResponse("/employees", status_code=303)
+
+@app.post("/employees/delete")
+def employees_delete(employee_id: int = Form(...)):
+    with db() as conn:
+        conn.execute(
+            """
+            UPDATE employees
+            SET enabled = 0
+            WHERE id = ?
+            """,
+            (employee_id,),
+        )
+
+    return RedirectResponse("/employees", status_code=303)
 
 @app.post('/employees/write', response_class=HTMLResponse)
-def employees_write(request: Request, key_values: str = Form(...), scope: str = Form('all'), panel_ids: list[int] = Form([]), flat_num: str = Form('0'), inner: int = Form(0)):
+def employees_write(
+    request: Request,
+    employee_name: str = Form(...),
+    key_values: str = Form(...),
+    scope: str = Form('all'),
+    panel_ids: list[int] = Form([]),
+    flat_num: str = Form('0'),
+    inner: int = Form(0),
+):
     if scope == 'selected':
         panels = get_panels(panel_ids=panel_ids)
     elif scope == 'employee_tag':
         panels = get_panels(tag='employee')
     else:
         panels = get_panels()
+
     all_results = []
+
     for val in [x.strip() for x in key_values.replace(',', ' ').split() if x.strip()]:
         item = find_key(val)
-        if item:
-            all_results.append({'key': item, 'results': write_key_to_panels('employee', item, panels, flat_num=flat_num, inner=inner)})
-        else:
-            all_results.append({'key': {'number': val, 'hex_value': 'НЕ НАЙДЕН'}, 'results': []})
-    return templates.TemplateResponse('write_results.html', {'request': request, 'title': 'Результат записи сотрудника', 'all_results': all_results})
 
+        if item:
+            all_results.append({
+                'key': item,
+                'results': write_key_to_panels(
+                    'employee',
+                    item,
+                    panels,
+                    flat_num=flat_num,
+                    inner=inner,
+                    address=f'Сотрудник: {employee_name}',
+                )
+            })
+        else:
+            all_results.append({
+                'key': {
+                    'number': val,
+                    'hex_value': 'НЕ НАЙДЕН'
+                },
+                'results': []
+            })
+
+    return templates.TemplateResponse(
+        'write_results.html',
+        {
+            'request': request,
+            'title': f'Результат записи сотрудника: {employee_name}',
+            'all_results': all_results,
+        }
+    )
 @app.get('/uk', response_class=HTMLResponse)
 def uk(request: Request):
     with db() as conn:
@@ -307,6 +395,95 @@ def panels_add(address: str = Form(...), name: str = Form(...), mac: str = Form(
     with db() as conn:
         conn.execute('INSERT INTO panels(address,entrance,name,mac,tags) VALUES(?,?,?,?,?) ON CONFLICT(mac) DO UPDATE SET address=excluded.address,entrance=excluded.entrance,name=excluded.name,tags=excluded.tags', (address.strip(), entrance.strip(), name.strip(), mac.strip().upper(), tags.strip()))
     return RedirectResponse('/panels', status_code=303)
+@app.post("/panels/edit")
+def panels_edit(
+    panel_id: int = Form(...),
+    address: str = Form(...),
+    entrance: str = Form(""),
+    name: str = Form(...),
+    mac: str = Form(...),
+    tags: str = Form(""),
+):
+    with db() as conn:
+        conn.execute(
+            """
+            UPDATE panels
+            SET address = ?,
+                entrance = ?,
+                name = ?,
+                mac = ?,
+                tags = ?
+            WHERE id = ?
+            """,
+            (
+                address.strip(),
+                entrance.strip(),
+                name.strip(),
+                mac.strip().upper(),
+                tags.strip(),
+                panel_id,
+            ),
+        )
+
+    return RedirectResponse("/panels", status_code=303)
+
+
+@app.post("/panels/delete")
+def panels_delete(panel_id: int = Form(...)):
+    with db() as conn:
+        conn.execute(
+            "UPDATE panels SET enabled = 0 WHERE id = ?",
+            (panel_id,),
+        )
+
+    return RedirectResponse("/panels", status_code=303)
+
+
+@app.get("/panels/export")
+def panels_export():
+    from io import BytesIO
+    from openpyxl import Workbook
+
+    with db() as conn:
+        rows = [
+            dict(r)
+            for r in conn.execute(
+                """
+                SELECT id, address, entrance, name, mac, tags
+                FROM panels
+                WHERE enabled = 1
+                ORDER BY address, entrance, name
+                """
+            )
+        ]
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Панели"
+
+    ws.append(["ID", "Адрес", "Вход", "Панель", "MAC", "Теги"])
+
+    for r in rows:
+        ws.append([
+            r["id"],
+            r["address"],
+            r["entrance"],
+            r["name"],
+            r["mac"],
+            r["tags"],
+        ])
+
+    stream = BytesIO()
+    wb.save(stream)
+    stream.seek(0)
+
+    return Response(
+        content=stream.read(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": 'attachment; filename="panels.xlsx"'
+        },
+    )
 
 @app.post('/panels/import')
 async def panels_import(file: UploadFile = File(...)):

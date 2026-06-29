@@ -30,6 +30,14 @@ def init_db():
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
+        CREATE TABLE IF NOT EXISTS employees (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            full_name TEXT NOT NULL,
+            note TEXT DEFAULT '',
+            enabled INTEGER DEFAULT 1,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        
         CREATE TABLE IF NOT EXISTS panels (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             address TEXT NOT NULL,

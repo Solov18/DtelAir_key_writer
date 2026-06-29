@@ -6,129 +6,69 @@
 
 <div class="hero-title">
     <h1>Панели / Адреса</h1>
-    <p class="subtitle">
-        База домофонных панелей и адресов
-    </p>
+    <p class="subtitle">База домофонных панелей и адресов</p>
 </div>
 
 {% if request.query_params.get('added') %}
 <div class="panel import-stats-panel">
-
     <h2>Результат импорта</h2>
 
     <div class="import-stats-grid">
-
-        <div class="import-stat">
-            <span>Добавлено</span>
-            <b>{{ request.query_params.get('added') }}</b>
-        </div>
-
-        <div class="import-stat">
-            <span>Обновлено</span>
-            <b>{{ request.query_params.get('updated') }}</b>
-        </div>
-
-        <div class="import-stat">
-            <span>Без изменений</span>
-            <b>{{ request.query_params.get('skipped') }}</b>
-        </div>
-
-        <div class="import-stat">
-            <span>Ошибок</span>
-            <b>{{ request.query_params.get('errors') }}</b>
-        </div>
-
+        <div class="import-stat"><span>Добавлено</span><b>{{ request.query_params.get('added') }}</b></div>
+        <div class="import-stat"><span>Обновлено</span><b>{{ request.query_params.get('updated') }}</b></div>
+        <div class="import-stat"><span>Без изменений</span><b>{{ request.query_params.get('skipped') }}</b></div>
+        <div class="import-stat"><span>Ошибок</span><b>{{ request.query_params.get('errors') }}</b></div>
     </div>
-
 </div>
 {% endif %}
-
 
 <div class="panels-top-grid">
 
     <div class="panel">
-
         <h2>Добавить панель вручную</h2>
 
         <form method="post" action="/panels/add">
-
             <label>Адрес</label>
-            <input
-                name="address"
-                placeholder="ул. Тепличная 65"
-                required
-            >
+            <input name="address" placeholder="ул. Тепличная 65" required>
 
             <label>Вход / Подъезд</label>
-            <input
-                name="entrance"
-                placeholder="калитка / под.1 / КПП"
-            >
+            <input name="entrance" placeholder="калитка / под.1 / КПП">
 
             <label>Название панели</label>
-            <input
-                name="name"
-                placeholder="Тепличная 65 калитка"
-                required
-            >
+            <input name="name" placeholder="Тепличная 65 калитка" required>
 
             <label>MAC-адрес</label>
-            <input
-                name="mac"
-                placeholder="08:13:CD:00:1D:C2"
-                required
-            >
+            <input name="mac" placeholder="08:13:CD:00:1D:C2" required>
 
             <label>Теги</label>
-            <input
-                name="tags"
-                placeholder="employee, uk"
-            >
+            <input name="tags" placeholder="employee, uk">
 
-            <button type="submit">
-                Сохранить
-            </button>
-
+            <button type="submit">Сохранить</button>
         </form>
-
     </div>
 
-
     <div class="panel">
-
-        <h2>Импорт панелей</h2>
+        <h2>Импорт / экспорт панелей</h2>
 
         <p class="panels-help">
-            Выберите Excel-файл (.xlsx).<br>
-            Программа автоматически обновит существующие панели
-            и добавит новые.
+            Загрузите Excel-файл (.xlsx). Программа обновит существующие панели и добавит новые.
         </p>
 
-        <form
-            method="post"
-            action="/panels/import"
-            enctype="multipart/form-data"
-        >
-
+        <form method="post" action="/panels/import" enctype="multipart/form-data">
             <label>Excel-файл</label>
+            <input type="file" name="file" accept=".xlsx,.xls,.xlsm" required>
 
-            <input
-                type="file"
-                name="file"
-                accept=".xlsx,.xls,.xlsm"
-                required
-            >
+            <div class="import-export-actions">
+                <button type="submit">Импортировать панели</button>
 
-            <button type="submit">
-                Импортировать панели
-            </button>
-
+                <a href="/panels/export" class="btn">
+                    Экспорт Excel
+                </a>
+            </div>
         </form>
-
     </div>
 
 </div>
-
 
 <div class="panel panels-list-panel">
 
@@ -152,45 +92,52 @@
     </div>
 
     <div class="table-scroll">
-
         <table id="panelsTable">
-
             <thead>
-
             <tr>
                 <th>ID</th>
                 <th>Адрес</th>
                 <th>Вход</th>
                 <th>MAC</th>
                 <th>Теги</th>
+                <th>Действия</th>
             </tr>
-
             </thead>
 
             <tbody>
-
             {% for p in panels %}
-
             <tr>
-
                 <td>{{ p.id }}</td>
-
                 <td>{{ p.address }}</td>
-
                 <td>{{ p.entrance or '—' }}</td>
-
                 <td>{{ p.mac }}</td>
-
                 <td>{{ p.tags or '—' }}</td>
+                <td>
+                    <details class="row-actions">
+                        <summary>Изменить</summary>
 
+                        <form method="post" action="/panels/edit">
+                            <input type="hidden" name="panel_id" value="{{ p.id }}">
+
+                            <input name="address" value="{{ p.address }}" required>
+                            <input name="entrance" value="{{ p.entrance }}">
+                            <input name="name" value="{{ p.name }}" required>
+                            <input name="mac" value="{{ p.mac }}" required>
+                            <input name="tags" value="{{ p.tags }}">
+
+                            <button type="submit">Сохранить</button>
+                        </form>
+
+                        <form method="post" action="/panels/delete">
+                            <input type="hidden" name="panel_id" value="{{ p.id }}">
+                            <button type="submit" class="danger-btn">Удалить</button>
+                        </form>
+                    </details>
+                </td>
             </tr>
-
             {% endfor %}
-
             </tbody>
-
         </table>
-
     </div>
 
 </div>
