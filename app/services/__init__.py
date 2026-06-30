@@ -1,14 +1,16 @@
-
-from app.services.parser import parse_message, normalize
-
-from app.services_old import (
-    find_key,
+from app.services.parser import parse_message
+from app.services.keys import find_key, normalize_hex_value
+from app.services.panels import (
+    normalize,
     find_panels_by_address,
     get_panels,
-    crm_add_key,
-    write_key_to_panels,
+    split_panel_address,
+)
+from app.services.crm import crm_add_key
+from app.services.writer import write_key_to_panels
+from app.services.importer import (
     import_keys_file,
     import_panels_csv,
     import_panels_excel,
-    universal_search,
 )
+from app.services.search import universal_search
