@@ -1,30 +1,61 @@
-* { box-sizing: border-box; }
+* {
+    box-sizing: border-box;
+}
 
 :root {
     --sidebar-width: 230px;
+
+    --bg-color: #02111a;
+    --text: #ffffff;
+    --text-strong: #ffffff;
+    --muted: #b8cde0;
+
     --panel: rgba(6, 20, 34, 0.58);
     --panel-strong: rgba(0, 10, 20, 0.72);
+
     --line: rgba(0, 170, 255, 0.32);
     --line-soft: rgba(0, 170, 255, 0.20);
     --soft: rgba(255, 255, 255, 0.08);
+
     --blue: #00aaff;
     --blue-2: #0b8fff;
-    --muted: #b8cde0;
     --green: #2cff9a;
     --red: #ff4a5f;
     --yellow: #ffc400;
+
+    --field-bg: rgba(0, 10, 20, 0.72);
+    --field-text: #ffffff;
+    --field-border: rgba(0, 170, 255, 0.34);
+
+    --hover-bg: rgba(0, 170, 255, 0.08);
+    --hover-text: #ffffff;
+
+    --shadow-panel:
+        inset 0 0 26px rgba(0, 170, 255, 0.035),
+        0 0 34px rgba(0, 90, 170, 0.16);
 }
 
-html, body {
+html,
+body {
     margin: 0;
     min-height: 100%;
     font-family: Arial, Helvetica, sans-serif;
-    color: #fff;
+    color: var(--text);
     background:
-        linear-gradient(90deg, rgba(0,8,17,.90) 0%, rgba(0,12,25,.62) 34%, rgba(0,12,25,.25) 66%, rgba(0,12,25,.04) 100%),
-        linear-gradient(180deg, rgba(0,8,17,.08), rgba(0,8,17,.35)),
+        linear-gradient(
+            90deg,
+            rgba(0, 8, 17, 0.90) 0%,
+            rgba(0, 12, 25, 0.62) 34%,
+            rgba(0, 12, 25, 0.25) 66%,
+            rgba(0, 12, 25, 0.04) 100%
+        ),
+        linear-gradient(
+            180deg,
+            rgba(0, 8, 17, 0.08),
+            rgba(0, 8, 17, 0.35)
+        ),
         url("/static/img/hero.png") right center / contain fixed no-repeat;
-    background-color: #02111a;
+    background-color: var(--bg-color);
 }
 
 body::before {
@@ -33,26 +64,48 @@ body::before {
     inset: 0;
     pointer-events: none;
     background:
-        radial-gradient(circle at 84% 18%, rgba(0,170,255,.18), transparent 22%),
-        radial-gradient(circle at 76% 74%, rgba(0,150,255,.12), transparent 28%),
-        radial-gradient(circle at 95% 52%, rgba(0,190,255,.08), transparent 20%);
+        radial-gradient(circle at 84% 18%, rgba(0, 170, 255, 0.18), transparent 22%),
+        radial-gradient(circle at 76% 74%, rgba(0, 150, 255, 0.12), transparent 28%),
+        radial-gradient(circle at 95% 52%, rgba(0, 190, 255, 0.08), transparent 20%);
     z-index: 0;
 }
 
 h1 {
     margin: 0 0 10px;
+    color: var(--text-strong);
     font-size: 40px;
     line-height: 1.05;
     font-weight: 900;
     letter-spacing: -1px;
-    text-shadow: 0 0 24px rgba(0,140,255,.16);
+    text-shadow: 0 0 24px rgba(0, 140, 255, 0.16);
 }
 
-h2 { margin: 0 0 14px; font-size: 18px; }
-p { margin: 0; }
-.subtitle { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.45; }
-.warn { color: var(--yellow); font-weight: 900; }
-.ok { color: var(--green); font-weight: 900; }
+h2 {
+    margin: 0 0 14px;
+    color: var(--text-strong);
+    font-size: 18px;
+}
+
+p {
+    margin: 0;
+}
+
+.subtitle {
+    margin: 0;
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1.45;
+}
+
+.warn {
+    color: var(--yellow);
+    font-weight: 900;
+}
+
+.ok {
+    color: var(--green);
+    font-weight: 900;
+}
 
 .badge {
     display: inline-flex;
@@ -63,6 +116,21 @@ p { margin: 0; }
     font-size: 13px;
     font-weight: 800;
 }
-.badge.success { color: var(--green); background: rgba(44,255,154,.08); border: 1px solid rgba(44,255,154,.35); }
-.badge.error { color: var(--red); background: rgba(255,74,95,.08); border: 1px solid rgba(255,74,95,.35); }
-.badge.dry-run { color: var(--yellow); background: rgba(255,196,0,.08); border: 1px solid rgba(255,196,0,.35); }
+
+.badge.success {
+    color: var(--green);
+    background: rgba(44, 255, 154, 0.08);
+    border: 1px solid rgba(44, 255, 154, 0.35);
+}
+
+.badge.error {
+    color: var(--red);
+    background: rgba(255, 74, 95, 0.08);
+    border: 1px solid rgba(255, 74, 95, 0.35);
+}
+
+.badge.dry-run {
+    color: var(--yellow);
+    background: rgba(255, 196, 0, 0.08);
+    border: 1px solid rgba(255, 196, 0, 0.35);
+}

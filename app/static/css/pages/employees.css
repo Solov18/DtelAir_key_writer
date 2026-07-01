@@ -1,16 +1,210 @@
-.employees-top-grid { display: grid; grid-template-columns: 420px minmax(520px, 1fr); gap: 18px; align-items: start; margin-bottom: 18px; }
-.employees-full-panel { margin-top: 18px; }
-.employee-picker { display: none; max-height: 180px; overflow: auto; gap: 6px; margin: -6px 0 14px; padding: 8px; border: 1px solid rgba(0,170,255,.25); border-radius: 12px; background: rgba(0,10,20,.85); }
-.employee-picker-item { min-height: 36px; justify-content: flex-start; padding: 0 12px; font-size: 14px; border-radius: 8px; background: rgba(0,120,220,.15); }
-.employees-cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; max-height: 360px; overflow-y: auto; overflow-x: hidden; margin-top: 18px; padding-right: 6px; }
-.employee-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; min-width: 0; padding: 14px 16px; border: 1px solid rgba(0,170,255,.24); border-radius: 14px; background: rgba(0,10,20,.38); }
-.employee-card-main { min-width: 0; }
-.employee-card-main b { display: block; max-width: 100%; font-size: 16px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.employee-card-main span { display: block; margin-top: 5px; color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.employee-card-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
-.employee-card-actions .btn-small, .employee-card-actions .danger-btn { min-width: 82px; height: 34px; min-height: 34px; padding: 0 12px; font-size: 13px; border-radius: 9px; }
-.employee-panels-panel .panel-search, .employees-list-panel .panel-search { width: min(520px, 100%); min-width: 280px; }
-.employee-panel-list-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 12px; max-height: 460px; overflow-y: auto; overflow-x: hidden; margin-top: 18px; padding-right: 6px; }
-.employee-panel-list { max-height: 430px; overflow: auto; padding-right: 6px; }
-.employee-search { margin: 0 0 14px; width: 100%; }
-@media (max-width: 1100px) { .employees-top-grid { grid-template-columns: 1fr; } .employee-panel-list-grid { grid-template-columns: 1fr; } }
+.employees-top-grid {
+    display: grid;
+    grid-template-columns: 420px minmax(520px, 1fr);
+    gap: 18px;
+    align-items: start;
+    margin-bottom: 18px;
+}
+
+.employees-full-panel {
+    margin-top: 18px;
+}
+
+.employee-picker {
+    display: none;
+    max-height: 180px;
+    overflow: auto;
+    gap: 6px;
+
+    margin: -6px 0 14px;
+    padding: 8px;
+
+    color: var(--text);
+    border: 1px solid var(--line-soft);
+    border-radius: 12px;
+    background: var(--panel-strong);
+}
+
+.employee-picker-item {
+    min-height: 36px;
+    justify-content: flex-start;
+
+    padding: 0 12px;
+
+    color: var(--text);
+    background: rgba(0, 120, 220, 0.15);
+
+    border-radius: 8px;
+    font-size: 14px;
+}
+
+body.light-theme .employee-picker-item {
+    background: rgba(230, 245, 255, 0.95);
+    color: var(--text);
+}
+
+.employee-picker-item:hover {
+    color: #ffffff;
+    background: rgba(0, 130, 230, 0.45);
+}
+
+body.light-theme .employee-picker-item:hover {
+    color: #061522;
+    background: rgba(215, 240, 255, 0.98);
+}
+
+.employees-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+
+    max-height: 360px;
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    margin-top: 18px;
+    padding-right: 6px;
+}
+
+.employee-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+
+    min-width: 0;
+    padding: 14px 16px;
+
+    color: var(--text);
+    border: 1px solid var(--line-soft);
+    border-radius: 14px;
+    background: var(--panel);
+
+    transition: 0.18s;
+}
+
+.employee-card:hover {
+    background: var(--hover-bg);
+    border-color: var(--line);
+}
+
+.employee-card-main {
+    min-width: 0;
+}
+
+.employee-card-main b {
+    display: block;
+    max-width: 100%;
+
+    color: var(--text-strong);
+
+    font-size: 16px;
+    line-height: 1.2;
+
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.employee-card-main span {
+    display: block;
+    margin-top: 5px;
+
+    color: var(--muted);
+    font-size: 13px;
+
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.employee-card-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.employee-card-actions .btn-small,
+.employee-card-actions .danger-btn {
+    min-width: 82px;
+    height: 34px;
+    min-height: 34px;
+    padding: 0 12px;
+
+    border-radius: 9px;
+    font-size: 13px;
+}
+
+.employee-panels-panel .panel-search,
+.employees-list-panel .panel-search {
+    width: min(520px, 100%);
+    min-width: 280px;
+}
+
+.employee-panel-list-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 12px;
+
+    max-height: 460px;
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    margin-top: 18px;
+    padding-right: 6px;
+}
+
+.employee-panel-list {
+    max-height: 430px;
+    overflow: auto;
+    padding-right: 6px;
+}
+
+.employee-search {
+    margin: 0 0 14px;
+    width: 100%;
+}
+
+.panel-option {
+    color: var(--text);
+    border: 1px solid var(--line-soft);
+    background: var(--panel);
+}
+
+.panel-option:hover {
+    color: var(--hover-text);
+    background: var(--hover-bg);
+    border-color: var(--line);
+}
+
+.panel-option-title,
+.panel-option-meta,
+.panel-option-mac {
+    color: var(--text);
+}
+
+.panel-option-meta,
+.panel-option-mac {
+    color: var(--muted);
+}
+
+.panel-option:hover .panel-option-title,
+.panel-option:hover .panel-option-meta,
+.panel-option:hover .panel-option-mac {
+    color: var(--hover-text);
+}
+
+body.light-theme .panel-option:hover {
+    background: rgba(225, 244, 255, 0.98);
+}
+
+@media (max-width: 1100px) {
+    .employees-top-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .employee-panel-list-grid {
+        grid-template-columns: 1fr;
+    }
+}
