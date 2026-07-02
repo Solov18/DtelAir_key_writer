@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Вход | DTEL AIR</title>
+
+    <link rel="stylesheet" href="/static/css/style.css">
+
+    <style>
+
+        body{
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            min-height:100vh;
+        }
+
+        .login-card{
+
+            width:430px;
+
+            padding:40px;
+
+            border-radius:20px;
+
+            background:var(--panel);
+
+            border:1px solid var(--line);
+
+            backdrop-filter:blur(25px);
+
+            box-shadow:var(--shadow-panel);
+        }
+
+        .login-logo{
+
+            display:flex;
+            justify-content:center;
+
+            margin-bottom:30px;
+        }
+
+        .login-logo img{
+            width:220px;
+        }
+
+        .login-title{
+
+            text-align:center;
+
+            font-size:28px;
+
+            margin-bottom:8px;
+        }
+
+        .login-subtitle{
+
+            text-align:center;
+
+            color:var(--muted);
+
+            margin-bottom:30px;
+        }
+
+        .login-error{
+
+            margin-bottom:18px;
+
+            padding:12px;
+
+            border-radius:10px;
+
+            background:rgba(255,70,70,.15);
+
+            color:#ff5c5c;
+
+            border:1px solid rgba(255,70,70,.35);
+        }
+
+        .login-footer{
+
+            margin-top:25px;
+
+            text-align:center;
+
+            color:var(--muted);
+
+            font-size:13px;
+        }
+
+        .login-btn{
+
+            width:100%;
+            margin-top:10px;
+            height:46px;
+            font-size:15px;
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+<div class="login-card">
+
+    <div class="login-logo">
+        <img src="/static/img/logo.png">
+    </div>
+
+    <h1 class="login-title">
+        Вход в систему
+    </h1>
+
+    <p class="login-subtitle">
+        Dtel Access Manager
+    </p>
+
+    {% if error %}
+    <div class="login-error">
+        {{ error }}
+    </div>
+    {% endif %}
+
+    <form method="post">
+
+        <label>Логин</label>
+
+        <input
+            type="text"
+            name="login"
+            autocomplete="username"
+            required
+        >
+
+        <label>Пароль</label>
+
+        <input
+            type="password"
+            name="password"
+            autocomplete="current-password"
+            required
+        >
+
+        <button class="login-btn">
+            Войти
+        </button>
+
+    </form>
+
+    <div class="login-footer">
+
+        DTEL AIR<br>
+
+        Key Writer Simple v2
+
+    </div>
+
+</div>
+
+</body>
+</html>

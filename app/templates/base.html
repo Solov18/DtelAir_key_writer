@@ -80,36 +80,63 @@
                 </div>
 
                 <div class="top-title">
-                    {% block page_name %}Главная{% endblock %}
+                    {% block page_name %}Панель управления{% endblock %}
                 </div>
             </div>
 
             <div class="topbar-right">
 
                 <div class="top-info">
-                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-                    <span id="live-time">--:--:--</span>
+                    <svg viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="9"/>
+                        <path d="M12 7v5l3 2"/>
+                    </svg>
+                    <span id="live-time">--:--</span>
                 </div>
 
-                <button type="button" class="theme-toggle" id="themeToggle">
-                    <span class="theme-icon">☀️</span>
-                    <span class="theme-text">Светлая</span>
-                </button>
-
-                <div class="top-info">
-                    <svg viewBox="0 0 24 24"><path d="M4 5h16v16H4zM8 3v4M16 3v4M4 10h16"/></svg>
-                    <span id="live-date">--.--.----</span>
-                </div>
+                <div class="topbar-divider"></div>
 
                 <div class="notify">
-                    <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 7h18s-3 0-3-7"/><path d="M10 21h4"/></svg>
+                    <svg viewBox="0 0 24 24">
+                        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 7h18s-3 0-3-7"/>
+                        <path d="M10 21h4"/>
+                    </svg>
                     <i></i>
                 </div>
 
-                <div class="user-pill">
-                    <svg viewBox="0 0 24 24"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>
-                    <span>Администратор</span>
-                </div>
+                <a class="user-pill" href="/logout" title="Выйти из системы">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M20 21a8 8 0 0 0-16 0"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
+
+                    <span class="user-pill-text">
+                        <b>
+                            {% if current_user(request) %}
+                                {{ current_user(request)["full_name"] }}
+                            {% else %}
+                                Пользователь
+                            {% endif %}
+                        </b>
+
+                        <small>
+                            {% if current_user(request) %}
+                                {% if current_user(request)["role"] == "admin" %}
+                                    Администратор
+                                {% else %}
+                                    Оператор
+                                {% endif %}
+                            {% else %}
+                                Гость
+                            {% endif %}
+                        </small>
+                    </span>
+                </a>
+
+                <button type="button" class="theme-toggle theme-icon-only" id="themeToggle">
+                    <span class="theme-icon">☀️</span>
+                    <span class="theme-text">Светлая</span>
+                </button>
 
             </div>
 
@@ -131,12 +158,9 @@ function updateClock() {
         "ru-RU",
         {
             hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit"
+            minute: "2-digit"
         }
     );
-
-    document.getElementById("live-date").textContent = now.toLocaleDateString("ru-RU");
 }
 
 updateClock();

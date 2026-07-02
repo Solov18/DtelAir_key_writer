@@ -260,3 +260,27 @@
         font-size: 36px;
     }
 }
+/* вот */
+
+.user-pill {
+    text-decoration: none;
+}
+
+.user-pill-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.15;
+}
+
+.user-pill-text b {
+    color: var(--text-strong);
+    font-size: 14px;
+    font-weight: 800;
+}
+
+.user-pill-text small {
+    margin-top: 2px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+}
