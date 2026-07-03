@@ -16,6 +16,7 @@ from app.routers import (
     uk,
     keys,
     log,
+    users,
 )
 
 app = FastAPI(title="Dtel Access Manager")
@@ -51,3 +52,4 @@ app.include_router(manual_write.router)
 app.include_router(uk.router)
 app.include_router(keys.router)
 app.include_router(log.router)
+app.include_router(users.router)

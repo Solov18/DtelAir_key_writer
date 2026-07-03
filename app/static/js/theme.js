@@ -3,16 +3,18 @@ const themeIcon = document.querySelector(".theme-icon");
 const themeText = document.querySelector(".theme-text");
 
 function applyTheme(theme) {
-    document.body.classList.toggle("light-theme", theme === "light");
+    if (theme === "light") {
+        document.body.classList.add("light-theme");
+    } else {
+        document.body.classList.remove("light-theme");
+    }
 
-    if (themeIcon && themeText) {
-        if (theme === "light") {
-            themeIcon.textContent = "🌙";
-            themeText.textContent = "Тёмная";
-        } else {
-            themeIcon.textContent = "☀️";
-            themeText.textContent = "Светлая";
-        }
+    if (themeIcon) {
+        themeIcon.textContent = theme === "light" ? "🌙" : "☀️";
+    }
+
+    if (themeText) {
+        themeText.textContent = theme === "light" ? "Тёмная" : "Светлая";
     }
 
     localStorage.setItem("theme", theme);
@@ -23,7 +25,10 @@ applyTheme(savedTheme);
 
 if (themeToggle) {
     themeToggle.addEventListener("click", () => {
-        const isLight = document.body.classList.contains("light-theme");
-        applyTheme(isLight ? "dark" : "light");
+        const currentTheme = document.body.classList.contains("light-theme")
+            ? "light"
+            : "dark";
+
+        applyTheme(currentTheme === "light" ? "dark" : "light");
     });
 }
