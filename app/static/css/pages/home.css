@@ -382,3 +382,113 @@
     color: var(--muted);
     font-size: 14px;
 }
+/* ===== Главные карточки: неоновое кольцо ===== */
+
+.dashboard-action-icon {
+    width: 76px;
+    height: 76px;
+
+    border-radius: 50%;
+
+    border: 1px solid rgba(0, 170, 255, 0.72);
+
+    background:
+        radial-gradient(circle, rgba(0, 170, 255, 0.22), rgba(0, 55, 100, 0.05));
+
+    box-shadow:
+        0 0 14px rgba(0, 170, 255, 0.46),
+        inset 0 0 20px rgba(0, 170, 255, 0.18);
+
+    transition: 0.22s;
+}
+
+.dashboard-action-icon svg {
+    width: 34px;
+    height: 34px;
+    stroke: currentColor;
+}
+
+.dashboard-action-card:hover .dashboard-action-icon {
+    border-color: rgba(0, 210, 255, 0.95);
+
+    box-shadow:
+        0 0 26px rgba(0, 170, 255, 0.75),
+        inset 0 0 26px rgba(0, 170, 255, 0.28);
+}
+
+
+/* ===== Быстрые действия: живее и дороже ===== */
+
+.dashboard-quick-grid a {
+    position: relative;
+
+    min-height: 118px;
+
+    display: grid;
+    grid-template-columns: 58px 1fr;
+    gap: 14px;
+    align-items: center;
+
+    padding: 18px;
+
+    text-align: left;
+
+    border: 1px solid rgba(0, 170, 255, 0.24);
+    border-radius: 16px;
+
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.015)),
+        var(--panel);
+
+    box-shadow:
+        inset 0 0 18px rgba(0, 170, 255, 0.035),
+        0 0 18px rgba(0, 110, 220, 0.08);
+
+    transition: 0.22s;
+}
+
+.dashboard-quick-grid a svg {
+    width: 52px;
+    height: 52px;
+
+    padding: 12px;
+
+    border-radius: 50%;
+
+    color: var(--blue);
+
+    border: 1px solid rgba(0, 170, 255, 0.55);
+
+    background:
+        radial-gradient(circle, rgba(0, 170, 255, 0.20), rgba(0, 50, 90, 0.04));
+
+    box-shadow:
+        0 0 14px rgba(0, 170, 255, 0.40),
+        inset 0 0 16px rgba(0, 170, 255, 0.16);
+}
+
+.dashboard-quick-grid a span {
+    font-size: 15px;
+    line-height: 1.2;
+    font-weight: 900;
+}
+
+.dashboard-quick-grid a:hover {
+    transform: translateY(-4px);
+
+    border-color: rgba(0, 210, 255, 0.75);
+
+    box-shadow:
+        inset 0 0 26px rgba(0, 170, 255, 0.07),
+        0 0 34px rgba(0, 130, 255, 0.20);
+}
+
+.dashboard-quick-grid a:hover svg {
+    color: #ffffff;
+
+    border-color: rgba(0, 210, 255, 0.95);
+
+    box-shadow:
+        0 0 26px rgba(0, 170, 255, 0.72),
+        inset 0 0 22px rgba(0, 170, 255, 0.28);
+}
