@@ -5,7 +5,6 @@
 {% block content %}
 
 <div class="dashboard-hero">
-
     <div>
         <h1>Добро пожаловать!</h1>
         <p class="subtitle">Выберите действие или перейдите в нужный раздел.</p>
@@ -20,15 +19,13 @@
         </div>
 
         <div>
-            <b>Система работает</b>
-            <span>Все сервисы доступны</span>
+            <b>{% if dry_run %}Тестовый режим{% else %}Система работает{% endif %}</b>
+            <span>{% if dry_run %}Операции не отправляются в CRM{% else %}Все сервисы доступны{% endif %}</span>
         </div>
 
         <i></i>
     </div>
-
 </div>
-
 
 <div class="dashboard-actions">
 
@@ -39,12 +36,10 @@
                 <path d="M8 9h8M8 13h5"/>
             </svg>
         </div>
-
         <div>
             <h2>Из сообщения</h2>
             <p>Создать запись<br>из сообщения</p>
         </div>
-
         <span>›</span>
     </a>
 
@@ -55,12 +50,10 @@
                 <path d="m11 11 9-9M16 6l3 3M14 8l2 2"/>
             </svg>
         </div>
-
         <div>
             <h2>Обычная запись</h2>
             <p>Ручное создание<br>новой записи</p>
         </div>
-
         <span>›</span>
     </a>
 
@@ -71,17 +64,14 @@
                 <path d="m16.5 16.5 4.5 4.5"/>
             </svg>
         </div>
-
         <div>
             <h2>Универсальный поиск</h2>
             <p>Быстрый поиск по всем<br>данным системы</p>
         </div>
-
         <span>›</span>
     </a>
 
 </div>
-
 
 <div class="dashboard-stats">
 
@@ -93,12 +83,10 @@
                 <path d="M20 8v6M17 11h6"/>
             </svg>
         </div>
-
         <div>
-            <b>—</b>
+            <b>{{ stats['employees'] }}</b>
             <span>Сотрудников</span>
         </div>
-
         <em>Все сотрудники →</em>
     </a>
 
@@ -109,12 +97,10 @@
                 <path d="M8 7h2M8 11h2M8 15h2M17 12h1M17 16h1"/>
             </svg>
         </div>
-
         <div>
-            <b>—</b>
+            <b>{{ stats['uk'] }}</b>
             <span>Управляющих<br>компаний</span>
         </div>
-
         <em>Список УК →</em>
     </a>
 
@@ -125,12 +111,10 @@
                 <circle cx="12" cy="10" r="2.5"/>
             </svg>
         </div>
-
         <div>
             <b>{{ stats['panels'] }}</b>
             <span>Панелей / Адресов</span>
         </div>
-
         <em>Все панели →</em>
     </a>
 
@@ -141,12 +125,10 @@
                 <path d="m11 11 9-9M16 6l3 3M14 8l2 2"/>
             </svg>
         </div>
-
         <div>
             <b>{{ stats['keys'] }}</b>
             <span>Ключей в базе</span>
         </div>
-
         <em>Открыть базу →</em>
     </a>
 
@@ -157,17 +139,14 @@
                 <path d="M9 11h6M9 15h6M9 19h3"/>
             </svg>
         </div>
-
         <div>
             <b>{{ stats['logs'] }}</b>
-            <span>Операций сегодня</span>
+            <span>Операций</span>
         </div>
-
         <em>Журнал операций →</em>
     </a>
 
 </div>
-
 
 <div class="dashboard-bottom">
 
@@ -185,40 +164,30 @@
                 <span>Пользователь</span>
             </div>
 
-            <div class="operations-row">
-                <i class="op-green"></i>
-                <span>Сейчас</span>
-                <span>Система готова</span>
-                <span>Ожидание операций</span>
-                <span>admin</span>
-            </div>
+            {% if recent_operations %}
+                {% for r in recent_operations %}
+                <div class="operations-row">
+                    {% if r.status_name == 'Ошибка' or r.status_name == 'Ошибка CRM' %}
+                        <i class="op-orange"></i>
+                    {% elif r.status_name == 'Тест' %}
+                        <i class="op-blue"></i>
+                    {% else %}
+                        <i class="op-green"></i>
+                    {% endif %}
 
-            <div class="operations-row">
-                <i class="op-blue"></i>
-                <span>—</span>
-                <span>Из сообщения</span>
-                <span>Будет отображаться после записи</span>
-                <span>operator</span>
-            </div>
-
-            <div class="operations-row">
-                <i class="op-green"></i>
-                <span>—</span>
-                <span>Обычная запись</span>
-                <span>Журнал пуст или ожидает действий</span>
-                <span>admin</span>
-            </div>
-
-            <div class="operations-row">
-                <i class="op-orange"></i>
-                <span>—</span>
-                <span>Импорт</span>
-                <span>Ключи / панели</span>
-                <span>admin</span>
-            </div>
+                    <span>{{ r.created_at }}</span>
+                    <span>{{ r.action_name }}</span>
+                    <span>{{ r.object_name_view }}</span>
+                    <span>{{ r.user_name }}</span>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="operations-empty">
+                    Пока нет операций
+                </div>
+            {% endif %}
         </div>
     </div>
-
 
     <div class="dashboard-panel">
         <div class="dashboard-panel-head">

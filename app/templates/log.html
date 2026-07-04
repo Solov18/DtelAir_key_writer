@@ -5,14 +5,14 @@
 {% block content %}
 <div class="hero-title">
     <h1>Журнал операций</h1>
-    <p class="subtitle">История записи ключей на панели</p>
+    <p class="subtitle">История действий пользователей в системе</p>
 </div>
 
 <div class="panel log-panel">
 
     <div class="panel-list-head">
         <div>
-            <h2>Операции</h2>
+            <h2>События</h2>
             <p class="subtitle">
                 Найдено: <span id="logFound">{{ rows|length }}</span>
             </p>
@@ -22,7 +22,7 @@
             <input
                 type="text"
                 id="logSearch"
-                placeholder="Поиск по ключу, адресу, квартире, панели..."
+                placeholder="Поиск по пользователю, действию, объекту..."
                 autocomplete="off"
             >
         </div>
@@ -32,14 +32,11 @@
         <table id="logTable">
             <thead>
             <tr>
-                <th>ID</th>
                 <th>Дата</th>
-                <th>Тип</th>
-                <th>Ключ</th>
-                <th>HEX</th>
-                <th>Адрес</th>
-                <th>Квартира</th>
-                <th>Панель</th>
+                <th>Пользователь</th>
+                <th>Действие</th>
+                <th>Объект</th>
+                <th>Детали</th>
                 <th>Статус</th>
             </tr>
             </thead>
@@ -47,21 +44,29 @@
             <tbody>
             {% for r in rows %}
             <tr>
-                <td>{{ r.id }}</td>
                 <td>{{ r.created_at }}</td>
-                <td>{{ r.mode or '—' }}</td>
-                <td>{{ r.printed_number or '—' }}</td>
-                <td>{{ r.hex_value or '—' }}</td>
-                <td>{{ r.address or '—' }}</td>
-                <td>{{ r.apartment or r.flat_num or '—' }}</td>
-                <td>{{ r.panel_name or r.mac or '—' }}</td>
+
                 <td>
-                    {% if r.status == 'DRY_RUN' %}
-                        <span class="badge dry-run">Тест</span>
-                    {% elif r.status == 'ERROR' or r.status == 'NO_COOKIE' %}
-                        <span class="badge error">{{ r.status }}</span>
+                    <b>{{ r.user_name }}</b><br>
+                    <span class="subtitle">{{ r.user_role_name }}</span>
+                </td>
+
+                <td>{{ r.action_name }}</td>
+
+                <td>
+                    <b>{{ r.object_name_view }}</b><br>
+                    <span class="subtitle">{{ r.object_type_view }}</span>
+                </td>
+
+                <td>{{ r.details_view }}</td>
+
+                <td>
+                    {% if r.status_name == 'Ошибка' or r.status_name == 'Ошибка CRM' %}
+                        <span class="badge error">{{ r.status_name }}</span>
+                    {% elif r.status_name == 'Тест' %}
+                        <span class="badge dry-run">{{ r.status_name }}</span>
                     {% else %}
-                        <span class="badge success">{{ r.status }}</span>
+                        <span class="badge success">{{ r.status_name }}</span>
                     {% endif %}
                 </td>
             </tr>
@@ -72,28 +77,26 @@
 </div>
 
 <script>
-    const logSearch = document.getElementById("logSearch");
-    const logTable = document.getElementById("logTable");
-    const logFound = document.getElementById("logFound");
+const logSearch = document.getElementById("logSearch");
+const logTable = document.getElementById("logTable");
+const logFound = document.getElementById("logFound");
 
-    if (logSearch && logTable && logFound) {
-        const rows = Array.from(logTable.querySelectorAll("tbody tr"));
+if (logSearch && logTable && logFound) {
+    const rows = Array.from(logTable.querySelectorAll("tbody tr"));
 
-        logSearch.addEventListener("input", function () {
-            const query = this.value.toLowerCase().trim();
-            let visible = 0;
+    logSearch.addEventListener("input", function () {
+        const query = this.value.toLowerCase().trim();
+        let visible = 0;
 
-            rows.forEach((row) => {
-                const match = row.innerText.toLowerCase().includes(query);
-                row.style.display = match ? "" : "none";
+        rows.forEach((row) => {
+            const match = row.innerText.toLowerCase().includes(query);
+            row.style.display = match ? "" : "none";
 
-                if (match) {
-                    visible += 1;
-                }
-            });
-
-            logFound.textContent = visible;
+            if (match) visible += 1;
         });
-    }
+
+        logFound.textContent = visible;
+    });
+}
 </script>
 {% endblock %}

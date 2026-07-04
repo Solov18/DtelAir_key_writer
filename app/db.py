@@ -21,6 +21,18 @@ def db():
         conn.close()
 
 
+def _add_column_if_missing(conn, table_name: str, column_name: str, column_sql: str):
+    columns = [
+        row["name"]
+        for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+    ]
+
+    if column_name not in columns:
+        conn.execute(
+            f"ALTER TABLE {table_name} ADD COLUMN {column_sql}"
+        )
+
+
 def init_db():
     with db() as conn:
         conn.executescript(
@@ -80,115 +92,105 @@ def init_db():
 
             CREATE TABLE IF NOT EXISTS operation_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                mode TEXT NOT NULL,
+
+                mode TEXT NOT NULL DEFAULT '',
+                action TEXT DEFAULT '',
+                object_type TEXT DEFAULT '',
+                object_name TEXT DEFAULT '',
+                details TEXT DEFAULT '',
+
                 printed_number TEXT DEFAULT '',
-                hex_value TEXT NOT NULL,
+                hex_value TEXT DEFAULT '',
                 flat_num TEXT DEFAULT '',
-                mac TEXT NOT NULL,
+                mac TEXT DEFAULT '',
                 panel_name TEXT DEFAULT '',
-                status TEXT NOT NULL,
+
+                address TEXT DEFAULT '',
+                apartment TEXT DEFAULT '',
+
+                status TEXT NOT NULL DEFAULT 'success',
                 response TEXT DEFAULT '',
+
+                username TEXT DEFAULT '',
+                user_full_name TEXT DEFAULT '',
+                user_role TEXT DEFAULT '',
+                ip_address TEXT DEFAULT '',
+
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
             """
         )
 
-        columns = [
-            row["name"]
-            for row in conn.execute(
-                "PRAGMA table_info(operation_log)"
-            ).fetchall()
-        ]
+        # Обновление старой таблицы operation_log, если база уже была создана раньше
+        _add_column_if_missing(
+            conn,
+            "operation_log",
+            "action",
+            "action TEXT DEFAULT ''",
+        )
 
-        if "address" not in columns:
-            conn.execute(
-                "ALTER TABLE operation_log ADD COLUMN address TEXT DEFAULT ''"
-            )
+        _add_column_if_missing(
+            conn,
+            "operation_log",
+            "object_type",
+            "object_type TEXT DEFAULT ''",
+        )
 
-        if "apartment" not in columns:
-            conn.execute(
-                "ALTER TABLE operation_log ADD COLUMN apartment TEXT DEFAULT ''"
-            )
+        _add_column_if_missing(
+            conn,
+            "operation_log",
+            "object_name",
+            "object_name TEXT DEFAULT ''",
+        )
 
-        if "username" not in columns:
-            conn.execute(
-                "ALTER TABLE operation_log ADD COLUMN username TEXT DEFAULT ''"
-            )
+        _add_column_if_missing(
+            conn,
+            "operation_log",
+            "details",
+            "details TEXT DEFAULT ''",
+        )
 
-        if "user_full_name" not in columns:
-            conn.execute(
-                "ALTER TABLE operation_log ADD COLUMN user_full_name TEXT DEFAULT ''"
-            )
+        _add_column_if_missing(
+            conn,
+            "operation_log",
+            "address",
+            "address TEXT DEFAULT ''",
+        )
 
-        if "user_role" not in columns:
-            conn.execute(
-                "ALTER TABLE operation_log ADD COLUMN user_role TEXT DEFAULT ''"
-            )
+        _add_column_if_missing(
+            conn,
+            "operation_log",
+            "apartment",
+            "apartment TEXT DEFAULT ''",
+        )
 
-        panel_count = conn.execute(
-            "SELECT COUNT(*) FROM panels"
-        ).fetchone()[0]
+        _add_column_if_missing(
+            conn,
+            "operation_log",
+            "username",
+            "username TEXT DEFAULT ''",
+        )
 
-        if panel_count == 0:
-            rows = [
-                (
-                    "Тепличная 65",
-                    "общий вход",
-                    "Тепличная 65 общий вход",
-                    "08:13:CD:00:1D:C2",
-                    "employee,uk,gate",
-                ),
-                (
-                    "Тепличная 65",
-                    "калитка",
-                    "Тепличная 65 калитка",
-                    "D4:A0:FB:1B:36:90",
-                    "employee,uk,gate",
-                ),
-                (
-                    "Ясногорская 16/2 к.14",
-                    "подъезд",
-                    "Ясногорская 16/2 к.14 подъезд",
-                    "08:53:CD:19:62:6E",
-                    "employee,uk",
-                ),
-            ]
+        _add_column_if_missing(
+            conn,
+            "operation_log",
+            "user_full_name",
+            "user_full_name TEXT DEFAULT ''",
+        )
 
-            conn.executemany(
-                """
-                INSERT OR IGNORE INTO panels(
-                    address,
-                    entrance,
-                    name,
-                    mac,
-                    tags
-                )
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                rows,
-            )
+        _add_column_if_missing(
+            conn,
+            "operation_log",
+            "user_role",
+            "user_role TEXT DEFAULT ''",
+        )
 
-        key_count = conn.execute(
-            "SELECT COUNT(*) FROM keys"
-        ).fetchone()[0]
-
-        if key_count == 0:
-            conn.executemany(
-                """
-                INSERT OR IGNORE INTO keys(
-                    number,
-                    hex_value,
-                    key_type
-                )
-                VALUES (?, ?, ?)
-                """,
-                [
-                    ("5654", "363FFAD7", "простой"),
-                    ("39107", "363FFAD7", "простой"),
-                    ("39300", "3643A6F1", "простой"),
-                    ("001101", "362E0847", "бесплатный"),
-                ],
-            )
+        _add_column_if_missing(
+            conn,
+            "operation_log",
+            "ip_address",
+            "ip_address TEXT DEFAULT ''",
+        )
 
         user_count = conn.execute(
             "SELECT COUNT(*) FROM users"

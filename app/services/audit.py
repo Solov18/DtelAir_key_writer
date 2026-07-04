@@ -4,8 +4,12 @@ from app.db import db
 def log_event(
     *,
     request,
-    mode: str,
+    action: str,
+    object_type: str = "",
+    object_name: str = "",
     status: str = "success",
+    details: str = "",
+    mode: str = "",
     printed_number: str = "",
     hex_value: str = "-",
     flat_num: str = "",
@@ -17,11 +21,19 @@ def log_event(
 ):
     user = request.session.get("user", {}) if request else {}
 
+    ip_address = ""
+    if request and request.client:
+        ip_address = request.client.host
+    print(request.session.get("user"))
     with db() as conn:
         conn.execute(
             """
             INSERT INTO operation_log(
                 mode,
+                action,
+                object_type,
+                object_name,
+                details,
                 printed_number,
                 hex_value,
                 flat_num,
@@ -33,12 +45,17 @@ def log_event(
                 apartment,
                 username,
                 user_full_name,
-                user_role
+                user_role,
+                ip_address
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                mode,
+                mode or action,
+                action,
+                object_type,
+                object_name,
+                details,
                 printed_number,
                 hex_value,
                 flat_num,
@@ -51,5 +68,6 @@ def log_event(
                 user.get("login", ""),
                 user.get("full_name", ""),
                 user.get("role", ""),
+                ip_address,
             ),
         )

@@ -1,16 +1,16 @@
 from fastapi import APIRouter, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
-from app.services.audit import log_event
 
 from app.repositories.user_repository import (
     get_users,
     get_user_by_login,
     create_user,
-    disable_user,
-    enable_user,
+    delete_user,
+    count_admins,
     change_user_password,
 )
 from app.services.auth import get_current_user, is_admin
+from app.services.audit import log_event
 from app.templates_config import templates
 
 router = APIRouter()
@@ -23,13 +23,11 @@ def users_page(request: Request):
     if not is_admin(current_user):
         return RedirectResponse("/", status_code=303)
 
-    users = get_users()
-
     return templates.TemplateResponse(
         "users.html",
         {
             "request": request,
-            "users": users,
+            "users": get_users(),
         },
     )
 
@@ -47,19 +45,18 @@ def users_add(
     if not is_admin(current_user):
         return RedirectResponse("/", status_code=303)
 
+    full_name = full_name.strip()
     login = login.strip()
 
     if role not in ("admin", "operator"):
         role = "operator"
 
     if get_user_by_login(login):
-        users = get_users()
-
         return templates.TemplateResponse(
             "users.html",
             {
                 "request": request,
-                "users": users,
+                "users": get_users(),
                 "error": f"Пользователь с логином '{login}' уже существует",
             },
             status_code=200,
@@ -74,17 +71,18 @@ def users_add(
 
     log_event(
         request=request,
-        mode="user_create",
+        action="user_create",
+        object_type="Пользователь",
+        object_name=full_name,
         status="success",
-        response=f"Создан пользователь: {full_name.strip()} ({role})",
+        details=f"Создан пользователь '{login}' с ролью '{role}'",
     )
 
     return RedirectResponse("/users", status_code=303)
 
 
-
-@router.post("/users/disable")
-def users_disable(
+@router.post("/users/delete")
+def users_delete(
     request: Request,
     user_id: int = Form(...),
 ):
@@ -93,48 +91,47 @@ def users_disable(
     if not is_admin(current_user):
         return RedirectResponse("/", status_code=303)
 
-    if int(user_id) == int(current_user["id"]):
-        users = get_users()
+    users = get_users()
 
+    user_to_delete = next(
+        (u for u in users if int(u["id"]) == int(user_id)),
+        None,
+    )
+
+    if not user_to_delete:
+        return RedirectResponse("/users", status_code=303)
+
+    if int(user_id) == int(current_user["id"]):
         return templates.TemplateResponse(
             "users.html",
             {
                 "request": request,
                 "users": users,
-                "error": "Нельзя отключить пользователя, под которым вы сейчас вошли",
+                "error": "Нельзя удалить пользователя, под которым вы сейчас вошли",
             },
             status_code=200,
         )
 
-    disable_user(user_id)
+    if user_to_delete["role"] == "admin" and count_admins() <= 1:
+        return templates.TemplateResponse(
+            "users.html",
+            {
+                "request": request,
+                "users": users,
+                "error": "Нельзя удалить последнего администратора",
+            },
+            status_code=200,
+        )
+
+    delete_user(user_id)
 
     log_event(
         request=request,
-        mode="user_disable",
+        action="user_delete",
+        object_type="Пользователь",
+        object_name=user_to_delete["full_name"],
         status="success",
-        response=f"Отключён пользователь ID {user_id}",
-    )
-
-    return RedirectResponse("/users", status_code=303)
-
-
-@router.post("/users/enable")
-def users_enable(
-    request: Request,
-    user_id: int = Form(...),
-):
-    current_user = get_current_user(request)
-
-    if not is_admin(current_user):
-        return RedirectResponse("/", status_code=303)
-
-    enable_user(user_id)
-
-    log_event(
-        request=request,
-        mode="user_enable",
-        status="success",
-        response=f"Включён пользователь ID {user_id}",
+        details=f"Удалён пользователь '{user_to_delete['login']}'",
     )
 
     return RedirectResponse("/users", status_code=303)
@@ -151,6 +148,16 @@ def users_password(
     if not is_admin(current_user):
         return RedirectResponse("/", status_code=303)
 
+    users = get_users()
+
+    user = next(
+        (u for u in users if int(u["id"]) == int(user_id)),
+        None,
+    )
+
+    if not user:
+        return RedirectResponse("/users", status_code=303)
+
     change_user_password(
         user_id=user_id,
         password_hash=password,
@@ -158,9 +165,11 @@ def users_password(
 
     log_event(
         request=request,
-        mode="user_password_change",
+        action="user_password_change",
+        object_type="Пользователь",
+        object_name=user["full_name"],
         status="success",
-        response=f"Сменён пароль пользователя ID {user_id}",
+        details="Изменён пароль пользователя",
     )
 
     return RedirectResponse("/users", status_code=303)

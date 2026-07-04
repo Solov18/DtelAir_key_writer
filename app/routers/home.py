@@ -4,6 +4,7 @@ from fastapi.responses import HTMLResponse
 from app.db import db
 from app.settings import settings
 from app.templates_config import templates
+from app.repositories.log_repository import get_recent_operations
 
 router = APIRouter()
 
@@ -12,9 +13,21 @@ router = APIRouter()
 def index(request: Request):
     with db() as conn:
         stats = {
-            "keys": conn.execute("SELECT COUNT(*) FROM keys").fetchone()[0],
-            "panels": conn.execute("SELECT COUNT(*) FROM panels WHERE enabled=1").fetchone()[0],
-            "logs": conn.execute("SELECT COUNT(*) FROM operation_log").fetchone()[0],
+            "keys": conn.execute(
+                "SELECT COUNT(*) FROM keys"
+            ).fetchone()[0],
+            "panels": conn.execute(
+                "SELECT COUNT(*) FROM panels WHERE enabled = 1"
+            ).fetchone()[0],
+            "logs": conn.execute(
+                "SELECT COUNT(*) FROM operation_log"
+            ).fetchone()[0],
+            "employees": conn.execute(
+                "SELECT COUNT(*) FROM employees WHERE enabled = 1"
+            ).fetchone()[0],
+            "uk": conn.execute(
+                "SELECT COUNT(*) FROM uk_groups"
+            ).fetchone()[0],
         }
 
     return templates.TemplateResponse(
@@ -22,6 +35,7 @@ def index(request: Request):
         {
             "request": request,
             "stats": stats,
+            "recent_operations": get_recent_operations(5),
             "dry_run": settings.dry_run,
         },
     )

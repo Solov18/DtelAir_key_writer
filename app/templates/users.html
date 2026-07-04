@@ -96,38 +96,44 @@
 
                 <div class="user-actions">
 
-                    <form method="post" action="/users/password" class="user-password-form">
-                        <input type="hidden" name="user_id" value="{{ u.id }}">
-                        <input
-                            type="password"
-                            name="password"
-                            placeholder="Новый пароль"
-                            required
-                        >
-                        <button type="submit" class="btn-small">
-                            Сменить
-                        </button>
-                    </form>
+    <form method="post" action="/users/password" class="user-password-form">
+        <input type="hidden" name="user_id" value="{{ u.id }}">
 
-                    {% if current_user(request) and u.id == current_user(request)["id"] %}
-    <span class="badge dry-run">Текущий пользователь</span>
-{% elif u.active %}
-                    <form method="post" action="/users/disable">
-                        <input type="hidden" name="user_id" value="{{ u.id }}">
-                        <button type="submit" class="danger-btn btn-small">
-                            Отключить
-                        </button>
-                    </form>
-                    {% else %}
-                    <form method="post" action="/users/enable">
-                        <input type="hidden" name="user_id" value="{{ u.id }}">
-                        <button type="submit" class="btn-small">
-                            Включить
-                        </button>
-                    </form>
-                    {% endif %}
+        <input
+            type="password"
+            name="password"
+            placeholder="Новый пароль"
+            required
+        >
 
-                </div>
+        <button type="submit" class="btn-small user-btn">
+            Сменить
+        </button>
+    </form>
+
+    {% if current_user(request) and u.id == current_user(request)["id"] %}
+
+        <span class="badge dry-run">
+            Текущий пользователь
+        </span>
+
+    {% else %}
+
+        <form method="post" action="/users/delete">
+            <input type="hidden" name="user_id" value="{{ u.id }}">
+
+            <button
+                type="submit"
+                class="danger-btn btn-small user-btn"
+                onclick="return confirm('Удалить пользователя {{ u.full_name }}?')"
+            >
+                Удалить
+            </button>
+        </form>
+
+    {% endif %}
+
+</div>
 
             </div>
             {% endfor %}
