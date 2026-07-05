@@ -6,14 +6,15 @@
 <div class="hero-title">
     <h1>Обычная запись</h1>
     <p class="subtitle">
-        Быстрая запись ключа по номеру, HEX или полному коду 000000HEX
+        Ручная запись ключа по номеру, HEX-коду или полному идентификатору.
+        После проверки система найдёт панели по указанному адресу.
     </p>
 </div>
 
 <div class="manual-form-grid">
 
     <div class="panel manual-form-panel">
-        <h2>Данные для записи</h2>
+        <h2>Введите данные</h2>
 
         <form method="post" action="/write/manual/preview">
             <label>Номер ключа или HEX</label>
@@ -39,30 +40,74 @@
                 placeholder="47"
             >
 
-            <button type="submit">
-                Проверить
+            <button type="submit" class="btn manual-main-btn">
+                Проверить данные
             </button>
         </form>
     </div>
 
     <div class="panel manual-help-panel">
-        <h2>Как пользоваться</h2>
+        <h2>Что можно указать</h2>
 
-        <div class="help-list">
+        <div class="help-list manual-help-list">
+
             <div>
-                <b>1. Введите ключ</b>
-                <span>Можно номер, HEX или полный код 000000HEX</span>
+                <span class="help-icon">
+                    <svg viewBox="0 0 24 24">
+                        <circle cx="7.5" cy="14.5" r="4.5"/>
+                        <path d="m11 11 9-9M16 6l3 3M14 8l2 2"/>
+                    </svg>
+                </span>
+
+                <p>
+                    <b>Ключ</b>
+                    <span>номер, HEX или полный код</span>
+                </p>
             </div>
 
             <div>
-                <b>2. Укажите адрес</b>
-                <span>Например: Тепличная 65 или Санаторная 50Б</span>
+                <span class="help-icon">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M4 11l8-7 8 7"/>
+                        <path d="M6 10v10h12V10"/>
+                        <path d="M10 20v-6h4v6"/>
+                    </svg>
+                </span>
+
+                <p>
+                    <b>Адрес</b>
+                    <span>адрес из базы панелей</span>
+                </p>
             </div>
 
             <div>
-                <b>3. Выберите панели</b>
-                <span>После проверки можно снять лишние панели</span>
+                <span class="help-icon">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M6 3h12v18H6z"/>
+                        <path d="M9 7h6M9 11h6M9 15h3"/>
+                    </svg>
+                </span>
+
+                <p>
+                    <b>Квартира</b>
+                    <span>номер квартиры жильца</span>
+                </p>
             </div>
+
+            <div>
+                <span class="help-icon">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6l7-3z"/>
+                        <path d="M9 12l2 2 4-5"/>
+                    </svg>
+                </span>
+
+                <p>
+                    <b>Проверка</b>
+                    <span>перед записью можно снять лишние панели</span>
+                </p>
+            </div>
+
         </div>
     </div>
 
@@ -82,7 +127,7 @@
         <div class="key-summary-head">
             <div>
                 <h2>Ключ найден</h2>
-                <p class="subtitle">Проверьте перед записью</p>
+                <p class="subtitle">Проверьте данные перед записью</p>
             </div>
 
             <div class="key-icon">
@@ -91,6 +136,10 @@
                     <path d="m11 11 9-9M16 6l3 3M14 8l2 2"></path>
                 </svg>
             </div>
+        </div>
+
+        <div class="badge success manual-found-badge">
+            Ключ найден в базе
         </div>
 
         <div class="key-info-list">
@@ -124,8 +173,8 @@
     <div class="panel panels-select">
         <div class="panels-head">
             <div>
-                <h2>Панели</h2>
-                <p class="subtitle">Выберите панели для записи ключа</p>
+                <h2>Панели для записи</h2>
+                <p class="subtitle">Выберите панели, куда нужно записать ключ</p>
             </div>
 
             {% if panels %}
@@ -133,6 +182,7 @@
                 <button type="button" class="btn-small" id="select-all-panels">
                     Выбрать все
                 </button>
+
                 <button type="button" class="btn-small btn-ghost" id="clear-all-panels">
                     Снять все
                 </button>
@@ -174,7 +224,7 @@
                 {% endfor %}
             </div>
 
-            <button type="submit" class="wide-action">
+            <button type="submit" class="btn wide-action">
                 Прописать на выбранные панели
             </button>
         </form>
@@ -186,24 +236,24 @@
 </div>
 
 <script>
-    const selectAllBtn = document.getElementById("select-all-panels");
-    const clearAllBtn = document.getElementById("clear-all-panels");
+const selectAllBtn = document.getElementById("select-all-panels");
+const clearAllBtn = document.getElementById("clear-all-panels");
 
-    function setPanelCheckboxes(value) {
-        document
-            .querySelectorAll('input[name="panel_ids"]')
-            .forEach((checkbox) => {
-                checkbox.checked = value;
-            });
-    }
+function setPanelCheckboxes(value) {
+    document
+        .querySelectorAll('input[name="panel_ids"]')
+        .forEach((checkbox) => {
+            checkbox.checked = value;
+        });
+}
 
-    if (selectAllBtn) {
-        selectAllBtn.addEventListener("click", () => setPanelCheckboxes(true));
-    }
+if (selectAllBtn) {
+    selectAllBtn.addEventListener("click", () => setPanelCheckboxes(true));
+}
 
-    if (clearAllBtn) {
-        clearAllBtn.addEventListener("click", () => setPanelCheckboxes(false));
-    }
+if (clearAllBtn) {
+    clearAllBtn.addEventListener("click", () => setPanelCheckboxes(false));
+}
 </script>
 {% endif %}
 {% endblock %}

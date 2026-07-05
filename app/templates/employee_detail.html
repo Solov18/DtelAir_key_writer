@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+
+{% block page_name %}Сотрудник{% endblock %}
+
+{% block content %}
+<div class="hero-title employee-detail-hero">
+    <div>
+        <a class="btn btn-small btn-ghost" href="/employees">
+            ← Назад к сотрудникам
+        </a>
+
+        <h1>{{ employee.full_name }}</h1>
+        <p class="subtitle">{{ employee.note or 'Карточка сотрудника' }}</p>
+    </div>
+</div>
+
+<div class="employee-detail-grid">
+
+    <div class="panel">
+        <div class="panel-head">
+            <div>
+                <h2>Ключи сотрудника</h2>
+                <p class="subtitle">Номера ключей, закреплённые за сотрудником</p>
+            </div>
+        </div>
+
+        {% if message and message.not_found %}
+        <div class="compact-alert">
+            <h2 class="warn">Не найдены ключи</h2>
+            <p>{{ message.not_found|join(', ') }}</p>
+        </div>
+        {% endif %}
+
+        {% if employee_keys %}
+        <div class="table-scroll small-scroll">
+            <table>
+                <thead>
+                <tr>
+                    <th>Номер</th>
+                    <th>HEX</th>
+                    <th>Тип</th>
+                    <th></th>
+                </tr>
+                </thead>
+
+                <tbody>
+                {% for k in employee_keys %}
+                <tr>
+                    <td><b>{{ k.number }}</b></td>
+                    <td>{{ k.hex_value }}</td>
+                    <td>{{ k.key_type or '—' }}</td>
+                    <td>
+                        <form method="post" action="/employees/{{ employee.id }}/keys/remove">
+                            <input type="hidden" name="key_id" value="{{ k.id }}">
+                            <button type="submit" class="danger-btn btn-small">
+                                Удалить
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="warn">У сотрудника пока нет закреплённых ключей.</p>
+        {% endif %}
+    </div>
+
+    <div class="panel">
+        <h2>Добавить ключи</h2>
+
+        <form method="post" action="/employees/{{ employee.id }}/keys/add" class="employee-detail-form">
+            <label>Номера ключей</label>
+            <input
+                name="key_values"
+                placeholder="39068, 39139, 001101"
+                required
+            >
+
+            <button type="submit" class="btn wide-action">
+                Добавить ключи
+            </button>
+        </form>
+    </div>
+
+</div>
+{% endblock %}

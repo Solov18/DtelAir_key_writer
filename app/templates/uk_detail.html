@@ -1,0 +1,275 @@
+{% extends 'base.html' %}
+
+{% block page_name %}Управление УК{% endblock %}
+
+{% block content %}
+<div class="hero-title uk-detail-hero">
+    <div>
+        <a class="btn btn-small btn-ghost" href="/uk">← Назад к УК</a>
+
+        <h1>{{ group.name }}</h1>
+        <p class="subtitle">
+            {{ group.note or 'Управление панелями и ключами этой УК' }}
+        </p>
+    </div>
+
+    <div class="uk-stats">
+        <div>
+            <b>{{ group_panels|length }}</b>
+            <span>Панелей</span>
+        </div>
+
+        <div>
+            <b>{{ group_keys|length }}</b>
+            <span>Ключей</span>
+        </div>
+    </div>
+</div>
+
+<div class="uk-control-grid">
+
+    <div class="panel uk-manage-panel">
+        <div class="panel-head">
+            <div>
+                <h2>Панели УК</h2>
+                <p class="subtitle">Адреса и входы, закреплённые за группой</p>
+            </div>
+
+            <button type="button" class="btn btn-small" id="openPanelsModal">
+                Добавить панели
+            </button>
+        </div>
+
+        {% if group_panels %}
+        <div class="uk-items-list">
+            {% for p in group_panels %}
+            <div class="uk-item-row">
+                <div>
+                    <b>{{ p.entrance or '—' }}</b>
+                    <span>{{ p.address }}</span>
+                    <small>{{ p.mac }}</small>
+                </div>
+
+                <form method="post" action="/uk/{{ group.id }}/panels/remove">
+                    <input type="hidden" name="panel_id" value="{{ p.id }}">
+                    <button type="submit" class="danger-btn btn-small">
+                        Удалить
+                    </button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="warn">Панели пока не добавлены.</p>
+        {% endif %}
+    </div>
+
+    <div class="panel uk-manage-panel">
+        <div class="panel-head">
+            <div>
+                <h2>Ключи УК</h2>
+                <p class="subtitle">Ключи, закреплённые за этой группой</p>
+            </div>
+
+            <button type="button" class="btn btn-small" id="openKeysModal">
+                Добавить ключи
+            </button>
+        </div>
+
+        {% if message and message.not_found %}
+        <div class="compact-alert">
+            <h2 class="warn">Не найдены ключи</h2>
+            <p>{{ message.not_found|join(', ') }}</p>
+        </div>
+        {% endif %}
+
+        {% if group_keys %}
+        <div class="table-scroll small-scroll">
+            <table>
+                <thead>
+                <tr>
+                    <th>Номер</th>
+                    <th>HEX</th>
+                    <th>Тип</th>
+                    <th></th>
+                </tr>
+                </thead>
+
+                <tbody>
+                {% for k in group_keys %}
+                <tr>
+                    <td><b>{{ k.number }}</b></td>
+                    <td>{{ k.hex_value }}</td>
+                    <td>{{ k.key_type or '—' }}</td>
+                    <td>
+                        <form method="post" action="/uk/{{ group.id }}/keys/remove">
+                            <input type="hidden" name="key_id" value="{{ k.id }}">
+                            <button type="submit" class="danger-btn btn-small">
+                                Удалить
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="warn">Ключи пока не добавлены.</p>
+        {% endif %}
+    </div>
+
+</div>
+
+<div class="panel uk-write-panel">
+    <div class="panel-head">
+        <div>
+            <h2>Прописать ключи УК</h2>
+            <p class="subtitle">Запись ключей на все панели этой управляющей компании</p>
+        </div>
+    </div>
+
+    <form method="post" action="/uk/{{ group.id }}/write" class="uk-write-form">
+        <div>
+            <label>Номера ключей</label>
+            <input
+                name="key_values"
+                placeholder="39068, 39139"
+                required
+            >
+        </div>
+
+        <div>
+            <label>Квартира / flatNum</label>
+            <input name="flat_num" value="0">
+        </div>
+
+        <input type="hidden" name="inner" value="0">
+
+        <button type="submit" class="btn">
+            Прописать ключи
+        </button>
+    </form>
+</div>
+
+<div class="modal-backdrop" id="panelsModal">
+    <div class="modal-window panel">
+        <div class="modal-head">
+            <div>
+                <h2>Добавить панели</h2>
+                <p class="subtitle">Выберите адреса и входы для этой УК</p>
+            </div>
+
+            <button type="button" class="btn-small btn-ghost modal-close" data-close="panelsModal">
+                Закрыть
+            </button>
+        </div>
+
+        <div class="panel-search uk-search">
+            <input
+                type="text"
+                id="availablePanelSearch"
+                placeholder="Поиск по адресу, входу или MAC..."
+                autocomplete="off"
+            >
+        </div>
+
+        <form method="post" action="/uk/{{ group.id }}/panels/add">
+            <div class="panel-list uk-panel-list" id="availablePanelList">
+                {% for p in available_panels %}
+                <label class="panel-option">
+                    <input type="checkbox" name="panel_ids" value="{{ p.id }}">
+
+                    <span class="panel-option-body">
+                        <span class="panel-option-title">{{ p.entrance or '—' }}</span>
+                        <span class="panel-option-meta">{{ p.address }}</span>
+                        <span class="panel-option-mac">{{ p.mac }}</span>
+                    </span>
+                </label>
+                {% endfor %}
+            </div>
+
+            <button type="submit" class="btn wide-action">
+                Добавить выбранные
+            </button>
+        </form>
+    </div>
+</div>
+
+<div class="modal-backdrop" id="keysModal">
+    <div class="modal-window panel">
+        <div class="modal-head">
+            <div>
+                <h2>Добавить ключи</h2>
+                <p class="subtitle">Введите номера ключей через пробел или запятую</p>
+            </div>
+
+            <button type="button" class="btn-small btn-ghost modal-close" data-close="keysModal">
+                Закрыть
+            </button>
+        </div>
+
+        <form method="post" action="/uk/{{ group.id }}/keys/add" class="uk-modal-form">
+            <label>Номера ключей</label>
+            <input
+                name="key_values"
+                placeholder="39068, 39139, 001101"
+                required
+            >
+
+            <button type="submit" class="btn wide-action">
+                Добавить ключи
+            </button>
+        </form>
+    </div>
+</div>
+
+<script>
+const panelsModal = document.getElementById("panelsModal");
+const keysModal = document.getElementById("keysModal");
+
+const openPanelsModal = document.getElementById("openPanelsModal");
+const openKeysModal = document.getElementById("openKeysModal");
+
+if (openPanelsModal) {
+    openPanelsModal.addEventListener("click", () => {
+        panelsModal.classList.add("active");
+    });
+}
+
+if (openKeysModal) {
+    openKeysModal.addEventListener("click", () => {
+        keysModal.classList.add("active");
+    });
+}
+
+document.querySelectorAll(".modal-close").forEach((btn) => {
+    btn.addEventListener("click", () => {
+        document.getElementById(btn.dataset.close).classList.remove("active");
+    });
+});
+
+document.querySelectorAll(".modal-backdrop").forEach((modal) => {
+    modal.addEventListener("click", (event) => {
+        if (event.target === modal) {
+            modal.classList.remove("active");
+        }
+    });
+});
+
+const availablePanelSearch = document.getElementById("availablePanelSearch");
+const availablePanelList = document.getElementById("availablePanelList");
+
+if (availablePanelSearch && availablePanelList) {
+    availablePanelSearch.addEventListener("input", function () {
+        const query = this.value.toLowerCase().trim();
+
+        availablePanelList.querySelectorAll(".panel-option").forEach((row) => {
+            row.style.display = row.innerText.toLowerCase().includes(query)
+                ? ""
+                : "none";
+        });
+    });
+}
+</script>
+{% endblock %}

@@ -6,14 +6,17 @@
 <div class="hero-title">
     <h1>Универсальный поиск</h1>
     <p class="subtitle">
-        Поиск по номеру ключа, HEX, адресу или квартире
+        Найдите ключ, историю записи, адрес или квартиру по любым известным данным.
     </p>
 </div>
 
 <div class="search-layout">
 
     <div class="panel search-form-panel">
-        <h2>Что ищем</h2>
+        <h2>Поисковый запрос</h2>
+        <p class="subtitle search-form-subtitle">
+            Введите номер ключа, HEX, адрес, квартиру или часть данных.
+        </p>
 
         <form method="post" action="/search">
             <input
@@ -23,7 +26,7 @@
                 required
             >
 
-            <button type="submit">
+            <button type="submit" class="btn search-main-btn">
                 Найти
             </button>
         </form>
@@ -32,21 +35,51 @@
     <div class="panel search-help-panel">
         <h2>Можно искать</h2>
 
-        <div class="help-list">
+        <div class="help-list search-help-list">
+
             <div>
-                <b>По ключу</b>
-                <span>39107 или 363FFAD7</span>
+                <span class="help-icon">
+                    <svg viewBox="0 0 24 24">
+                        <circle cx="7.5" cy="14.5" r="4.5"/>
+                        <path d="m11 11 9-9M16 6l3 3M14 8l2 2"/>
+                    </svg>
+                </span>
+
+                <p>
+                    <b>По ключу</b>
+                    <span>39107 или 363FFAD7</span>
+                </p>
             </div>
 
             <div>
-                <b>По адресу</b>
-                <span>Тепличная 65</span>
+                <span class="help-icon">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M4 11l8-7 8 7"/>
+                        <path d="M6 10v10h12V10"/>
+                        <path d="M10 20v-6h4v6"/>
+                    </svg>
+                </span>
+
+                <p>
+                    <b>По адресу</b>
+                    <span>Тепличная 65</span>
+                </p>
             </div>
 
             <div>
-                <b>По квартире</b>
-                <span>10 или кв. 10</span>
+                <span class="help-icon">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M6 3h12v18H6z"/>
+                        <path d="M9 7h6M9 11h6M9 15h3"/>
+                    </svg>
+                </span>
+
+                <p>
+                    <b>По квартире</b>
+                    <span>10 или кв. 10</span>
+                </p>
             </div>
+
         </div>
     </div>
 
@@ -68,6 +101,10 @@
                     <path d="m11 11 9-9M16 6l3 3M14 8l2 2"></path>
                 </svg>
             </div>
+        </div>
+
+        <div class="badge success search-found-badge">
+            Найден в базе
         </div>
 
         <div class="key-info-list">
@@ -124,7 +161,7 @@
                     <td>{{ row.panel_name or '—' }}</td>
                     <td>
                         {% if row.status == 'DRY_RUN' %}
-                            <span class="badge">DRY_RUN</span>
+                            <span class="badge dry-run">Тест</span>
                         {% elif row.status == 'ERROR' or row.status == 'NO_COOKIE' %}
                             <span class="badge error">{{ row.status }}</span>
                         {% else %}
@@ -171,7 +208,7 @@
                 <td>{{ row.panel_name or '—' }}</td>
                 <td>
                     {% if row.status == 'DRY_RUN' %}
-                        <span class="badge">DRY_RUN</span>
+                        <span class="badge dry-run">Тест</span>
                     {% elif row.status == 'ERROR' or row.status == 'NO_COOKIE' %}
                         <span class="badge error">{{ row.status }}</span>
                     {% else %}

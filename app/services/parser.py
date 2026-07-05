@@ -25,9 +25,27 @@ ENTRANCE_RE = re.compile(
 
 KEY_RE = re.compile(r"(?:№|#)?\s*(\d{4,6})(?!\d)")
 
-HOUSE_RE = re.compile(r"^\d+[а-яa-z]?(?:/\d+)?$", re.I)
+HOUSE_RE = re.compile(
+    r"^\d+[а-яa-z]?(?:/\d+){0,2}$",
+    re.I,
+)
 
+def expand_tokens(tokens: list[str]) -> set[str]:
+    result = set()
 
+    for token in tokens:
+        result.add(token)
+
+        if "/" in token:
+            parts = token.split("/")
+            current = parts[0]
+            result.add(current)
+
+            for part in parts[1:]:
+                current += "/" + part
+                result.add(current)
+
+    return result
 def compact(value: str) -> str:
     return re.sub(r"\s+", " ", value or "").strip()
 
@@ -225,7 +243,7 @@ def score_address(message_tokens: set[str], item: dict) -> int:
 
 def extract_address_from_db(text: str) -> str:
     message = normalize_house_variants(remove_noise(text))
-    message_tokens = set(message.split())
+    message_tokens = expand_tokens(message.split())
 
     best_address = ""
     best_score = 0

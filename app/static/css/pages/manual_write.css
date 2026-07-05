@@ -189,3 +189,79 @@ body.light-theme .key-icon {
         text-align: left;
     }
 }
+.manual-form-panel form {
+    display: flex;
+    flex-direction: column;
+}
+
+.manual-form-panel input {
+    min-height: 48px;
+    border-radius: 14px;
+}
+
+.manual-main-btn {
+    width: fit-content;
+    min-width: 230px;
+    margin-top: 4px;
+}
+
+.manual-help-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.manual-help-list > div {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 18px;
+    border-radius: 16px;
+    border: 1px solid var(--line-soft);
+    transition: .18s;
+}
+
+.manual-help-list > div:hover {
+    transform: translateY(-2px);
+    border-color: rgba(0,170,255,.38);
+    box-shadow: 0 8px 24px rgba(0,120,255,.10);
+}
+
+.manual-help-list p {
+    margin: 0;
+}
+
+.manual-help-list .help-icon {
+    width: 42px;
+    height: 42px;
+    flex: 0 0 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    color: var(--blue);
+    border: 1px solid rgba(0,170,255,.48);
+    background: radial-gradient(circle, rgba(0,170,255,.18), rgba(0,50,90,.04));
+    box-shadow:
+        0 0 14px rgba(0,170,255,.30),
+        inset 0 0 12px rgba(0,170,255,.12);
+}
+
+.manual-help-list .help-icon svg {
+    width: 21px;
+    height: 21px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.manual-found-badge {
+    margin-bottom: 18px;
+}
+
+.wide-action {
+    width: fit-content;
+    min-width: 300px;
+}

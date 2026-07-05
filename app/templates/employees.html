@@ -3,43 +3,83 @@
 {% block page_name %}Сотрудники{% endblock %}
 
 {% block content %}
-<div class="hero-title">
-    <h1>Сотрудники</h1>
-    <p class="subtitle">База сотрудников и запись служебных ключей</p>
+<div class="employees-hero">
+    <div>
+        <h1>Сотрудники</h1>
+        <p class="subtitle">Управление сотрудниками и запись служебных ключей на панели</p>
+    </div>
+
+    <div class="employees-stats">
+        <div class="employees-stat-card">
+            <div class="employees-stat-icon">
+                <svg viewBox="0 0 24 24">
+                    <path d="M17 21a6 6 0 0 0-12 0"/>
+                    <circle cx="11" cy="8" r="4"/>
+                    <path d="M20 8v6M17 11h6"/>
+                </svg>
+            </div>
+            <div>
+                <b>{{ employees_count or employees|length }}</b>
+                <span>Сотрудников</span>
+            </div>
+        </div>
+
+        <div class="employees-stat-card">
+            <div class="employees-stat-icon">
+                <svg viewBox="0 0 24 24">
+                    <circle cx="7.5" cy="14.5" r="4.5"/>
+                    <path d="m11 11 9-9M16 6l3 3M14 8l2 2"/>
+                </svg>
+            </div>
+            <div>
+                <b>{{ employee_keys_count or 0 }}</b>
+                <span>Ключей у сотрудников</span>
+            </div>
+        </div>
+    </div>
 </div>
 
-<div class="employees-page-grid">
+<div class="employees-top-grid">
 
-    <div class="panel">
-        <h2>Добавить сотрудника</h2>
+    <div class="panel employee-add-panel">
+        <h2>
+            <span class="title-svg-icon">
+                <svg viewBox="0 0 24 24">
+                    <path d="M17 21a6 6 0 0 0-12 0"/>
+                    <circle cx="11" cy="8" r="4"/>
+                    <path d="M20 8v6M17 11h6"/>
+                </svg>
+            </span>
+            Добавить сотрудника
+        </h2>
 
         <form method="post" action="/employees/add">
             <label>ФИО сотрудника</label>
-            <input
-                name="full_name"
-                placeholder="Иванов Иван Иванович"
-                required
-            >
+            <input name="full_name" placeholder="Иванов Иван Иванович" required>
 
             <label>Комментарий</label>
-            <input
-                name="note"
-                placeholder="Отдел, должность или примечание"
-            >
+            <input name="note" placeholder="Отдел, должность или примечание">
 
-            <button type="submit">
+            <button type="submit" class="btn employees-wide-btn">
                 Добавить сотрудника
             </button>
         </form>
     </div>
 
-    <div class="panel employee-form-panel">
-        <h2>Записать ключ сотруднику</h2>
+    <div class="panel employee-write-panel">
+        <h2>
+            <span class="title-svg-icon">
+                <svg viewBox="0 0 24 24">
+                    <circle cx="7.5" cy="14.5" r="4.5"/>
+                    <path d="m11 11 9-9M16 6l3 3M14 8l2 2"/>
+                </svg>
+            </span>
+            Записать ключ сотруднику
+        </h2>
 
         <form method="post" action="/employees/write" id="employeeWriteForm">
 
             <label>Сотрудник</label>
-
             <input
                 type="text"
                 id="employeeWriteSearch"
@@ -51,108 +91,137 @@
 
             <div class="employee-picker" id="employeePicker">
                 {% for e in employees %}
-                <button
-                    type="button"
-                    class="employee-picker-item"
-                    data-name="{{ e.full_name }}"
-                >
+                <button type="button" class="employee-picker-item" data-name="{{ e.full_name }}">
                     {{ e.full_name }}
                 </button>
                 {% endfor %}
             </div>
 
             <label>Номер ключа / несколько номеров</label>
-            <input
-                name="key_values"
-                placeholder="39068, 39139"
-                required
-            >
+            <input name="key_values" placeholder="39068, 39139" required>
 
-            <label>Куда прописывать</label>
-            <select name="scope">
-                <option value="all">На все панели</option>
-                <option value="employee_tag">Только панели с тегом employee</option>
-                <option value="selected">Выбрать панели вручную</option>
-            </select>
+            <div class="employee-write-row">
+                <div>
+                    <label>Куда прописывать</label>
+                    <select name="scope" id="employeeScope">
+                        <option value="all">На все панели</option>
+                        <option value="employee_tag">Только панели с тегом employee</option>
+                        <option value="selected">Выбрать панели вручную</option>
+                    </select>
+                </div>
 
-            <label>Квартира / flatNum</label>
-            <input name="flat_num" value="0">
+                <div>
+                    <label>Квартира / flatNum</label>
+                    <input name="flat_num" value="0">
+                </div>
+            </div>
 
             <input type="hidden" name="inner" value="0">
 
-            <button type="submit">
-                Прописать сотруднику
-            </button>
+            <div class="employee-write-actions">
+                <button type="button" class="btn btn-ghost" id="openEmployeePanelsModal">
+                    Выбрать панели
+                </button>
+
+                <button type="submit" class="btn">
+                    Прописать сотруднику
+                </button>
+            </div>
         </form>
     </div>
 
 </div>
 
-<div class="employee-layout">
-
-    <div class="panel employees-list-panel">
-        <div class="panel-list-head">
-            <div>
-                <h2>Список сотрудников</h2>
-                <p class="subtitle">
-                    Всего: <span id="employeesFound">{{ employees|length }}</span>
-                </p>
-            </div>
-
-            <div class="panel-search">
-                <input
-                    type="text"
-                    id="employeesSearch"
-                    placeholder="Поиск по ФИО или комментарию..."
-                    autocomplete="off"
-                >
-            </div>
+<div class="panel employees-list-panel">
+    <div class="panel-list-head">
+        <div>
+            <h2>
+                <span class="title-svg-icon">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M17 21a6 6 0 0 0-12 0"/>
+                        <circle cx="11" cy="8" r="4"/>
+                        <path d="M20 8v6M17 11h6"/>
+                    </svg>
+                </span>
+                Список сотрудников
+            </h2>
+            <p class="subtitle">
+                Всего: <span id="employeesFound">{{ employees|length }}</span>
+            </p>
         </div>
 
-        <div class="employees-cards" id="employeesCards">
-            {% for e in employees %}
-            <div class="employee-card">
-                <div class="employee-card-main">
-                    <b>{{ e.full_name }}</b>
-                    <span>{{ e.note or 'Без комментария' }}</span>
-                </div>
-
-                <div class="employee-card-actions">
-                    <button
-                        type="button"
-                        class="btn-small"
-                        data-employee-select="{{ e.full_name }}"
-                    >
-                        Выбрать
-                    </button>
-
-                    <form method="post" action="/employees/delete">
-                        <input type="hidden" name="employee_id" value="{{ e.id }}">
-                        <button type="submit" class="danger-btn small-danger">
-                            Удалить
-                        </button>
-                    </form>
-                </div>
-            </div>
-            {% endfor %}
+        <div class="panel-search employees-search-box">
+            <input
+                type="text"
+                id="employeesSearch"
+                placeholder="Поиск по ФИО или комментарию..."
+                autocomplete="off"
+            >
         </div>
     </div>
 
-    <div class="panel panels-select employee-panels-panel">
-        <div class="panels-head">
-            <div>
-                <h2>Выборочные панели</h2>
-                <p class="subtitle">Используется только при режиме “Выбрать панели вручную”</p>
+    <div class="employees-cards" id="employeesCards">
+        {% for e in employees %}
+        <div class="employee-card">
+            <div class="employee-avatar">
+                <svg viewBox="0 0 24 24">
+                    <path d="M17 21a6 6 0 0 0-12 0"/>
+                    <circle cx="11" cy="8" r="4"/>
+                </svg>
             </div>
 
-            <div class="panel-actions">
-                <button type="button" class="btn-small" id="select-all-panels">
-                    Выбрать все
-                </button>
-                <button type="button" class="btn-small btn-ghost" id="clear-all-panels">
-                    Снять все
-                </button>
+            <div class="employee-card-main">
+                <b>{{ e.full_name }}</b>
+                <span>{{ e.note or 'Без комментария' }}</span>
             </div>
+
+            <div class="employee-card-stat employee-key-numbers">
+                <b>{{ e.key_numbers or '—' }}</b>
+                <span>Ключи</span>
+            </div>
+
+            <div class="employee-card-actions">
+                <button
+                    type="button"
+                    class="btn btn-small"
+                    data-employee-select="{{ e.full_name }}"
+                >
+                    Выбрать
+                </button>
+
+                <a href="/employees/{{ e.id }}" class="btn btn-small btn-ghost">
+                    Управлять
+                </a>
+
+                <form method="post" action="/employees/delete">
+                    <input type="hidden" name="employee_id" value="{{ e.id }}">
+
+                    <button type="submit" class="danger-btn btn-small">
+                        Удалить
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="modal-backdrop" id="employeePanelsModal">
+    <div class="modal-window panel">
+        <div class="modal-head">
+            <div>
+                <h2>Выбрать панели</h2>
+                <p class="subtitle">Используется при режиме “Выбрать панели вручную”</p>
+            </div>
+
+            <button type="button" class="btn-small btn-ghost" id="closeEmployeePanelsModal">
+                Закрыть
+            </button>
+        </div>
+
+        <div class="panel-actions employee-modal-actions">
+            <button type="button" class="btn-small" id="select-all-panels">Выбрать все</button>
+            <button type="button" class="btn-small btn-ghost" id="clear-all-panels">Снять все</button>
         </div>
 
         <div class="panel-search employee-search">
@@ -167,32 +236,44 @@
         <div class="panel-list employee-panel-list" id="employeePanelList">
             {% for p in panels %}
             <label class="panel-option">
-                <input
-                    type="checkbox"
-                    name="panel_ids"
-                    value="{{ p.id }}"
-                    form="employeeWriteForm"
-                >
+                <input type="checkbox" name="panel_ids" value="{{ p.id }}" form="employeeWriteForm">
 
                 <span class="panel-option-body">
-                    <span class="panel-option-title">
-                        {{ p.entrance or '—' }}
-                    </span>
-
-                    <span class="panel-option-meta">
-                        {{ p.address }}
-                    </span>
-
-                    <span class="panel-option-mac">
-                        {{ p.mac }}
-                    </span>
+                    <span class="panel-option-title">{{ p.entrance or '—' }}</span>
+                    <span class="panel-option-meta">{{ p.address }}</span>
+                    <span class="panel-option-mac">{{ p.mac }}</span>
                 </span>
             </label>
             {% endfor %}
         </div>
     </div>
-
 </div>
 
 <script src="/static/js/employees.js?v=1"></script>
+
+<script>
+const employeePanelsModal = document.getElementById("employeePanelsModal");
+const openEmployeePanelsModal = document.getElementById("openEmployeePanelsModal");
+const closeEmployeePanelsModal = document.getElementById("closeEmployeePanelsModal");
+
+if (openEmployeePanelsModal) {
+    openEmployeePanelsModal.addEventListener("click", () => {
+        employeePanelsModal.classList.add("active");
+    });
+}
+
+if (closeEmployeePanelsModal) {
+    closeEmployeePanelsModal.addEventListener("click", () => {
+        employeePanelsModal.classList.remove("active");
+    });
+}
+
+if (employeePanelsModal) {
+    employeePanelsModal.addEventListener("click", (event) => {
+        if (event.target === employeePanelsModal) {
+            employeePanelsModal.classList.remove("active");
+        }
+    });
+}
+</script>
 {% endblock %}

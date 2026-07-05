@@ -5,17 +5,17 @@
 {% block content %}
 <div class="hero-title">
     <h1>База ключей</h1>
-    <p class="subtitle">Импорт и поиск ключей в локальной базе</p>
+    <p class="subtitle">
+        Импорт, проверка и поиск ключей в локальной базе системы.
+    </p>
 </div>
 
 <div class="keys-layout">
 
     <div class="panel keys-import-panel">
         <h2>Импорт ключей</h2>
-
-        <p class="panels-help">
-            Загрузите Excel или CSV с колонками:
-            <b>номер</b>, <b>HEX</b>, <b>тип</b>.
+        <p class="subtitle keys-import-subtitle">
+            Загрузите Excel или CSV-файл с номерами ключей, HEX и типом.
         </p>
 
         <form method="post" action="/keys/import" enctype="multipart/form-data">
@@ -28,30 +28,60 @@
                 required
             >
 
-            <button type="submit">
+            <button type="submit" class="btn keys-main-btn">
                 Импортировать ключи
             </button>
         </form>
     </div>
 
     <div class="panel keys-help-panel">
-        <h2>Формат</h2>
+        <h2>Формат файла</h2>
 
-        <div class="help-list">
+        <div class="help-list keys-help-list">
+
             <div>
-                <b>Номер</b>
-                <span>39107 или 001101</span>
+                <span class="help-icon">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M8 3h8l2 3v15H6V6z"/>
+                        <path d="M9 10h6M9 14h6M9 18h3"/>
+                    </svg>
+                </span>
+
+                <p>
+                    <b>Номер</b>
+                    <span>39107 или 001101</span>
+                </p>
             </div>
 
             <div>
-                <b>HEX</b>
-                <span>363FFAD7</span>
+                <span class="help-icon">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M4 7h16"/>
+                        <path d="M4 12h16"/>
+                        <path d="M4 17h16"/>
+                    </svg>
+                </span>
+
+                <p>
+                    <b>HEX</b>
+                    <span>363FFAD7</span>
+                </p>
             </div>
 
             <div>
-                <b>Тип</b>
-                <span>простой, бесплатный, стикер</span>
+                <span class="help-icon">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M20 12l-8 8-8-8 8-8z"/>
+                        <path d="M12 4v16"/>
+                    </svg>
+                </span>
+
+                <p>
+                    <b>Тип</b>
+                    <span>простой, бесплатный, стикер</span>
+                </p>
             </div>
+
         </div>
     </div>
 
@@ -91,7 +121,7 @@
             {% for k in keys %}
             <tr>
                 <td>{{ k.id }}</td>
-                <td>{{ k.number }}</td>
+                <td><b>{{ k.number }}</b></td>
                 <td>{{ k.hex_value }}</td>
                 <td>{{ k.key_type or '—' }}</td>
             </tr>
@@ -102,28 +132,28 @@
 </div>
 
 <script>
-    const keysSearch = document.getElementById("keysSearch");
-    const keysTable = document.getElementById("keysTable");
-    const keysFound = document.getElementById("keysFound");
+const keysSearch = document.getElementById("keysSearch");
+const keysTable = document.getElementById("keysTable");
+const keysFound = document.getElementById("keysFound");
 
-    if (keysSearch && keysTable && keysFound) {
-        const rows = Array.from(keysTable.querySelectorAll("tbody tr"));
+if (keysSearch && keysTable && keysFound) {
+    const rows = Array.from(keysTable.querySelectorAll("tbody tr"));
 
-        keysSearch.addEventListener("input", function () {
-            const query = this.value.toLowerCase().trim();
-            let visible = 0;
+    keysSearch.addEventListener("input", function () {
+        const query = this.value.toLowerCase().trim();
+        let visible = 0;
 
-            rows.forEach((row) => {
-                const match = row.innerText.toLowerCase().includes(query);
-                row.style.display = match ? "" : "none";
+        rows.forEach((row) => {
+            const match = row.innerText.toLowerCase().includes(query);
+            row.style.display = match ? "" : "none";
 
-                if (match) {
-                    visible += 1;
-                }
-            });
-
-            keysFound.textContent = visible;
+            if (match) {
+                visible += 1;
+            }
         });
-    }
+
+        keysFound.textContent = visible;
+    });
+}
 </script>
 {% endblock %}

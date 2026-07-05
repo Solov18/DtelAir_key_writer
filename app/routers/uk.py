@@ -1,45 +1,33 @@
 from fastapi import APIRouter, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from app.db import db
+
 from app.services import find_key, write_key_to_panels
 from app.templates_config import templates
+from app.repositories.uk_repository import (
+    get_groups,
+    get_group,
+    save_group,
+    get_group_panels,
+    get_available_panels,
+    add_panels,
+    remove_panel,
+    get_group_keys,
+    add_keys,
+    remove_key,
+    delete_group,
+)
 
 router = APIRouter()
 
 
 @router.get("/uk", response_class=HTMLResponse)
 def uk_page(request: Request):
-    with db() as conn:
-        groups = [
-            dict(r)
-            for r in conn.execute(
-                """
-                SELECT *
-                FROM uk_groups
-                ORDER BY name
-                """
-            )
-        ]
-
-        panels = [
-            dict(r)
-            for r in conn.execute(
-                """
-                SELECT *
-                FROM panels
-                WHERE enabled = 1
-                ORDER BY address, name
-                """
-            )
-        ]
-
     return templates.TemplateResponse(
         "uk.html",
         {
             "request": request,
-            "groups": groups,
-            "panels": panels,
+            "groups": get_groups(),
         },
     )
 
@@ -47,89 +35,97 @@ def uk_page(request: Request):
 @router.post("/uk/group")
 def uk_group(
     name: str = Form(...),
-    panel_ids: list[int] = Form([]),
     note: str = Form(""),
 ):
-    with db() as conn:
+    save_group(name=name, note=note)
+    return RedirectResponse("/uk", status_code=303)
 
-        conn.execute(
-            """
-            INSERT INTO uk_groups(name, note)
-            VALUES(?, ?)
-            ON CONFLICT(name)
-            DO UPDATE SET
-                note = excluded.note
-            """,
-            (
-                name.strip(),
-                note.strip(),
-            ),
-        )
 
-        gid = conn.execute(
-            """
-            SELECT id
-            FROM uk_groups
-            WHERE name = ?
-            """,
-            (name.strip(),),
-        ).fetchone()["id"]
+@router.get("/uk/{group_id}", response_class=HTMLResponse)
+def uk_detail(request: Request, group_id: int):
+    group = get_group(group_id)
 
-        conn.execute(
-            """
-            DELETE
-            FROM uk_group_panels
-            WHERE group_id = ?
-            """,
-            (gid,),
-        )
+    if not group:
+        return RedirectResponse("/uk", status_code=303)
 
-        conn.executemany(
-            """
-            INSERT OR IGNORE
-            INTO uk_group_panels(group_id, panel_id)
-            VALUES(?, ?)
-            """,
-            [
-                (gid, int(pid))
-                for pid in panel_ids
-            ],
-        )
-
-    return RedirectResponse(
-        "/uk",
-        status_code=303,
+    return templates.TemplateResponse(
+        "uk_detail.html",
+        {
+            "request": request,
+            "group": group,
+            "group_panels": get_group_panels(group_id),
+            "available_panels": get_available_panels(group_id),
+            "group_keys": get_group_keys(group_id),
+            "message": None,
+        },
     )
 
 
-@router.post("/uk/write", response_class=HTMLResponse)
+@router.post("/uk/{group_id}/panels/add")
+def uk_add_panels(
+    group_id: int,
+    panel_ids: list[int] = Form([]),
+):
+    add_panels(group_id, panel_ids)
+    return RedirectResponse(f"/uk/{group_id}", status_code=303)
+
+
+@router.post("/uk/{group_id}/panels/remove")
+def uk_remove_panel(
+    group_id: int,
+    panel_id: int = Form(...),
+):
+    remove_panel(group_id, panel_id)
+    return RedirectResponse(f"/uk/{group_id}", status_code=303)
+
+
+@router.post("/uk/{group_id}/keys/add")
+def uk_add_keys(
+    request: Request,
+    group_id: int,
+    key_values: str = Form(...),
+):
+    numbers = [
+        x.strip()
+        for x in key_values.replace(",", " ").split()
+        if x.strip()
+    ]
+
+    result = add_keys(group_id, numbers)
+
+    group = get_group(group_id)
+
+    return templates.TemplateResponse(
+        "uk_detail.html",
+        {
+            "request": request,
+            "group": group,
+            "group_panels": get_group_panels(group_id),
+            "available_panels": get_available_panels(group_id),
+            "group_keys": get_group_keys(group_id),
+            "message": result,
+        },
+    )
+
+
+@router.post("/uk/{group_id}/keys/remove")
+def uk_remove_key(
+    group_id: int,
+    key_id: int = Form(...),
+):
+    remove_key(group_id, key_id)
+    return RedirectResponse(f"/uk/{group_id}", status_code=303)
+
+
+@router.post("/uk/{group_id}/write", response_class=HTMLResponse)
 def uk_write(
     request: Request,
-    group_id: int = Form(...),
+    group_id: int,
     key_values: str = Form(...),
     flat_num: str = Form("0"),
     inner: int = Form(0),
 ):
-    with db() as conn:
-
-        panels = [
-            dict(r)
-            for r in conn.execute(
-                """
-                SELECT p.*
-                FROM panels p
-                JOIN uk_group_panels gp
-                    ON gp.panel_id = p.id
-                WHERE
-                    gp.group_id = ?
-                    AND p.enabled = 1
-                ORDER BY
-                    p.address,
-                    p.name
-                """,
-                (group_id,),
-            )
-        ]
+    panels = get_group_panels(group_id)
 
     all_results = []
 
@@ -138,11 +134,9 @@ def uk_write(
         for x in key_values.replace(",", " ").split()
         if x.strip()
     ]:
-
         item = find_key(value)
 
         if item:
-
             all_results.append(
                 {
                     "key": item,
@@ -155,9 +149,7 @@ def uk_write(
                     ),
                 }
             )
-
         else:
-
             all_results.append(
                 {
                     "key": {
@@ -176,3 +168,9 @@ def uk_write(
             "all_results": all_results,
         },
     )
+
+
+@router.post("/uk/delete")
+def uk_delete(group_id: int = Form(...)):
+    delete_group(group_id)
+    return RedirectResponse("/uk", status_code=303)

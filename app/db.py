@@ -55,6 +55,13 @@ def init_db():
                 enabled INTEGER DEFAULT 1,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
+            
+            CREATE TABLE IF NOT EXISTS employee_keys (
+                employee_id INTEGER NOT NULL,
+                key_id INTEGER NOT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(employee_id, key_id)
+            );
 
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -89,6 +96,13 @@ def init_db():
                 panel_id INTEGER NOT NULL,
                 UNIQUE(group_id, panel_id)
             );
+            
+            CREATE TABLE IF NOT EXISTS uk_group_keys (
+                group_id INTEGER NOT NULL,
+                key_id INTEGER NOT NULL,
+                UNIQUE(group_id, key_id)
+            );
+            
 
             CREATE TABLE IF NOT EXISTS operation_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
