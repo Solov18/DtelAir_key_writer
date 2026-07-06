@@ -3,120 +3,121 @@
 {% block page_name %}УК{% endblock %}
 
 {% block content %}
-<div class="employees-hero">
+
+<div class="uk-hero">
     <div>
         <h1>Управляющие компании</h1>
-        <p class="subtitle">Создание и управление группами УК, их панелями и ключами</p>
+        <p class="subtitle">Группы УК, закреплённые панели и служебные ключи</p>
     </div>
 
-    <div class="employees-stats">
-        <div class="employees-stat-card">
-            <div class="employees-stat-icon">
-                <svg viewBox="0 0 24 24">
-                    <path d="M3 21h18"/>
-                    <path d="M5 21V7l7-4 7 4v14"/>
-                    <path d="M9 21v-6h6v6"/>
-                </svg>
-            </div>
-            <div>
-                <b>{{ groups|length }}</b>
-                <span>Групп УК</span>
-            </div>
+    <div class="uk-stat-card">
+        <div class="uk-stat-icon">
+            <svg viewBox="0 0 24 24">
+                <path d="M3 21h18"/>
+                <path d="M5 21V7l7-4 7 4v14"/>
+                <path d="M9 21v-6h6v6"/>
+            </svg>
+        </div>
+
+        <div>
+            <b>{{ groups|length }}</b>
+            <span>Групп УК</span>
         </div>
     </div>
 </div>
 
-<div class="uk-layout">
-
-    <div class="panel uk-group-panel">
-        <h2>
-            <span class="title-svg-icon">
-                <svg viewBox="0 0 24 24">
-                    <path d="M3 21h18"/>
-                    <path d="M5 21V7l7-4 7 4v14"/>
-                    <path d="M9 21v-6h6v6"/>
-                </svg>
-            </span>
-            Создать УК
-        </h2>
-
-        <form method="post" action="/uk/group">
-            <label>Название УК</label>
-            <input name="name" placeholder="Например: УК Александрия" required>
-
-            <label>Комментарий</label>
-            <input name="note" placeholder="Описание или примечание">
-
-            <button type="submit" class="btn wide-action">
-                Создать УК
-            </button>
-        </form>
-    </div>
-
-    <div class="panel uk-groups-panel">
-        <div class="panel-list-head">
-            <div>
-                <h2>
-                    <span class="title-svg-icon">
-                        <svg viewBox="0 0 24 24">
-                            <path d="M3 21h18"/>
-                            <path d="M5 21V7l7-4 7 4v14"/>
-                            <path d="M9 21v-6h6v6"/>
-                        </svg>
-                    </span>
-                    Группы УК
-                </h2>
-                <p class="subtitle">Всего: {{ groups|length }}</p>
-            </div>
-        </div>
-
-        <div class="uk-cards">
-            {% for g in groups %}
-            <div class="uk-card">
-                <div class="uk-card-icon">
+<div class="panel uk-create-panel">
+    <div class="panel-head">
+        <div>
+            <h2>
+                <span class="title-svg-icon">
                     <svg viewBox="0 0 24 24">
                         <path d="M3 21h18"/>
                         <path d="M5 21V7l7-4 7 4v14"/>
                         <path d="M9 21v-6h6v6"/>
                     </svg>
-                </div>
-
-                <div class="uk-card-main">
-                    <b>{{ g.name }}</b>
-                    <span>{{ g.note or 'Без комментария' }}</span>
-                </div>
-
-                <div class="uk-card-stat">
-                    <b>{{ g.panels_count }}</b>
-                    <span>панелей</span>
-                </div>
-
-                <div class="uk-card-stat">
-                    <b>{{ g.keys_count }}</b>
-                    <span>ключей</span>
-                </div>
-
-                <div class="uk-card-actions">
-                    <a href="/uk/{{ g.id }}" class="btn btn-small">
-                        Управлять
-                    </a>
-
-                    <form
-                        method="post"
-                        action="/uk/delete"
-                        onsubmit="return confirm('Удалить группу УК?')"
-                    >
-                        <input type="hidden" name="group_id" value="{{ g.id }}">
-
-                        <button type="submit" class="danger-btn btn-small">
-                            Удалить
-                        </button>
-                    </form>
-                </div>
-            </div>
-            {% endfor %}
+                </span>
+                Создать УК
+            </h2>
+            <p class="subtitle">Создайте новую группу и затем добавьте панели и ключи</p>
         </div>
     </div>
 
+    <form method="post" action="/uk/group" class="uk-create-form">
+        <div>
+            <label>Название УК</label>
+            <input name="name" placeholder="Например: УК Александрия" required>
+        </div>
+
+        <div>
+            <label>Комментарий</label>
+            <input name="note" placeholder="Описание или примечание">
+        </div>
+
+        <button type="submit" class="btn">
+            Создать УК
+        </button>
+    </form>
 </div>
+
+<div class="panel uk-groups-panel">
+    <div class="panel-list-head">
+        <div>
+            <h2>
+                <span class="title-svg-icon">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M3 21h18"/>
+                        <path d="M5 21V7l7-4 7 4v14"/>
+                        <path d="M9 21v-6h6v6"/>
+                    </svg>
+                </span>
+                Группы УК
+            </h2>
+            <p class="subtitle">Всего: {{ groups|length }}</p>
+        </div>
+    </div>
+
+    <div class="uk-cards">
+        {% for g in groups %}
+        <div class="uk-card">
+            <div class="uk-card-icon">
+                <svg viewBox="0 0 24 24">
+                    <path d="M3 21h18"/>
+                    <path d="M5 21V7l7-4 7 4v14"/>
+                    <path d="M9 21v-6h6v6"/>
+                </svg>
+            </div>
+
+            <div class="uk-card-main">
+                <b>{{ g.name }}</b>
+                <span>{{ g.note or 'Без комментария' }}</span>
+
+                <div class="uk-card-meta">
+                    <span>{{ g.panels_count }} панелей</span>
+                    <span>{{ g.keys_count }} ключей</span>
+                </div>
+            </div>
+
+            <div class="uk-card-actions">
+                <a href="/uk/{{ g.id }}" class="btn btn-small">
+                    Управлять
+                </a>
+
+                <form
+                    method="post"
+                    action="/uk/delete"
+                    onsubmit="return confirm('Удалить группу УК?')"
+                >
+                    <input type="hidden" name="group_id" value="{{ g.id }}">
+
+                    <button type="submit" class="danger-btn btn-small">
+                        Удалить
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
 {% endblock %}

@@ -134,6 +134,19 @@ def init_db():
             );
             """
         )
+        _add_column_if_missing(
+            conn,
+            "uk_groups",
+            "crm_login",
+            "crm_login TEXT DEFAULT ''",
+        )
+
+        _add_column_if_missing(
+            conn,
+            "uk_groups",
+            "crm_password",
+            "crm_password TEXT DEFAULT ''",
+        )
 
         # Обновление старой таблицы operation_log, если база уже была создана раньше
         _add_column_if_missing(

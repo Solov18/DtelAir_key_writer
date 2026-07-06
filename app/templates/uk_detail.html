@@ -3,6 +3,7 @@
 {% block page_name %}Управление УК{% endblock %}
 
 {% block content %}
+
 <div class="hero-title uk-detail-hero">
     <div>
         <a class="btn btn-small btn-ghost" href="/uk">← Назад к УК</a>
@@ -24,6 +25,48 @@
             <span>Ключей</span>
         </div>
     </div>
+</div>
+
+<div class="panel uk-credentials-panel">
+    <div class="panel-head">
+        <div>
+            <h2>Доступ в CRM</h2>
+            <p class="subtitle">Логин, пароль и комментарий этой управляющей компании</p>
+        </div>
+    </div>
+
+    <form method="post" action="/uk/{{ group.id }}/update" class="uk-credentials-form">
+        <div>
+            <label>Комментарий</label>
+            <input
+                name="note"
+                value="{{ group.note or '' }}"
+                placeholder="Описание или примечание"
+            >
+        </div>
+
+        <div>
+            <label>Логин CRM</label>
+            <input
+                name="crm_login"
+                value="{{ group.crm_login or '' }}"
+                placeholder="Логин от CRM"
+            >
+        </div>
+
+        <div>
+            <label>Пароль CRM</label>
+            <input
+                name="crm_password"
+                value="{{ group.crm_password or '' }}"
+                placeholder="Пароль от CRM"
+            >
+        </div>
+
+        <button type="submit" class="btn">
+            Сохранить
+        </button>
+    </form>
 </div>
 
 <div class="uk-control-grid">
@@ -132,11 +175,7 @@
     <form method="post" action="/uk/{{ group.id }}/write" class="uk-write-form">
         <div>
             <label>Номера ключей</label>
-            <input
-                name="key_values"
-                placeholder="39068, 39139"
-                required
-            >
+            <input name="key_values" placeholder="39068, 39139" required>
         </div>
 
         <div>
@@ -211,11 +250,7 @@
 
         <form method="post" action="/uk/{{ group.id }}/keys/add" class="uk-modal-form">
             <label>Номера ключей</label>
-            <input
-                name="key_values"
-                placeholder="39068, 39139, 001101"
-                required
-            >
+            <input name="key_values" placeholder="39068, 39139, 001101" required>
 
             <button type="submit" class="btn wide-action">
                 Добавить ключи
@@ -227,7 +262,6 @@
 <script>
 const panelsModal = document.getElementById("panelsModal");
 const keysModal = document.getElementById("keysModal");
-
 const openPanelsModal = document.getElementById("openPanelsModal");
 const openKeysModal = document.getElementById("openKeysModal");
 
@@ -272,4 +306,5 @@ if (availablePanelSearch && availablePanelList) {
     });
 }
 </script>
+
 {% endblock %}

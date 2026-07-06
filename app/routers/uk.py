@@ -16,6 +16,7 @@ from app.repositories.uk_repository import (
     add_keys,
     remove_key,
     delete_group,
+    update_group_credentials
 )
 
 router = APIRouter()
@@ -174,3 +175,19 @@ def uk_write(
 def uk_delete(group_id: int = Form(...)):
     delete_group(group_id)
     return RedirectResponse("/uk", status_code=303)
+
+@router.post("/uk/{group_id}/update")
+def uk_update(
+    group_id: int,
+    note: str = Form(""),
+    crm_login: str = Form(""),
+    crm_password: str = Form(""),
+):
+    update_group_credentials(
+        group_id=group_id,
+        note=note,
+        crm_login=crm_login,
+        crm_password=crm_password,
+    )
+
+    return RedirectResponse(f"/uk/{group_id}", status_code=303)

@@ -137,3 +137,26 @@ def delete_group(group_id: int):
             "DELETE FROM uk_groups WHERE id=?",
             (group_id,),
         )
+
+def update_group_credentials(
+    group_id: int,
+    note: str = "",
+    crm_login: str = "",
+    crm_password: str = "",
+):
+    with db() as conn:
+        conn.execute(
+            """
+            UPDATE uk_groups
+            SET note = ?,
+                crm_login = ?,
+                crm_password = ?
+            WHERE id = ?
+            """,
+            (
+                note.strip(),
+                crm_login.strip(),
+                crm_password.strip(),
+                group_id,
+            ),
+        )
