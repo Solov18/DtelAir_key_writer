@@ -26,7 +26,7 @@ ENTRANCE_RE = re.compile(
 KEY_RE = re.compile(r"(?:№|#)?\s*(\d{4,6})(?!\d)")
 
 HOUSE_RE = re.compile(
-    r"^\d+[а-яa-z]?(?:/\d+){0,2}$",
+    r"^\d+[а-яa-z]?(?:/\d+[а-яa-z]?){0,2}$",
     re.I,
 )
 
