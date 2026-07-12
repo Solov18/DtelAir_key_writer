@@ -726,3 +726,71 @@ body.light-theme .modal-window {
 body.light-theme .modal-head {
     border-color: #d7e9f7;
 }
+body.light-theme .custom-scroll,
+body.light-theme .table-scroll,
+body.light-theme .employee-picker,
+body.light-theme .employee-panel-list,
+body.light-theme .employees-cards,
+body.light-theme .employees-cards-grid,
+body.light-theme .employee-panel-list-grid,
+body.light-theme .modal-window,
+body.light-theme .preview-panel-list,
+body.light-theme .log-scroll,
+body.light-theme .search-scroll,
+body.light-theme .uk-items-list,
+body.light-theme .uk-panel-list,
+body.light-theme .uk-cards-scroll {
+    scrollbar-color: #5cb8ff #eef6fc;
+}
+
+body.light-theme .custom-scroll::-webkit-scrollbar-track,
+body.light-theme .table-scroll::-webkit-scrollbar-track,
+body.light-theme .employee-picker::-webkit-scrollbar-track,
+body.light-theme .employee-panel-list::-webkit-scrollbar-track,
+body.light-theme .employees-cards::-webkit-scrollbar-track,
+body.light-theme .employees-cards-grid::-webkit-scrollbar-track,
+body.light-theme .employee-panel-list-grid::-webkit-scrollbar-track,
+body.light-theme .modal-window::-webkit-scrollbar-track,
+body.light-theme .preview-panel-list::-webkit-scrollbar-track,
+body.light-theme .log-scroll::-webkit-scrollbar-track,
+body.light-theme .search-scroll::-webkit-scrollbar-track,
+body.light-theme .uk-items-list::-webkit-scrollbar-track,
+body.light-theme .uk-panel-list::-webkit-scrollbar-track,
+body.light-theme .uk-cards-scroll::-webkit-scrollbar-track {
+    background: #eef6fc;
+}
+
+body.light-theme .custom-scroll::-webkit-scrollbar-thumb,
+body.light-theme .table-scroll::-webkit-scrollbar-thumb,
+body.light-theme .employee-picker::-webkit-scrollbar-thumb,
+body.light-theme .employee-panel-list::-webkit-scrollbar-thumb,
+body.light-theme .employees-cards::-webkit-scrollbar-thumb,
+body.light-theme .employees-cards-grid::-webkit-scrollbar-thumb,
+body.light-theme .employee-panel-list-grid::-webkit-scrollbar-thumb,
+body.light-theme .modal-window::-webkit-scrollbar-thumb,
+body.light-theme .preview-panel-list::-webkit-scrollbar-thumb,
+body.light-theme .log-scroll::-webkit-scrollbar-thumb,
+body.light-theme .search-scroll::-webkit-scrollbar-thumb,
+body.light-theme .uk-items-list::-webkit-scrollbar-thumb,
+body.light-theme .uk-panel-list::-webkit-scrollbar-thumb,
+body.light-theme .uk-cards-scroll::-webkit-scrollbar-thumb {
+    background: #5cb8ff;
+    border-color: #eef6fc;
+}
+
+body.light-theme .custom-scroll::-webkit-scrollbar-thumb:hover,
+body.light-theme .table-scroll::-webkit-scrollbar-thumb:hover,
+body.light-theme .employee-picker::-webkit-scrollbar-thumb:hover,
+body.light-theme .employee-panel-list::-webkit-scrollbar-thumb:hover,
+body.light-theme .employees-cards::-webkit-scrollbar-thumb:hover,
+body.light-theme .employees-cards-grid::-webkit-scrollbar-thumb:hover,
+body.light-theme .employee-panel-list-grid::-webkit-scrollbar-thumb:hover,
+body.light-theme .modal-window::-webkit-scrollbar-thumb:hover,
+body.light-theme .preview-panel-list::-webkit-scrollbar-thumb:hover,
+body.light-theme .log-scroll::-webkit-scrollbar-thumb:hover,
+body.light-theme .search-scroll::-webkit-scrollbar-thumb:hover,
+body.light-theme .uk-items-list::-webkit-scrollbar-thumb:hover,
+body.light-theme .uk-panel-list::-webkit-scrollbar-thumb:hover,
+body.light-theme .uk-cards-scroll::-webkit-scrollbar-thumb:hover {
+    background: #2293ff;
+}

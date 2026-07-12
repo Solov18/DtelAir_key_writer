@@ -1,87 +1,175 @@
 <!DOCTYPE html>
 <html lang="ru">
+
 <head>
     <meta charset="UTF-8">
-    <title>{% block title %}Key Writer Simple{% endblock %}</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        {% block title %}DTEL CRM{% endblock %}
+    </title>
+
+    <!-- Favicon -->
+    <link
+        rel="icon"
+        type="image/x-icon"
+        href="/static/img/favicon.ico?v=2"
+    >
+
+    <link
+        rel="shortcut icon"
+        type="image/x-icon"
+        href="/static/img/favicon.ico?v=2"
+    >
+
+    <!-- Стили -->
+    <link
+        rel="stylesheet"
+        href="/static/css/style.css?v=2"
+    >
 </head>
 
 <body>
+
 <div class="app-shell">
 
+    <!-- ==================================================
+         БОКОВОЕ МЕНЮ
+    ================================================== -->
+
     <aside class="sidebar">
+
         <div class="brand">
-            <img src="/static/img/logo.png" alt="DTEL AIR">
+            <img
+                src="/static/img/logo.png?v=2"
+                alt="DTEL CRM"
+            >
         </div>
 
         <nav class="sidebar-nav">
+
             <a class="nav-item" href="/">
-                <svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V21a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg>
+                <svg viewBox="0 0 24 24">
+                    <path d="M3 10.5 12 3l9 7.5V21a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>
+                </svg>
+
                 <span>Главная</span>
             </a>
 
             <a class="nav-item" href="/message">
-                <svg viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M8 9h8M8 13h5"/></svg>
+                <svg viewBox="0 0 24 24">
+                    <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/>
+                    <path d="M8 9h8M8 13h5"/>
+                </svg>
+
                 <span>Из сообщения</span>
             </a>
 
             <a class="nav-item" href="/write/manual">
-                <svg viewBox="0 0 24 24"><circle cx="7.5" cy="14.5" r="4.5"/><path d="m11 11 9-9M16 6l3 3M14 8l2 2"/></svg>
+                <svg viewBox="0 0 24 24">
+                    <circle cx="7.5" cy="14.5" r="4.5"/>
+                    <path d="m11 11 9-9M16 6l3 3M14 8l2 2"/>
+                </svg>
+
                 <span>Обычная запись</span>
             </a>
 
             <a class="nav-item" href="/search">
-                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4.5 4.5"/></svg>
+                <svg viewBox="0 0 24 24">
+                    <circle cx="11" cy="11" r="7"/>
+                    <path d="m16.5 16.5 4.5 4.5"/>
+                </svg>
+
                 <span>Универсальный поиск</span>
             </a>
 
             <a class="nav-item" href="/employees">
-                <svg viewBox="0 0 24 24"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>
+                <svg viewBox="0 0 24 24">
+                    <path d="M20 21a8 8 0 0 0-16 0"/>
+                    <circle cx="12" cy="7" r="4"/>
+                </svg>
+
                 <span>Сотрудники</span>
             </a>
 
             <a class="nav-item" href="/uk">
-                <svg viewBox="0 0 24 24"><path d="M4 22V3h10v19M14 8h6v14"/><path d="M8 7h2M8 11h2M8 15h2M17 12h1M17 16h1"/></svg>
+                <svg viewBox="0 0 24 24">
+                    <path d="M4 22V3h10v19M14 8h6v14"/>
+                    <path d="M8 7h2M8 11h2M8 15h2M17 12h1M17 16h1"/>
+                </svg>
+
                 <span>Управляющие компании</span>
             </a>
 
             <a class="nav-item" href="/panels">
-                <svg viewBox="0 0 24 24"><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg>
+                <svg viewBox="0 0 24 24">
+                    <path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z"/>
+                    <circle cx="12" cy="10" r="2.5"/>
+                </svg>
+
                 <span>Панели / Адреса</span>
             </a>
 
             <a class="nav-item" href="/keys">
-                <svg viewBox="0 0 24 24"><circle cx="7.5" cy="14.5" r="4.5"/><path d="m11 11 9-9M16 6l3 3M14 8l2 2"/></svg>
+                <svg viewBox="0 0 24 24">
+                    <circle cx="7.5" cy="14.5" r="4.5"/>
+                    <path d="m11 11 9-9M16 6l3 3M14 8l2 2"/>
+                </svg>
+
                 <span>База ключей</span>
             </a>
 
             <a class="nav-item" href="/log">
-                <svg viewBox="0 0 24 24"><path d="M8 3h8l2 3v15H6V6z"/><path d="M9 11h6M9 15h6M9 19h3"/></svg>
+                <svg viewBox="0 0 24 24">
+                    <path d="M8 3h8l2 3v15H6V6z"/>
+                    <path d="M9 11h6M9 15h6M9 19h3"/>
+                </svg>
+
                 <span>Журнал операций</span>
             </a>
+
         </nav>
 
         <div class="sidebar-footer">
-            <div>© DTEL AIR</div>
+            <div>© DTEL CRM</div>
             <div>Key Writer Simple</div>
             <div>v2.0.0</div>
         </div>
+
     </aside>
+
+
+    <!-- ==================================================
+         ОСНОВНАЯ ЧАСТЬ
+    ================================================== -->
 
     <main class="main">
 
         <header class="topbar">
 
             <div class="topbar-left">
-                <div class="burger">
+
+                <button
+                    type="button"
+                    class="burger"
+                    id="sidebarToggle"
+                    aria-label="Открыть меню"
+                >
                     <span></span>
                     <span></span>
                     <span></span>
-                </div>
+                </button>
 
                 <div class="top-title">
-                    {% block page_name %}Панель управления{% endblock %}
+                    {% block page_name %}
+                        Панель управления
+                    {% endblock %}
                 </div>
+
             </div>
 
             <div class="topbar-right">
@@ -91,20 +179,24 @@
                         <circle cx="12" cy="12" r="9"/>
                         <path d="M12 7v5l3 2"/>
                     </svg>
+
                     <span id="live-time">--:--</span>
                 </div>
 
                 <div class="topbar-divider"></div>
 
-
-
-                <a class="user-pill" href="/users" title="Пользователи">
+                <a
+                    class="user-pill"
+                    href="/users"
+                    title="Пользователи"
+                >
                     <svg viewBox="0 0 24 24">
                         <path d="M20 21a8 8 0 0 0-16 0"/>
                         <circle cx="12" cy="7" r="4"/>
                     </svg>
 
                     <span class="user-pill-text">
+
                         <b>
                             {% if current_user(request) %}
                                 {{ current_user(request)["full_name"] }}
@@ -115,19 +207,27 @@
 
                         <small>
                             {% if current_user(request) %}
+
                                 {% if current_user(request)["role"] == "admin" %}
                                     Администратор
                                 {% else %}
                                     Оператор
                                 {% endif %}
+
                             {% else %}
                                 Гость
                             {% endif %}
                         </small>
+
                     </span>
                 </a>
 
-                <button type="button" class="theme-toggle theme-icon-only" id="themeToggle">
+                <button
+                    type="button"
+                    class="theme-toggle theme-icon-only"
+                    id="themeToggle"
+                    aria-label="Переключить тему"
+                >
                     <span class="theme-icon">☀️</span>
                     <span class="theme-text">Светлая</span>
                 </button>
@@ -136,45 +236,81 @@
 
         </header>
 
+
+        <!-- ==================================================
+             КОНТЕНТ СТРАНИЦЫ
+        ================================================== -->
+
         <section class="content">
-            {% block content %}{% endblock %}
+            {% block content %}
+            {% endblock %}
         </section>
 
     </main>
 
 </div>
 
+
+<!-- ==================================================
+     ОСНОВНОЙ JAVASCRIPT
+================================================== -->
+
 <script>
-function updateClock() {
-    const now = new Date();
+    function updateClock() {
+        const clockElement = document.getElementById("live-time");
 
-    document.getElementById("live-time").textContent = now.toLocaleTimeString(
-        "ru-RU",
-        {
-            hour: "2-digit",
-            minute: "2-digit"
+        if (!clockElement) {
+            return;
         }
-    );
-}
 
-updateClock();
-setInterval(updateClock, 1000);
+        const now = new Date();
 
-const path = window.location.pathname;
-
-document.querySelectorAll(".nav-item").forEach((item) => {
-    const href = item.getAttribute("href");
-
-    if (
-        (href === "/" && path === "/")
-        || (href !== "/" && path.startsWith(href))
-    ) {
-        item.classList.add("active");
+        clockElement.textContent = now.toLocaleTimeString(
+            "ru-RU",
+            {
+                hour: "2-digit",
+                minute: "2-digit"
+            }
+        );
     }
-});
+
+    updateClock();
+    setInterval(updateClock, 1000);
+
+
+    const currentPath = window.location.pathname;
+
+    document.querySelectorAll(".nav-item").forEach((item) => {
+        const href = item.getAttribute("href");
+
+        const isHomePage =
+            href === "/" &&
+            currentPath === "/";
+
+        const isNestedPage =
+            href !== "/" &&
+            currentPath.startsWith(href);
+
+        if (isHomePage || isNestedPage) {
+            item.classList.add("active");
+        }
+    });
+
+
+    const sidebarToggle = document.getElementById("sidebarToggle");
+    const sidebar = document.querySelector(".sidebar");
+
+    if (sidebarToggle && sidebar) {
+        sidebarToggle.addEventListener("click", () => {
+            document.body.classList.toggle("sidebar-open");
+        });
+    }
 </script>
 
-<script src="/static/js/theme.js?v=1"></script>
+<script src="/static/js/theme.js?v=2"></script>
+
+{% block scripts %}
+{% endblock %}
 
 </body>
 </html>

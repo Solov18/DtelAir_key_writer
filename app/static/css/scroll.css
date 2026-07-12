@@ -1,67 +1,118 @@
 .custom-scroll,
 .table-scroll,
+.employee-picker,
 .employee-panel-list,
+.employees-cards,
 .employees-cards-grid,
 .employee-panel-list-grid,
+.modal-window,
 .preview-panel-list,
-.uk-panel-list {
+.log-scroll,
+.search-scroll,
+.uk-items-list,
+.uk-panel-list,
+.uk-cards-scroll {
     scrollbar-width: thin;
     scrollbar-color: rgba(0, 170, 255, .55) rgba(0, 10, 20, .45);
 }
 
-/* Chrome */
+/* Chrome, Edge, Safari */
 
 .custom-scroll::-webkit-scrollbar,
 .table-scroll::-webkit-scrollbar,
+.employee-picker::-webkit-scrollbar,
 .employee-panel-list::-webkit-scrollbar,
+.employees-cards::-webkit-scrollbar,
 .employees-cards-grid::-webkit-scrollbar,
 .employee-panel-list-grid::-webkit-scrollbar,
+.modal-window::-webkit-scrollbar,
 .preview-panel-list::-webkit-scrollbar,
-.uk-panel-list::-webkit-scrollbar {
+.log-scroll::-webkit-scrollbar,
+.search-scroll::-webkit-scrollbar,
+.uk-items-list::-webkit-scrollbar,
+.uk-panel-list::-webkit-scrollbar,
+.uk-cards-scroll::-webkit-scrollbar {
     width: 8px;
     height: 8px;
 }
 
 .custom-scroll::-webkit-scrollbar-track,
 .table-scroll::-webkit-scrollbar-track,
+.employee-picker::-webkit-scrollbar-track,
 .employee-panel-list::-webkit-scrollbar-track,
+.employees-cards::-webkit-scrollbar-track,
 .employees-cards-grid::-webkit-scrollbar-track,
 .employee-panel-list-grid::-webkit-scrollbar-track,
+.modal-window::-webkit-scrollbar-track,
 .preview-panel-list::-webkit-scrollbar-track,
-.uk-panel-list::-webkit-scrollbar-track {
+.log-scroll::-webkit-scrollbar-track,
+.search-scroll::-webkit-scrollbar-track,
+.uk-items-list::-webkit-scrollbar-track,
+.uk-panel-list::-webkit-scrollbar-track,
+.uk-cards-scroll::-webkit-scrollbar-track {
     background: rgba(0, 10, 20, .45);
     border-radius: 10px;
 }
 
 .custom-scroll::-webkit-scrollbar-thumb,
 .table-scroll::-webkit-scrollbar-thumb,
+.employee-picker::-webkit-scrollbar-thumb,
 .employee-panel-list::-webkit-scrollbar-thumb,
+.employees-cards::-webkit-scrollbar-thumb,
 .employees-cards-grid::-webkit-scrollbar-thumb,
 .employee-panel-list-grid::-webkit-scrollbar-thumb,
+.modal-window::-webkit-scrollbar-thumb,
 .preview-panel-list::-webkit-scrollbar-thumb,
-.uk-panel-list::-webkit-scrollbar-thumb {
+.log-scroll::-webkit-scrollbar-thumb,
+.search-scroll::-webkit-scrollbar-thumb,
+.uk-items-list::-webkit-scrollbar-thumb,
+.uk-panel-list::-webkit-scrollbar-thumb,
+.uk-cards-scroll::-webkit-scrollbar-thumb {
     background: rgba(0, 170, 255, .55);
+    border: 2px solid rgba(0, 10, 20, .45);
     border-radius: 10px;
 }
 
 .custom-scroll::-webkit-scrollbar-thumb:hover,
 .table-scroll::-webkit-scrollbar-thumb:hover,
+.employee-picker::-webkit-scrollbar-thumb:hover,
 .employee-panel-list::-webkit-scrollbar-thumb:hover,
+.employees-cards::-webkit-scrollbar-thumb:hover,
 .employees-cards-grid::-webkit-scrollbar-thumb:hover,
 .employee-panel-list-grid::-webkit-scrollbar-thumb:hover,
+.modal-window::-webkit-scrollbar-thumb:hover,
 .preview-panel-list::-webkit-scrollbar-thumb:hover,
-.uk-panel-list::-webkit-scrollbar-thumb:hover {
-    background: rgba(0, 184, 255, .75);
+.log-scroll::-webkit-scrollbar-thumb:hover,
+.search-scroll::-webkit-scrollbar-thumb:hover,
+.uk-items-list::-webkit-scrollbar-thumb:hover,
+.uk-panel-list::-webkit-scrollbar-thumb:hover,
+.uk-cards-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 184, 255, .80);
+}
+
+.custom-scroll::-webkit-scrollbar-corner,
+.table-scroll::-webkit-scrollbar-corner,
+.employee-picker::-webkit-scrollbar-corner,
+.employee-panel-list::-webkit-scrollbar-corner,
+.employees-cards::-webkit-scrollbar-corner,
+.employees-cards-grid::-webkit-scrollbar-corner,
+.employee-panel-list-grid::-webkit-scrollbar-corner,
+.modal-window::-webkit-scrollbar-corner,
+.preview-panel-list::-webkit-scrollbar-corner,
+.log-scroll::-webkit-scrollbar-corner,
+.search-scroll::-webkit-scrollbar-corner,
+.uk-items-list::-webkit-scrollbar-corner,
+.uk-panel-list::-webkit-scrollbar-corner,
+.uk-cards-scroll::-webkit-scrollbar-corner {
+    background: transparent;
 }
 
 .table-scroll {
     width: 100%;
     max-height: 430px;
-
     overflow: auto;
-
-    border-radius: 14px;
     border: 1px solid var(--line-soft);
+    border-radius: 14px;
 }
 
 .table-scroll table {

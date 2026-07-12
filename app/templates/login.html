@@ -1,99 +1,334 @@
 <!DOCTYPE html>
 <html lang="ru">
+
 <head>
     <meta charset="UTF-8">
-    <title>Вход | DTEL AIR</title>
 
-    <link rel="stylesheet" href="/static/css/style.css">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Вход | DTEL CRM</title>
+
+    <link
+        rel="icon"
+        type="image/x-icon"
+        href="/static/img/favicon.ico?v=3"
+    >
+
+    <link
+        rel="stylesheet"
+        href="/static/css/style.css?v=4"
+    >
 
     <style>
-
-        body{
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            min-height:100vh;
+        html,
+        body {
+            width: 100%;
+            min-height: 100%;
+            margin: 0;
         }
 
-        .login-card{
+        body {
+            min-height: 100vh;
+            min-height: 100dvh;
 
-            width:430px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
 
-            padding:40px;
+            padding: 24px;
 
-            border-radius:20px;
-
-            background:var(--panel);
-
-            border:1px solid var(--line);
-
-            backdrop-filter:blur(25px);
-
-            box-shadow:var(--shadow-panel);
+            box-sizing: border-box;
+            overflow-x: hidden;
         }
 
-        .login-logo{
-
-            display:flex;
-            justify-content:center;
-
-            margin-bottom:30px;
+        /*
+           Ослабляем затемнение общего фона.
+           Если фон задан через body::before в style.css,
+           это правило сделает город заметнее.
+        */
+        body::before {
+            opacity: 0.12 !important;
         }
 
-        .login-logo img{
-            width:220px;
+        /*
+           Если дополнительное затемнение задано через body::after,
+           практически убираем его.
+        */
+        body::after {
+            opacity: 0.08 !important;
         }
 
-        .login-title{
 
-            text-align:center;
+        /* ==================================================
+           КАРТОЧКА ВХОДА
+        ================================================== */
 
-            font-size:28px;
+        .login-card {
+            position: relative;
+            z-index: 2;
 
-            margin-bottom:8px;
+            width: min(430px, calc(100vw - 32px));
+
+            padding: 40px 40px 36px;
+
+            box-sizing: border-box;
+
+            border-radius: 20px;
+
+            background: rgba(0, 18, 34, 0.76);
+
+            border: 1px solid rgba(0, 170, 255, 0.42);
+
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+
+            box-shadow:
+                0 0 45px rgba(0, 140, 255, 0.16),
+                inset 0 0 30px rgba(0, 170, 255, 0.035);
         }
 
-        .login-subtitle{
 
-            text-align:center;
+        /* ==================================================
+           ЛОГОТИП
+        ================================================== */
 
-            color:var(--muted);
+        .login-logo {
+            width: 100%;
+            height: 105px;
 
-            margin-bottom:30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            margin-bottom: 22px;
+
+            overflow: hidden;
         }
 
-        .login-error{
+        .login-logo img {
+            display: block;
 
-            margin-bottom:18px;
+            width: 300px;
+            height: 90px;
 
-            padding:12px;
+            max-width: none;
+            max-height: none;
 
-            border-radius:10px;
+            object-fit: contain;
 
-            background:rgba(255,70,70,.15);
-
-            color:#ff5c5c;
-
-            border:1px solid rgba(255,70,70,.35);
+            transform: scale(2.8);
+            transform-origin: center;
         }
 
-        .login-footer{
 
-            margin-top:25px;
+        /* ==================================================
+           ЗАГОЛОВОК
+        ================================================== */
 
-            text-align:center;
+        .login-title {
+            margin: 0 0 24px;
 
-            color:var(--muted);
+            text-align: center;
 
-            font-size:13px;
+            color: var(--text-strong);
+
+            font-size: 30px;
+            line-height: 1.2;
+            font-weight: 800;
         }
 
-        .login-btn{
 
-            width:100%;
-            margin-top:10px;
-            height:46px;
-            font-size:15px;
+        /* ==================================================
+           ОШИБКА ВХОДА
+        ================================================== */
+
+        .login-error {
+            margin-bottom: 18px;
+
+            padding: 12px 14px;
+
+            color: #ff7070;
+            background: rgba(255, 70, 70, 0.15);
+
+            border: 1px solid rgba(255, 70, 70, 0.35);
+            border-radius: 10px;
+        }
+
+
+        /* ==================================================
+           ФОРМА
+        ================================================== */
+
+        .login-card form {
+            width: 100%;
+        }
+
+        .login-card label {
+            display: block;
+
+            margin-bottom: 7px;
+
+            color: var(--text-strong);
+
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .login-card input {
+            width: 100%;
+            height: 46px;
+
+            margin-bottom: 14px;
+            padding-left: 14px;
+            padding-right: 14px;
+
+            box-sizing: border-box;
+        }
+
+
+        /* ==================================================
+           КНОПКА
+        ================================================== */
+
+        .login-btn {
+            width: 100%;
+            height: 48px;
+
+            margin-top: 8px;
+
+            font-size: 15px;
+            font-weight: 800;
+        }
+
+
+        /* ==================================================
+           НИЖНЯЯ НАДПИСЬ
+        ================================================== */
+
+        .login-footer {
+            margin-top: 24px;
+
+            text-align: center;
+
+            color: var(--muted);
+
+            font-size: 13px;
+            line-height: 1.45;
+        }
+
+
+        /* ==================================================
+           НЕВЫСОКИЕ ЭКРАНЫ
+        ================================================== */
+
+        @media (max-height: 760px) {
+            body {
+                align-items: flex-start;
+                overflow-y: auto;
+            }
+
+            .login-card {
+                margin: auto 0;
+
+                padding-top: 26px;
+                padding-bottom: 26px;
+            }
+
+            .login-logo {
+                height: 78px;
+                margin-bottom: 14px;
+            }
+
+            .login-logo img {
+                width: 260px;
+                height: 78px;
+
+                transform: scale(2.5);
+            }
+
+            .login-title {
+                margin-bottom: 18px;
+
+                font-size: 27px;
+            }
+
+            .login-card input {
+                height: 42px;
+                margin-bottom: 11px;
+            }
+
+            .login-btn {
+                height: 44px;
+            }
+
+            .login-footer {
+                margin-top: 16px;
+            }
+        }
+
+
+        /* ==================================================
+           ТЕЛЕФОНЫ
+        ================================================== */
+
+        @media (max-width: 600px) {
+            body {
+                padding: 14px;
+            }
+
+            .login-card {
+                width: 100%;
+
+                padding: 30px 22px;
+
+                border-radius: 16px;
+            }
+
+            .login-logo {
+                height: 84px;
+
+                margin-bottom: 16px;
+            }
+
+            .login-logo img {
+                width: 250px;
+                height: 80px;
+
+                transform: scale(2.45);
+            }
+
+            .login-title {
+                font-size: 27px;
+            }
+        }
+
+
+        /* ==================================================
+           ОЧЕНЬ МАЛЕНЬКИЕ ЭКРАНЫ
+        ================================================== */
+
+        @media (max-width: 380px) {
+            .login-card {
+                padding: 24px 16px;
+            }
+
+            .login-logo {
+                height: 74px;
+            }
+
+            .login-logo img {
+                width: 220px;
+                height: 72px;
+
+                transform: scale(2.25);
+            }
+
+            .login-title {
+                font-size: 24px;
+            }
         }
 
     </style>
@@ -105,56 +340,66 @@
 <div class="login-card">
 
     <div class="login-logo">
-        <img src="/static/img/logo.png">
+        <img
+            src="/static/img/logo.png?v=3"
+            alt="DTEL CRM"
+        >
     </div>
 
     <h1 class="login-title">
         Вход в систему
     </h1>
 
-
-
     {% if error %}
-    <div class="login-error">
-        {{ error }}
-    </div>
+        <div class="login-error">
+            {{ error }}
+        </div>
     {% endif %}
 
     <form method="post">
 
-        <label>Логин</label>
+        <label for="login">
+            Логин
+        </label>
 
         <input
+            id="login"
             type="text"
             name="login"
             autocomplete="username"
+            autofocus
             required
         >
 
-        <label>Пароль</label>
+        <label for="password">
+            Пароль
+        </label>
 
         <input
+            id="password"
             type="password"
             name="password"
             autocomplete="current-password"
             required
         >
 
-        <button class="login-btn">
+        <button
+            type="submit"
+            class="login-btn"
+        >
             Войти
         </button>
 
     </form>
 
     <div class="login-footer">
-
-        DTEL AIR<br>
-
-        управление доступом v2
-
+        DTEL CRM
+        <br>
+        Управление доступом v2
     </div>
 
 </div>
 
 </body>
+
 </html>
