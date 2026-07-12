@@ -1,31 +1,71 @@
-document.addEventListener("DOMContentLoaded", function () {
+document.addEventListener("DOMContentLoaded", () => {
     const searchInput = document.getElementById("panelSearch");
     const table = document.getElementById("panelsTable");
     const foundCounter = document.getElementById("panelsFound");
+    const emptyMessage = document.getElementById("panelsSearchEmpty");
 
     if (!searchInput || !table || !foundCounter) {
         return;
     }
 
-    const rows = Array.from(table.querySelectorAll("tbody tr"));
+    const rows = Array.from(
+        table.querySelectorAll("tbody tr[data-panel-row]")
+    );
+
+    function normalize(value) {
+        return String(value || "")
+            .toLowerCase()
+            .replaceAll("ё", "е")
+            .replace(/[^a-zа-я0-9]+/gi, "");
+    }
 
     function filterPanels() {
-        const query = searchInput.value.trim().toLowerCase();
+        const query = normalize(searchInput.value);
+
         let visibleCount = 0;
 
         rows.forEach((row) => {
-            const text = row.innerText.toLowerCase();
-            const isVisible = text.includes(query);
+            const searchValue = normalize(
+                row.dataset.search || row.textContent
+            );
 
-            row.style.display = isVisible ? "" : "none";
+            const isVisible =
+                query === "" ||
+                searchValue.includes(query);
+
+            row.hidden = !isVisible;
 
             if (isVisible) {
                 visibleCount += 1;
             }
         });
 
-        foundCounter.textContent = visibleCount;
+        foundCounter.textContent = String(visibleCount);
+
+        if (emptyMessage) {
+            emptyMessage.hidden =
+                visibleCount > 0 ||
+                query === "";
+        }
     }
 
-    searchInput.addEventListener("input", filterPanels);
+    searchInput.addEventListener(
+        "input",
+        filterPanels
+    );
+
+    searchInput.addEventListener(
+        "keydown",
+        (event) => {
+            if (event.key !== "Escape") {
+                return;
+            }
+
+            searchInput.value = "";
+            filterPanels();
+            searchInput.blur();
+        }
+    );
+
+    filterPanels();
 });

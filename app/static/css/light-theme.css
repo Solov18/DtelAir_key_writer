@@ -794,3 +794,354 @@ body.light-theme .uk-panel-list::-webkit-scrollbar-thumb:hover,
 body.light-theme .uk-cards-scroll::-webkit-scrollbar-thumb:hover {
     background: #2293ff;
 }
+/* ==================================================
+   PANELS PAGE
+================================================== */
+
+body.light-theme .panel-create-card::before,
+body.light-theme .panels-summary-card::before,
+body.light-theme .panels-list-panel::before {
+    background:
+        radial-gradient(
+            circle at top right,
+            rgba(0, 140, 255, 0.08),
+            transparent 36%
+        );
+}
+
+
+/* ==================================================
+   СОСТОЯНИЕ БАЗЫ
+================================================== */
+
+body.light-theme .panels-summary-main {
+    color: #102033;
+
+    border-color: #8bcaff;
+
+    background:
+        linear-gradient(
+            145deg,
+            #eaf6ff,
+            #d8ebf8
+        );
+
+    box-shadow:
+        inset 0 0 24px rgba(0, 140, 255, 0.06),
+        0 8px 22px rgba(35, 85, 140, 0.08);
+}
+
+body.light-theme .panels-summary-icon {
+    color: #087cff;
+
+    border-color: #63bdff;
+
+    background:
+        linear-gradient(
+            145deg,
+            #dff3ff,
+            #c7e8ff
+        );
+
+    box-shadow:
+        inset 0 0 18px rgba(0, 140, 255, 0.08),
+        0 8px 20px rgba(0, 120, 220, 0.10);
+}
+
+body.light-theme .panels-summary-label {
+    color: #63778c;
+}
+
+body.light-theme .panels-summary-value {
+    color: #071827;
+}
+
+body.light-theme .panels-summary-note {
+    color: #33495f;
+
+    border-color: #c9dff2;
+
+    background: #f4f9fd;
+
+    box-shadow: none;
+}
+
+body.light-theme .panels-summary-note p {
+    color: #63778c;
+}
+
+body.light-theme .summary-note-icon {
+    color: #087cff;
+}
+
+
+/* ==================================================
+   ФОРМА ПАНЕЛИ
+================================================== */
+
+body.light-theme .panel-form .form-field label,
+body.light-theme .panel-edit-form .form-field label {
+    color: #33495f;
+}
+
+body.light-theme .panel-form .form-field input,
+body.light-theme .panel-edit-form .form-field input {
+    color: #102033;
+
+    border-color: #cbddeb;
+
+    background: #ffffff;
+
+    box-shadow: none;
+}
+
+body.light-theme .panel-form .form-field input::placeholder,
+body.light-theme .panel-edit-form .form-field input::placeholder {
+    color: #8293a3;
+}
+
+body.light-theme .panel-form .form-field input:hover,
+body.light-theme .panel-edit-form .form-field input:hover {
+    border-color: #75c2ff;
+}
+
+body.light-theme .panel-form .form-field input:focus,
+body.light-theme .panel-edit-form .form-field input:focus {
+    color: #102033;
+
+    border-color: #2293ff;
+
+    background: #ffffff;
+
+    box-shadow:
+        0 0 0 3px rgba(34, 147, 255, 0.12);
+}
+
+
+/* ==================================================
+   ПОИСК ПАНЕЛЕЙ
+================================================== */
+
+body.light-theme .panel-search {
+    color: #63778c;
+}
+
+body.light-theme .panel-search input {
+    color: #102033;
+
+    border-color: #cbddeb;
+
+    background: #ffffff;
+
+    box-shadow: none;
+}
+
+body.light-theme .panel-search input::placeholder {
+    color: #8293a3;
+}
+
+body.light-theme .panel-search input:focus {
+    color: #102033;
+
+    border-color: #2293ff;
+
+    background: #ffffff;
+
+    box-shadow:
+        0 0 0 3px rgba(34, 147, 255, 0.12);
+}
+
+body.light-theme .panel-search svg {
+    color: #63778c;
+}
+
+
+/* ==================================================
+   ТАБЛИЦА ПАНЕЛЕЙ
+================================================== */
+
+body.light-theme .panels-table-scroll {
+    border-color: #d7e9f7;
+
+    background: #ffffff;
+}
+
+body.light-theme .panels-table {
+    color: #102033;
+
+    background: #ffffff;
+
+    border: none;
+}
+
+body.light-theme .panels-table thead th {
+    color: #2a6f9f;
+
+    border-bottom-color: #d7e9f7;
+
+    background: rgba(237, 246, 255, 0.98);
+
+    backdrop-filter: blur(14px);
+}
+
+body.light-theme .panels-table tbody td {
+    color: #102033;
+
+    border-bottom-color: #e6eef5;
+}
+
+body.light-theme .panels-table tbody tr:hover {
+    background: #f6fbff;
+
+    box-shadow:
+        inset 3px 0 0 #2293ff;
+}
+
+body.light-theme .panels-table tbody tr:hover td {
+    color: #071827;
+
+    background: transparent;
+}
+
+body.light-theme .panel-id-cell {
+    color: #63778c !important;
+}
+
+body.light-theme .panel-address-cell strong {
+    color: #071827;
+}
+
+body.light-theme .panel-empty-value {
+    color: #8293a3;
+}
+
+
+/* ==================================================
+   MAC И IP
+================================================== */
+
+body.light-theme .panel-mac {
+    color: #33495f;
+
+    border-color: #cbddeb;
+
+    background: #f4f9fd;
+
+    box-shadow: none;
+}
+
+body.light-theme .panel-ip-link {
+    color: #006fd6;
+
+    border-color: #9ed0ff;
+
+    background:
+        linear-gradient(
+            180deg,
+            #f2f9ff,
+            #e5f3ff
+        );
+
+    box-shadow: none;
+}
+
+body.light-theme .panel-ip-link:hover {
+    color: #005eb8;
+
+    border-color: #2293ff;
+
+    background:
+        linear-gradient(
+            180deg,
+            #e8f5ff,
+            #d8edff
+        );
+
+    box-shadow:
+        0 8px 18px rgba(0, 120, 220, 0.12);
+}
+
+
+/* ==================================================
+   КНОПКА ИЗМЕНЕНИЯ
+================================================== */
+
+body.light-theme .row-actions-button {
+    color: #0077d9;
+
+    border-color: #9ed0ff;
+
+    background: #eef7ff;
+
+    box-shadow: none;
+}
+
+body.light-theme .row-actions-button:hover,
+body.light-theme .row-actions[open] .row-actions-button {
+    color: #005eb8;
+
+    border-color: #2293ff;
+
+    background: #e2f2ff;
+
+    box-shadow:
+        0 8px 18px rgba(0, 120, 220, 0.10);
+}
+
+
+/* ==================================================
+   ВЫПАДАЮЩЕЕ РЕДАКТИРОВАНИЕ
+================================================== */
+
+body.light-theme .row-actions-content {
+    color: #102033;
+
+    border-color: #b9dcff;
+
+    background: rgba(255, 255, 255, 0.98);
+
+    box-shadow:
+        0 18px 45px rgba(35, 85, 140, 0.18),
+        0 0 24px rgba(0, 120, 220, 0.08);
+}
+
+body.light-theme .panel-edit-form {
+    color: #102033;
+}
+
+
+/* ==================================================
+   ПУСТЫЕ СОСТОЯНИЯ
+================================================== */
+
+body.light-theme .panels-empty-state,
+body.light-theme .panels-search-empty {
+    color: #63778c;
+
+    border-color: #d7e9f7;
+
+    background: #f8fbff;
+}
+
+
+/* ==================================================
+   СКРОЛЛ ТАБЛИЦЫ
+================================================== */
+
+body.light-theme .panels-table-scroll {
+    scrollbar-color: #5cb8ff #eef6fc;
+}
+
+body.light-theme .panels-table-scroll::-webkit-scrollbar-track {
+    background: #eef6fc;
+}
+
+body.light-theme .panels-table-scroll::-webkit-scrollbar-thumb {
+    border-color: #eef6fc;
+
+    background: #5cb8ff;
+}
+
+body.light-theme .panels-table-scroll::-webkit-scrollbar-thumb:hover {
+    background: #2293ff;
+}
