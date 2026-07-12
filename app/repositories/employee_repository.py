@@ -12,43 +12,61 @@ CLOSED_KEY_STATUSES = {
 }
 
 
+def _employee_card_query(enabled: int) -> str:
+    return """
+        SELECT
+            e.*,
+
+            active_ek.id AS active_assignment_id,
+            active_ek.key_id AS active_key_id,
+            active_ek.issued_at AS active_key_issued_at,
+            active_ek.comment AS active_key_comment,
+
+            active_key.number AS active_key_number,
+            active_key.hex_value AS active_key_hex_value,
+            active_key.key_type AS active_key_type,
+
+            (
+                SELECT COUNT(*)
+                FROM employee_keys history_ek
+                WHERE history_ek.employee_id = e.id
+                  AND history_ek.status <> 'active'
+            ) AS history_count,
+
+            (
+                SELECT k.number
+                FROM employee_keys last_ek
+                JOIN keys k ON k.id = last_ek.key_id
+                WHERE last_ek.employee_id = e.id
+                ORDER BY
+                    datetime(COALESCE(last_ek.closed_at, last_ek.updated_at, last_ek.created_at)) DESC,
+                    last_ek.id DESC
+                LIMIT 1
+            ) AS last_key_number
+
+        FROM employees e
+
+        LEFT JOIN employee_keys active_ek
+            ON active_ek.employee_id = e.id
+           AND active_ek.status = 'active'
+
+        LEFT JOIN keys active_key
+            ON active_key.id = active_ek.key_id
+
+        WHERE e.enabled = ?
+        ORDER BY e.full_name COLLATE NOCASE
+    """
+
+
 def get_active_employees() -> list[dict]:
     with db() as conn:
-        rows = conn.execute(
-            """
-            SELECT
-                e.*,
+        rows = conn.execute(_employee_card_query(1), (1,)).fetchall()
+        return [dict(row) for row in rows]
 
-                active_ek.id AS active_assignment_id,
-                active_ek.key_id AS active_key_id,
-                active_ek.issued_at AS active_key_issued_at,
-                active_ek.comment AS active_key_comment,
 
-                active_key.number AS active_key_number,
-                active_key.hex_value AS active_key_hex_value,
-                active_key.key_type AS active_key_type,
-
-                (
-                    SELECT COUNT(*)
-                    FROM employee_keys history_ek
-                    WHERE history_ek.employee_id = e.id
-                      AND history_ek.status <> 'active'
-                ) AS history_count
-
-            FROM employees e
-
-            LEFT JOIN employee_keys active_ek
-                ON active_ek.employee_id = e.id
-               AND active_ek.status = 'active'
-
-            LEFT JOIN keys active_key
-                ON active_key.id = active_ek.key_id
-
-            WHERE e.enabled = 1
-            ORDER BY e.full_name COLLATE NOCASE
-            """
-        ).fetchall()
-
+def get_dismissed_employees() -> list[dict]:
+    with db() as conn:
+        rows = conn.execute(_employee_card_query(0), (0,)).fetchall()
         return [dict(row) for row in rows]
 
 
@@ -103,6 +121,15 @@ def get_employees_count() -> int:
         return int(
             conn.execute(
                 "SELECT COUNT(*) FROM employees WHERE enabled = 1"
+            ).fetchone()[0]
+        )
+
+
+def get_dismissed_employees_count() -> int:
+    with db() as conn:
+        return int(
+            conn.execute(
+                "SELECT COUNT(*) FROM employees WHERE enabled = 0"
             ).fetchone()[0]
         )
 
@@ -172,6 +199,25 @@ def update_employee(
 
         if cursor.rowcount == 0:
             raise ValueError("Сотрудник не найден.")
+
+
+def restore_employee(employee_id: int) -> None:
+    with db() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE employees
+            SET
+                enabled = 1,
+                dismissed_at = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+              AND enabled = 0
+            """,
+            (employee_id,),
+        )
+
+        if cursor.rowcount == 0:
+            raise ValueError("Уволенный сотрудник не найден.")
 
 
 def get_employee_active_key(employee_id: int) -> dict | None:

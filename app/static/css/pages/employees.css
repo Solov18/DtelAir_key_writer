@@ -1022,3 +1022,178 @@ body.light-theme .modal-backdrop {
     content: "Свернуть историю  ↑";
     transform: translateX(-50%);
 }
+
+/* Архив сотрудников */
+
+.employee-view-tabs {
+    display: flex;
+    gap: 12px;
+    margin: 0 0 24px;
+}
+
+.employee-view-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 0 18px;
+    color: var(--muted);
+    text-decoration: none;
+    border: 1px solid var(--line-soft);
+    border-radius: 12px;
+    background: rgba(0, 10, 20, 0.28);
+    transition: 0.18s;
+}
+
+.employee-view-tab:hover,
+.employee-view-tab.active {
+    color: var(--text-strong);
+    border-color: rgba(0, 170, 255, 0.48);
+    background: rgba(0, 140, 255, 0.14);
+    box-shadow: 0 0 18px rgba(0, 170, 255, 0.10);
+}
+
+.employee-view-tab span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    height: 28px;
+    padding: 0 8px;
+    color: var(--blue);
+    border-radius: 999px;
+    background: rgba(0, 170, 255, 0.12);
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.employee-card-dismissed {
+    opacity: 0.94;
+    border-color: rgba(255, 196, 0, 0.22);
+}
+
+.employee-dismissed-date {
+    display: block;
+    margin-top: 8px;
+    color: var(--yellow);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.employee-detail-title-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.employee-dismissed-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 34px;
+    padding: 0 13px;
+    color: var(--yellow);
+    border: 1px solid rgba(255, 196, 0, 0.34);
+    border-radius: 999px;
+    background: rgba(255, 196, 0, 0.08);
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.employee-archive-banner {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 24px;
+    align-items: center;
+    margin-bottom: 24px;
+    border-color: rgba(255, 196, 0, 0.28);
+}
+
+.employee-archive-banner .btn {
+    min-width: 220px;
+}
+
+.employee-readonly-data,
+.employee-history-readonly {
+    display: grid;
+    gap: 12px;
+}
+
+.employee-readonly-data > div,
+.employee-history-readonly > div {
+    padding: 14px;
+    border: 1px solid var(--line-soft);
+    border-radius: 12px;
+    background: rgba(0, 10, 20, 0.24);
+}
+
+.employee-readonly-data span,
+.employee-history-readonly span {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.employee-readonly-data b,
+.employee-history-readonly b {
+    display: block;
+    margin-top: 6px;
+    color: var(--text-strong);
+    line-height: 1.4;
+}
+
+body.light-theme .employee-view-tab {
+    color: #63778c;
+    background: #ffffff;
+    border-color: #d7e9f7;
+}
+
+body.light-theme .employee-view-tab:hover,
+body.light-theme .employee-view-tab.active {
+    color: #071827;
+    background: #eef7ff;
+    border-color: #75c2ff;
+}
+
+body.light-theme .employee-card-dismissed {
+    background: #fffdf7;
+    border-color: #ead59a;
+}
+
+body.light-theme .employee-dismissed-date {
+    color: #9c7300;
+}
+
+body.light-theme .employee-archive-banner {
+    background: #fffdf7;
+    border-color: #ead59a;
+}
+
+body.light-theme .employee-readonly-data > div,
+body.light-theme .employee-history-readonly > div {
+    background: #f8fbff;
+    border-color: #d7e9f7;
+}
+
+@media (max-width: 760px) {
+    .employee-view-tabs {
+        flex-direction: column;
+    }
+
+    .employee-view-tab {
+        justify-content: space-between;
+    }
+
+    .employee-archive-banner {
+        grid-template-columns: 1fr;
+    }
+
+    .employee-archive-banner .btn {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .employee-detail-title-row {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}

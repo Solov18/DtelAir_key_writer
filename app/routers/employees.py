@@ -6,13 +6,17 @@ from app.repositories.employee_repository import (
     create_employee,
     dismiss_employee,
     get_active_employees,
+    get_dismissed_employees,
+    get_dismissed_employees_count,
     get_employee,
     get_employee_active_key,
+    get_employee_any_status,
     get_employee_by_name,
     get_employee_key_history,
     get_employee_keys_count,
     get_employees_count,
     issue_key_to_employee,
+    restore_employee,
     update_employee,
     update_employee_key_comment,
     update_employee_key_history,
@@ -39,14 +43,12 @@ def _employee_detail_context(
     employee_id: int,
     message: dict | None = None,
 ) -> dict:
-    """
-    Собирает данные для карточки сотрудника.
-    """
-    employee = get_employee(employee_id)
+    employee = get_employee_any_status(employee_id)
 
     return {
         "request": request,
         "employee": employee,
+        "is_dismissed": bool(employee and not employee["enabled"]),
         "active_key": get_employee_active_key(employee_id),
         "key_history": get_employee_key_history(employee_id),
         "status_labels": KEY_STATUS_LABELS,
@@ -63,7 +65,25 @@ def employees_page(request: Request):
             "panels": get_panels(),
             "employees": get_active_employees(),
             "employees_count": get_employees_count(),
+            "dismissed_count": get_dismissed_employees_count(),
             "employee_keys_count": get_employee_keys_count(),
+            "current_view": "active",
+        },
+    )
+
+
+@router.get("/employees/dismissed", response_class=HTMLResponse)
+def dismissed_employees_page(request: Request):
+    return templates.TemplateResponse(
+        "employees.html",
+        {
+            "request": request,
+            "panels": [],
+            "employees": get_dismissed_employees(),
+            "employees_count": get_employees_count(),
+            "dismissed_count": get_dismissed_employees_count(),
+            "employee_keys_count": get_employee_keys_count(),
+            "current_view": "dismissed",
         },
     )
 
@@ -73,15 +93,8 @@ def employees_add(
     full_name: str = Form(...),
     note: str = Form(""),
 ):
-    create_employee(
-        full_name=full_name,
-        note=note,
-    )
-
-    return RedirectResponse(
-        "/employees",
-        status_code=303,
-    )
+    create_employee(full_name=full_name, note=note)
+    return RedirectResponse("/employees", status_code=303)
 
 
 @router.post("/employees/{employee_id}/edit")
@@ -95,11 +108,7 @@ def employee_edit(
         full_name=full_name,
         note=note,
     )
-
-    return RedirectResponse(
-        f"/employees/{employee_id}",
-        status_code=303,
-    )
+    return RedirectResponse(f"/employees/{employee_id}", status_code=303)
 
 
 @router.post("/employees/{employee_id}/dismiss")
@@ -107,67 +116,39 @@ def employee_dismiss(
     employee_id: int,
     comment: str = Form(""),
 ):
-    dismiss_employee(
-        employee_id=employee_id,
-        comment=comment,
-    )
+    dismiss_employee(employee_id=employee_id, comment=comment)
+    return RedirectResponse("/employees/dismissed", status_code=303)
 
-    return RedirectResponse(
-        "/employees",
-        status_code=303,
-    )
+
+@router.post("/employees/{employee_id}/restore")
+def employee_restore(employee_id: int):
+    restore_employee(employee_id)
+    return RedirectResponse(f"/employees/{employee_id}", status_code=303)
 
 
 @router.post("/employees/delete")
-def employees_delete(
-    employee_id: int = Form(...),
-):
-    """
-    Оставлено для совместимости со старым HTML.
-
-    Сотрудник больше не удаляется.
-    Он переводится в статус уволенного.
-    """
+def employees_delete(employee_id: int = Form(...)):
     dismiss_employee(
         employee_id=employee_id,
         comment="Сотрудник уволен",
     )
-
-    return RedirectResponse(
-        "/employees",
-        status_code=303,
-    )
+    return RedirectResponse("/employees/dismissed", status_code=303)
 
 
-@router.get(
-    "/employees/{employee_id}",
-    response_class=HTMLResponse,
-)
-def employee_detail(
-    request: Request,
-    employee_id: int,
-):
-    employee = get_employee(employee_id)
+@router.get("/employees/{employee_id}", response_class=HTMLResponse)
+def employee_detail(request: Request, employee_id: int):
+    employee = get_employee_any_status(employee_id)
 
     if not employee:
-        return RedirectResponse(
-            "/employees",
-            status_code=303,
-        )
+        return RedirectResponse("/employees", status_code=303)
 
     return templates.TemplateResponse(
         "employee_detail.html",
-        _employee_detail_context(
-            request=request,
-            employee_id=employee_id,
-        ),
+        _employee_detail_context(request, employee_id),
     )
 
 
-@router.post(
-    "/employees/{employee_id}/keys/issue",
-    response_class=HTMLResponse,
-)
+@router.post("/employees/{employee_id}/keys/issue", response_class=HTMLResponse)
 def employee_issue_key(
     request: Request,
     employee_id: int,
@@ -180,10 +161,7 @@ def employee_issue_key(
     employee = get_employee(employee_id)
 
     if not employee:
-        return RedirectResponse(
-            "/employees",
-            status_code=303,
-        )
+        return RedirectResponse("/employees/dismissed", status_code=303)
 
     key = find_key(key_value.strip())
 
@@ -191,14 +169,11 @@ def employee_issue_key(
         return templates.TemplateResponse(
             "employee_detail.html",
             _employee_detail_context(
-                request=request,
-                employee_id=employee_id,
-                message={
+                request,
+                employee_id,
+                {
                     "type": "error",
-                    "text": (
-                        f"Ключ «{key_value.strip()}» "
-                        "не найден в базе."
-                    ),
+                    "text": f"Ключ «{key_value.strip()}» не найден в базе.",
                 },
             ),
         )
@@ -216,36 +191,21 @@ def employee_issue_key(
         return templates.TemplateResponse(
             "employee_detail.html",
             _employee_detail_context(
-                request=request,
-                employee_id=employee_id,
-                message={
-                    "type": "error",
-                    "text": str(error),
-                },
+                request,
+                employee_id,
+                {"type": "error", "text": str(error)},
             ),
         )
 
-    return RedirectResponse(
-        f"/employees/{employee_id}",
-        status_code=303,
-    )
+    return RedirectResponse(f"/employees/{employee_id}", status_code=303)
 
 
-@router.post(
-    "/employees/{employee_id}/keys/add",
-    response_class=HTMLResponse,
-)
+@router.post("/employees/{employee_id}/keys/add", response_class=HTMLResponse)
 def employee_add_keys(
     request: Request,
     employee_id: int,
     key_values: str = Form(...),
 ):
-    """
-    Совместимость со старой формой.
-
-    Берётся только один номер ключа.
-    Несколько действующих ключей больше не создаются.
-    """
     values = [
         value.strip()
         for value in key_values.replace(",", " ").split()
@@ -256,12 +216,9 @@ def employee_add_keys(
         return templates.TemplateResponse(
             "employee_detail.html",
             _employee_detail_context(
-                request=request,
-                employee_id=employee_id,
-                message={
-                    "type": "error",
-                    "text": "Не указан номер ключа.",
-                },
+                request,
+                employee_id,
+                {"type": "error", "text": "Не указан номер ключа."},
             ),
         )
 
@@ -269,9 +226,9 @@ def employee_add_keys(
         return templates.TemplateResponse(
             "employee_detail.html",
             _employee_detail_context(
-                request=request,
-                employee_id=employee_id,
-                message={
+                request,
+                employee_id,
+                {
                     "type": "error",
                     "text": (
                         "У сотрудника может быть только один "
@@ -287,12 +244,9 @@ def employee_add_keys(
         return templates.TemplateResponse(
             "employee_detail.html",
             _employee_detail_context(
-                request=request,
-                employee_id=employee_id,
-                message={
-                    "type": "error",
-                    "text": f"Ключ «{values[0]}» не найден.",
-                },
+                request,
+                employee_id,
+                {"type": "error", "text": f"Ключ «{values[0]}» не найден."},
             ),
         )
 
@@ -307,24 +261,16 @@ def employee_add_keys(
         return templates.TemplateResponse(
             "employee_detail.html",
             _employee_detail_context(
-                request=request,
-                employee_id=employee_id,
-                message={
-                    "type": "error",
-                    "text": str(error),
-                },
+                request,
+                employee_id,
+                {"type": "error", "text": str(error)},
             ),
         )
 
-    return RedirectResponse(
-        f"/employees/{employee_id}",
-        status_code=303,
-    )
+    return RedirectResponse(f"/employees/{employee_id}", status_code=303)
 
 
-@router.post(
-    "/employees/{employee_id}/keys/close",
-)
+@router.post("/employees/{employee_id}/keys/close")
 def employee_close_key(
     employee_id: int,
     assignment_id: int = Form(...),
@@ -339,16 +285,10 @@ def employee_close_key(
         close_reason=close_reason,
         comment=comment,
     )
-
-    return RedirectResponse(
-        f"/employees/{employee_id}",
-        status_code=303,
-    )
+    return RedirectResponse(f"/employees/{employee_id}", status_code=303)
 
 
-@router.post(
-    "/employees/{employee_id}/keys/comment",
-)
+@router.post("/employees/{employee_id}/keys/comment")
 def employee_key_comment(
     employee_id: int,
     assignment_id: int = Form(...),
@@ -359,16 +299,10 @@ def employee_key_comment(
         assignment_id=assignment_id,
         comment=comment,
     )
-
-    return RedirectResponse(
-        f"/employees/{employee_id}",
-        status_code=303,
-    )
+    return RedirectResponse(f"/employees/{employee_id}", status_code=303)
 
 
-@router.post(
-    "/employees/{employee_id}/keys/history/edit",
-)
+@router.post("/employees/{employee_id}/keys/history/edit")
 def employee_key_history_edit(
     employee_id: int,
     assignment_id: int = Form(...),
@@ -383,25 +317,14 @@ def employee_key_history_edit(
         close_reason=close_reason,
         comment=comment,
     )
-
-    return RedirectResponse(
-        f"/employees/{employee_id}",
-        status_code=303,
-    )
+    return RedirectResponse(f"/employees/{employee_id}", status_code=303)
 
 
-@router.post(
-    "/employees/{employee_id}/keys/remove",
-)
+@router.post("/employees/{employee_id}/keys/remove")
 def employee_remove_key(
     employee_id: int,
     key_id: int = Form(...),
 ):
-    """
-    Старый маршрут оставлен временно.
-
-    Ключ не удаляется, а переносится в историю.
-    """
     active_key = get_employee_active_key(employee_id)
 
     if active_key and active_key["key_id"] == key_id:
@@ -412,16 +335,10 @@ def employee_remove_key(
             close_reason="Ключ деактивирован вручную",
         )
 
-    return RedirectResponse(
-        f"/employees/{employee_id}",
-        status_code=303,
-    )
+    return RedirectResponse(f"/employees/{employee_id}", status_code=303)
 
 
-@router.post(
-    "/employees/write",
-    response_class=HTMLResponse,
-)
+@router.post("/employees/write", response_class=HTMLResponse)
 def employees_write(
     request: Request,
     employee_name: str = Form(...),
@@ -434,10 +351,6 @@ def employees_write(
     old_key_status: str = Form("replaced"),
     old_key_reason: str = Form("Выдан новый ключ"),
 ):
-    """
-    Выдаёт сотруднику один действующий ключ
-    и записывает его на выбранные панели.
-    """
     employee = get_employee_by_name(employee_name)
 
     if not employee:
@@ -465,10 +378,7 @@ def employees_write(
             "write_results.html",
             {
                 "request": request,
-                "title": (
-                    f"Результат записи сотрудника: "
-                    f"{employee_name}"
-                ),
+                "title": f"Результат записи сотрудника: {employee_name}",
                 "all_results": [
                     {
                         "key": {
@@ -507,12 +417,7 @@ def employees_write(
             },
         )
 
-    if scope == "selected":
-        panels = get_panels(
-            panel_ids=panel_ids,
-        )
-    else:
-        panels = get_panels()
+    panels = get_panels(panel_ids=panel_ids) if scope == "selected" else get_panels()
 
     results = write_key_to_panels(
         "employee",
@@ -528,15 +433,7 @@ def employees_write(
         "write_results.html",
         {
             "request": request,
-            "title": (
-                f"Результат записи сотрудника: "
-                f"{employee_name}"
-            ),
-            "all_results": [
-                {
-                    "key": item,
-                    "results": results,
-                }
-            ],
+            "title": f"Результат записи сотрудника: {employee_name}",
+            "all_results": [{"key": item, "results": results}],
         },
     )

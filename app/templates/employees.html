@@ -6,9 +6,7 @@
 <div class="employees-hero">
     <div>
         <h1>Сотрудники</h1>
-        <p class="subtitle">
-            Учёт сотрудников, действующих ключей и истории замен
-        </p>
+        <p class="subtitle">Учёт сотрудников, действующих ключей и истории замен</p>
     </div>
 
     <div class="employees-stats">
@@ -20,10 +18,9 @@
                     <path d="M20 8v6M17 11h6"/>
                 </svg>
             </div>
-
             <div>
                 <b>{{ employees_count or 0 }}</b>
-                <span>Сотрудников</span>
+                <span>Активных сотрудников</span>
             </div>
         </div>
 
@@ -34,18 +31,48 @@
                     <path d="m11 11 9-9M16 6l3 3M14 8l2 2"/>
                 </svg>
             </div>
-
             <div>
                 <b>{{ employee_keys_count or 0 }}</b>
                 <span>Действующих ключей</span>
             </div>
         </div>
+
+        <div class="employees-stat-card">
+            <div class="employees-stat-icon">
+                <svg viewBox="0 0 24 24">
+                    <path d="M4 7h16M7 3h10l1 4H6l1-4Z"/>
+                    <path d="M6 7v13h12V7"/>
+                    <path d="M9 11h6"/>
+                </svg>
+            </div>
+            <div>
+                <b>{{ dismissed_count or 0 }}</b>
+                <span>Уволенных сотрудников</span>
+            </div>
+        </div>
     </div>
 </div>
 
+<div class="employee-view-tabs">
+    <a
+        href="/employees"
+        class="employee-view-tab {% if current_view == 'active' %}active{% endif %}"
+    >
+        Активные
+        <span>{{ employees_count or 0 }}</span>
+    </a>
 
+    <a
+        href="/employees/dismissed"
+        class="employee-view-tab {% if current_view == 'dismissed' %}active{% endif %}"
+    >
+        Уволенные
+        <span>{{ dismissed_count or 0 }}</span>
+    </a>
+</div>
+
+{% if current_view != 'dismissed' %}
 <div class="employees-top-grid">
-
     <div class="panel employee-add-panel">
         <h2>
             <span class="title-svg-icon">
@@ -55,16 +82,11 @@
                     <path d="M20 8v6M17 11h6"/>
                 </svg>
             </span>
-
             Добавить сотрудника
         </h2>
 
-        <form
-            method="post"
-            action="/employees/add"
-        >
+        <form method="post" action="/employees/add">
             <label>ФИО сотрудника</label>
-
             <input
                 name="full_name"
                 placeholder="Иванов Иван Иванович"
@@ -73,22 +95,17 @@
             >
 
             <label>Комментарий</label>
-
             <input
                 name="note"
                 placeholder="Должность, отдел или примечание"
                 autocomplete="off"
             >
 
-            <button
-                type="submit"
-                class="btn employees-wide-btn"
-            >
+            <button type="submit" class="btn employees-wide-btn">
                 Добавить сотрудника
             </button>
         </form>
     </div>
-
 
     <div class="panel employee-write-panel">
         <h2>
@@ -98,18 +115,11 @@
                     <path d="m11 11 9-9M16 6l3 3M14 8l2 2"/>
                 </svg>
             </span>
-
             Выдать и прописать ключ
         </h2>
 
-        <form
-            method="post"
-            action="/employees/write"
-            id="employeeWriteForm"
-        >
-
+        <form method="post" action="/employees/write" id="employeeWriteForm">
             <label>Сотрудник</label>
-
             <input
                 type="text"
                 id="employeeWriteSearch"
@@ -119,10 +129,7 @@
                 required
             >
 
-            <div
-                class="employee-picker"
-                id="employeePicker"
-            >
+            <div class="employee-picker" id="employeePicker">
                 {% for e in employees %}
                 <button
                     type="button"
@@ -134,9 +141,7 @@
                 {% endfor %}
             </div>
 
-
             <label>Номер нового ключа</label>
-
             <input
                 name="key_value"
                 placeholder="Например: 39068"
@@ -149,96 +154,47 @@
                 Предыдущий ключ будет сохранён в истории.
             </p>
 
-
             <label>Комментарий к новому ключу</label>
-
             <input
                 name="new_key_comment"
                 placeholder="Например: основной служебный ключ"
                 autocomplete="off"
             >
 
-
             <div class="employee-write-row">
-
                 <div>
                     <label>Куда прописывать</label>
-
-                    <select
-                        name="scope"
-                        id="employeeScope"
-                    >
-                        <option value="all">
-                            На все панели
-                        </option>
-
-                        <option value="selected">
-                            Выбрать панели вручную
-                        </option>
+                    <select name="scope" id="employeeScope">
+                        <option value="all">На все панели</option>
+                        <option value="selected">Выбрать панели вручную</option>
                     </select>
                 </div>
 
-
                 <div>
                     <label>Квартира / flatNum</label>
-
-                    <input
-                        name="flat_num"
-                        value="0"
-                    >
+                    <input name="flat_num" value="0">
                 </div>
-
             </div>
 
-
-            <input
-                type="hidden"
-                name="inner"
-                value="0"
-            >
-
-            <input
-                type="hidden"
-                name="old_key_status"
-                value="replaced"
-            >
-
-            <input
-                type="hidden"
-                name="old_key_reason"
-                value="Выдан новый ключ"
-            >
-
+            <input type="hidden" name="inner" value="0">
+            <input type="hidden" name="old_key_status" value="replaced">
+            <input type="hidden" name="old_key_reason" value="Выдан новый ключ">
 
             <div class="employee-write-actions">
-
-                <button
-                    type="button"
-                    class="btn btn-ghost"
-                    id="openEmployeePanelsModal"
-                >
+                <button type="button" class="btn btn-ghost" id="openEmployeePanelsModal">
                     Выбрать панели
                 </button>
-
-                <button
-                    type="submit"
-                    class="btn"
-                >
+                <button type="submit" class="btn">
                     Выдать и прописать
                 </button>
-
             </div>
-
         </form>
     </div>
-
 </div>
-
+{% endif %}
 
 <div class="panel employees-list-panel">
-
     <div class="panel-list-head">
-
         <div>
             <h2>
                 <span class="title-svg-icon">
@@ -248,115 +204,85 @@
                         <path d="M20 8v6M17 11h6"/>
                     </svg>
                 </span>
-
-                Список сотрудников
+                {% if current_view == 'dismissed' %}
+                    Уволенные сотрудники
+                {% else %}
+                    Список сотрудников
+                {% endif %}
             </h2>
 
             <p class="subtitle">
                 Найдено:
-                <span id="employeesFound">
-                    {{ employees|length }}
-                </span>
+                <span id="employeesFound">{{ employees|length }}</span>
             </p>
         </div>
 
-
         <div class="panel-search employees-search-box">
-
             <input
                 type="text"
                 id="employeesSearch"
                 placeholder="Поиск по ФИО, ключу или комментарию..."
                 autocomplete="off"
             >
-
         </div>
-
     </div>
 
-
-    <div
-        class="employees-cards"
-        id="employeesCards"
-    >
-
+    <div class="employees-cards" id="employeesCards">
         {% for e in employees %}
-
         <div
-            class="employee-card"
+            class="employee-card {% if current_view == 'dismissed' %}employee-card-dismissed{% endif %}"
             data-search="
                 {{ e.full_name }}
                 {{ e.note or '' }}
                 {{ e.active_key_number or '' }}
+                {{ e.last_key_number or '' }}
                 {{ e.active_key_comment or '' }}
             "
         >
-
             <div class="employee-avatar">
-
                 <svg viewBox="0 0 24 24">
                     <path d="M17 21a6 6 0 0 0-12 0"/>
                     <circle cx="11" cy="8" r="4"/>
                 </svg>
-
             </div>
-
 
             <div class="employee-card-main">
-
                 <b>{{ e.full_name }}</b>
+                <span>{{ e.note or 'Без комментария' }}</span>
 
-                <span>
-                    {{ e.note or 'Без комментария' }}
-                </span>
-
-                {% if e.history_count %}
-
-                <small class="employee-history-count">
-                    История ключей:
-                    {{ e.history_count }}
+                {% if current_view == 'dismissed' %}
+                <small class="employee-dismissed-date">
+                    Уволен: {{ e.dismissed_at or 'дата не указана' }}
                 </small>
-
+                <span class="employee-key-status dismissed employee-list-status">
+                    Уволен
+                </span>
+                {% elif e.history_count %}
+                <small class="employee-history-count">
+                    История ключей: {{ e.history_count }}
+                </small>
                 {% endif %}
-
             </div>
-
 
             <div class="employee-card-stat">
-
-                {% if e.active_key_number %}
-
-                <b>
-                    {{ e.active_key_number }}
-                </b>
-
-                <span>
-                    Действующий ключ
-                </span>
-
-                {% if e.active_key_comment %}
-
-                <small>
-                    {{ e.active_key_comment }}
-                </small>
-
-                {% endif %}
-
+                {% if current_view == 'dismissed' %}
+                    <b>{{ e.last_key_number or '—' }}</b>
+                    <span>Последний ключ</span>
+                    <small>История: {{ e.history_count or 0 }}</small>
+                {% elif e.active_key_number %}
+                    <b>{{ e.active_key_number }}</b>
+                    <span>Действующий ключ</span>
+                    {% if e.active_key_comment %}
+                    <small>{{ e.active_key_comment }}</small>
+                    {% endif %}
                 {% else %}
-
-                <b>—</b>
-
-                <span>
-                    Ключ не выдан
-                </span>
-
+                    <b>—</b>
+                    <span>Ключ не выдан</span>
                 {% endif %}
-
             </div>
 
-
             <div class="employee-card-actions">
-
+                {% if current_view != 'dismissed' %}
                 <button
                     type="button"
                     class="btn btn-small"
@@ -364,7 +290,7 @@
                 >
                     Выбрать
                 </button>
-
+                {% endif %}
 
                 <a
                     href="/employees/{{ e.id }}"
@@ -372,107 +298,57 @@
                 >
                     Карточка
                 </a>
-
             </div>
-
         </div>
-
         {% else %}
-
         <div class="empty-state">
-
-            <h3>Сотрудников пока нет</h3>
-
-            <p>
-                Добавьте первого сотрудника
-                с помощью формы выше.
-            </p>
-
+            {% if current_view == 'dismissed' %}
+                <h3>Уволенных сотрудников нет</h3>
+                <p>После увольнения сотрудник появится в этом разделе.</p>
+            {% else %}
+                <h3>Сотрудников пока нет</h3>
+                <p>Добавьте первого сотрудника с помощью формы выше.</p>
+            {% endif %}
         </div>
-
         {% endfor %}
-
     </div>
-
 </div>
 
-
-<div
-    class="modal-backdrop"
-    id="employeePanelsModal"
->
-
+{% if current_view != 'dismissed' %}
+<div class="modal-backdrop" id="employeePanelsModal">
     <div class="modal-window panel">
-
         <div class="modal-head">
-
             <div>
-
-                <h2>
-                    Выбрать панели
-                </h2>
-
-                <p class="subtitle">
-                    Выберите панели, на которые
-                    нужно прописать ключ
-                </p>
-
+                <h2>Выбрать панели</h2>
+                <p class="subtitle">Выберите панели, на которые нужно прописать ключ</p>
             </div>
 
-
-            <button
-                type="button"
-                class="btn-small btn-ghost"
-                id="closeEmployeePanelsModal"
-            >
+            <button type="button" class="btn-small btn-ghost" id="closeEmployeePanelsModal">
                 Закрыть
             </button>
-
         </div>
-
 
         <div class="panel-actions employee-modal-actions">
-
-            <button
-                type="button"
-                class="btn-small"
-                id="select-all-panels"
-            >
+            <button type="button" class="btn-small" id="select-all-panels">
                 Выбрать все
             </button>
-
-            <button
-                type="button"
-                class="btn-small btn-ghost"
-                id="clear-all-panels"
-            >
+            <button type="button" class="btn-small btn-ghost" id="clear-all-panels">
                 Снять все
             </button>
-
         </div>
 
-
         <div class="panel-search employee-search">
-
             <input
                 type="text"
                 id="employeePanelSearch"
                 placeholder="Поиск по адресу, входу или MAC..."
                 autocomplete="off"
             >
-
         </div>
 
-
-        <div
-            class="panel-list employee-panel-list"
-            id="employeePanelList"
-        >
-
+        <div class="panel-list employee-panel-list" id="employeePanelList">
             {% for p in panels %}
-
             <label class="panel-option">
-
                 <input
                     type="checkbox"
                     name="panel_ids"
@@ -481,99 +357,46 @@
                 >
 
                 <span class="panel-option-body">
-
-                    <span class="panel-option-title">
-                        {{ p.entrance or '—' }}
-                    </span>
-
-                    <span class="panel-option-meta">
-                        {{ p.address }}
-                    </span>
-
-                    <span class="panel-option-mac">
-                        {{ p.mac }}
-                    </span>
-
+                    <span class="panel-option-title">{{ p.entrance or '—' }}</span>
+                    <span class="panel-option-meta">{{ p.address }}</span>
+                    <span class="panel-option-mac">{{ p.mac }}</span>
                 </span>
-
             </label>
-
             {% endfor %}
-
         </div>
-
     </div>
-
 </div>
+{% endif %}
 
+<script src="/static/js/employees.js?v=3"></script>
 
-<script src="/static/js/employees.js?v=2"></script>
-
-
+{% if current_view != 'dismissed' %}
 <script>
-const employeePanelsModal =
-    document.getElementById("employeePanelsModal");
+const employeePanelsModal = document.getElementById("employeePanelsModal");
+const openEmployeePanelsModal = document.getElementById("openEmployeePanelsModal");
+const closeEmployeePanelsModal = document.getElementById("closeEmployeePanelsModal");
 
-const openEmployeePanelsModal =
-    document.getElementById("openEmployeePanelsModal");
-
-const closeEmployeePanelsModal =
-    document.getElementById("closeEmployeePanelsModal");
-
-
-if (openEmployeePanelsModal) {
-
-    openEmployeePanelsModal.addEventListener(
-        "click",
-        () => {
-
-            employeePanelsModal.classList.add(
-                "active"
-            );
-
-        }
-    );
-
+if (openEmployeePanelsModal && employeePanelsModal) {
+    openEmployeePanelsModal.addEventListener("click", () => {
+        employeePanelsModal.classList.add("active");
+    });
 }
 
-
-if (closeEmployeePanelsModal) {
-
-    closeEmployeePanelsModal.addEventListener(
-        "click",
-        () => {
-
-            employeePanelsModal.classList.remove(
-                "active"
-            );
-
-        }
-    );
-
+if (closeEmployeePanelsModal && employeePanelsModal) {
+    closeEmployeePanelsModal.addEventListener("click", () => {
+        employeePanelsModal.classList.remove("active");
+    });
 }
-
 
 if (employeePanelsModal) {
-
-    employeePanelsModal.addEventListener(
-        "click",
-        (event) => {
-
-            if (
-                event.target ===
-                employeePanelsModal
-            ) {
-
-                employeePanelsModal.classList.remove(
-                    "active"
-                );
-
-            }
-
+    employeePanelsModal.addEventListener("click", (event) => {
+        if (event.target === employeePanelsModal) {
+            employeePanelsModal.classList.remove("active");
         }
-    );
-
+    });
 }
 </script>
+{% endif %}
 
 {% endblock %}
+
