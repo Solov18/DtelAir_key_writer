@@ -3,86 +3,954 @@
 {% block page_name %}Сотрудник{% endblock %}
 
 {% block content %}
+
 <div class="hero-title employee-detail-hero">
+
     <div>
-        <a class="btn btn-small btn-ghost" href="/employees">
+
+        <a
+            class="btn btn-small btn-ghost"
+            href="/employees"
+        >
             ← Назад к сотрудникам
         </a>
 
         <h1>{{ employee.full_name }}</h1>
-        <p class="subtitle">{{ employee.note or 'Карточка сотрудника' }}</p>
+
+        <p class="subtitle">
+            {{ employee.note or 'Карточка сотрудника' }}
+        </p>
+
     </div>
+
 </div>
+
+
+{% if message %}
+
+<div
+    class="
+        compact-alert
+        {% if message.type == 'error' %}
+            employee-alert-error
+        {% else %}
+            employee-alert-success
+        {% endif %}
+    "
+>
+
+    <h3>
+        {% if message.type == 'error' %}
+            Ошибка
+        {% else %}
+            Готово
+        {% endif %}
+    </h3>
+
+    <p>
+        {{ message.text }}
+    </p>
+
+</div>
+
+{% endif %}
+
 
 <div class="employee-detail-grid">
 
-    <div class="panel">
+
+    <!-- ИНФОРМАЦИЯ О СОТРУДНИКЕ -->
+
+    <div class="panel employee-info-panel">
+
         <div class="panel-head">
+
             <div>
-                <h2>Ключи сотрудника</h2>
-                <p class="subtitle">Номера ключей, закреплённые за сотрудником</p>
+
+                <h2>
+                    Данные сотрудника
+                </h2>
+
+                <p class="subtitle">
+                    ФИО и общий комментарий
+                </p>
+
             </div>
+
         </div>
 
-        {% if message and message.not_found %}
-        <div class="compact-alert">
-            <h2 class="warn">Не найдены ключи</h2>
-            <p>{{ message.not_found|join(', ') }}</p>
-        </div>
-        {% endif %}
 
-        {% if employee_keys %}
-        <div class="table-scroll small-scroll">
-            <table>
-                <thead>
-                <tr>
-                    <th>Номер</th>
-                    <th>HEX</th>
-                    <th>Тип</th>
-                    <th></th>
-                </tr>
-                </thead>
+        <form
+            method="post"
+            action="/employees/{{ employee.id }}/edit"
+            class="employee-detail-form"
+        >
 
-                <tbody>
-                {% for k in employee_keys %}
-                <tr>
-                    <td><b>{{ k.number }}</b></td>
-                    <td>{{ k.hex_value }}</td>
-                    <td>{{ k.key_type or '—' }}</td>
-                    <td>
-                        <form method="post" action="/employees/{{ employee.id }}/keys/remove">
-                            <input type="hidden" name="key_id" value="{{ k.id }}">
-                            <button type="submit" class="danger-btn btn-small">
-                                Удалить
-                            </button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <p class="warn">У сотрудника пока нет закреплённых ключей.</p>
-        {% endif %}
-    </div>
+            <label>
+                ФИО сотрудника
+            </label>
 
-    <div class="panel">
-        <h2>Добавить ключи</h2>
-
-        <form method="post" action="/employees/{{ employee.id }}/keys/add" class="employee-detail-form">
-            <label>Номера ключей</label>
             <input
-                name="key_values"
-                placeholder="39068, 39139, 001101"
+                name="full_name"
+                value="{{ employee.full_name }}"
+                autocomplete="off"
                 required
             >
 
-            <button type="submit" class="btn wide-action">
-                Добавить ключи
+
+            <label>
+                Комментарий
+            </label>
+
+            <textarea
+                name="note"
+                rows="4"
+                placeholder="Должность, отдел или примечание"
+            >{{ employee.note or '' }}</textarea>
+
+
+            <button
+                type="submit"
+                class="btn wide-action"
+            >
+                Сохранить изменения
             </button>
+
         </form>
+
+    </div>
+
+
+
+    <!-- ДЕЙСТВУЮЩИЙ КЛЮЧ -->
+
+    <div class="panel employee-active-key-panel">
+
+        <div class="panel-head">
+
+            <div>
+
+                <h2>
+                    Действующий ключ
+                </h2>
+
+                <p class="subtitle">
+                    У сотрудника может быть только
+                    один действующий ключ
+                </p>
+
+            </div>
+
+        </div>
+
+
+        {% if active_key %}
+
+
+        <div class="employee-active-key-card">
+
+
+            <div class="employee-active-key-number">
+
+                <span>
+                    Номер ключа
+                </span>
+
+                <strong>
+                    {{ active_key.number }}
+                </strong>
+
+            </div>
+
+
+            <div class="employee-active-key-data">
+
+                <div>
+
+                    <span>
+                        HEX
+                    </span>
+
+                    <b>
+                        {{ active_key.hex_value }}
+                    </b>
+
+                </div>
+
+
+                <div>
+
+                    <span>
+                        Тип
+                    </span>
+
+                    <b>
+                        {{ active_key.key_type or '—' }}
+                    </b>
+
+                </div>
+
+
+                <div>
+
+                    <span>
+                        Выдан
+                    </span>
+
+                    <b>
+                        {{ active_key.issued_at or '—' }}
+                    </b>
+
+                </div>
+
+            </div>
+
+
+            <div class="employee-key-status active">
+
+                Действующий
+
+            </div>
+
+        </div>
+
+
+
+        <form
+            method="post"
+            action="/employees/{{ employee.id }}/keys/comment"
+            class="employee-detail-form employee-key-comment-form"
+        >
+
+            <input
+                type="hidden"
+                name="assignment_id"
+                value="{{ active_key.assignment_id }}"
+            >
+
+
+            <label>
+                Комментарий к действующему ключу
+            </label>
+
+
+            <textarea
+                name="comment"
+                rows="3"
+                placeholder="Например: основной служебный ключ"
+            >{{ active_key.comment or '' }}</textarea>
+
+
+            <button
+                type="submit"
+                class="btn btn-ghost wide-action"
+            >
+                Сохранить комментарий
+            </button>
+
+        </form>
+
+
+        {% else %}
+
+
+        <div class="employee-no-key">
+
+            <div class="employee-no-key-icon">
+
+                <svg viewBox="0 0 24 24">
+
+                    <circle
+                        cx="7.5"
+                        cy="14.5"
+                        r="4.5"
+                    />
+
+                    <path
+                        d="m11 11 9-9M16 6l3 3M14 8l2 2"
+                    />
+
+                </svg>
+
+            </div>
+
+
+            <h3>
+                Действующий ключ не выдан
+            </h3>
+
+
+            <p>
+                Выдайте сотруднику новый ключ
+                с помощью формы ниже.
+            </p>
+
+        </div>
+
+
+        {% endif %}
+
     </div>
 
 </div>
+
+
+
+<!-- ВЫДАЧА ИЛИ ЗАМЕНА КЛЮЧА -->
+
+<div class="panel employee-replace-panel">
+
+
+    <div class="panel-head">
+
+        <div>
+
+            <h2>
+
+                {% if active_key %}
+
+                    Заменить действующий ключ
+
+                {% else %}
+
+                    Выдать ключ сотруднику
+
+                {% endif %}
+
+            </h2>
+
+
+            <p class="subtitle">
+
+                {% if active_key %}
+
+                    Старый ключ останется
+                    в истории сотрудника
+
+                {% else %}
+
+                    Новый ключ станет действующим
+
+                {% endif %}
+
+            </p>
+
+        </div>
+
+    </div>
+
+
+
+    <form
+        method="post"
+        action="/employees/{{ employee.id }}/keys/issue"
+        class="employee-replace-form"
+    >
+
+
+        <div class="employee-form-grid">
+
+
+            <div>
+
+                <label>
+                    Номер нового ключа
+                </label>
+
+                <input
+                    name="key_value"
+                    placeholder="Например: 39068"
+                    autocomplete="off"
+                    required
+                >
+
+            </div>
+
+
+
+            <div>
+
+                <label>
+                    Комментарий к новому ключу
+                </label>
+
+                <input
+                    name="new_key_comment"
+                    placeholder="Основной служебный ключ"
+                    autocomplete="off"
+                >
+
+            </div>
+
+
+        </div>
+
+
+
+        {% if active_key %}
+
+
+        <div class="employee-old-key-box">
+
+
+            <div class="employee-old-key-head">
+
+                <div>
+
+                    <span>
+                        Текущий ключ
+                    </span>
+
+                    <strong>
+                        {{ active_key.number }}
+                    </strong>
+
+                </div>
+
+
+                <p>
+                    Укажите, почему этот ключ
+                    больше не используется.
+                </p>
+
+            </div>
+
+
+
+            <div class="employee-form-grid">
+
+
+                <div>
+
+                    <label>
+                        Статус старого ключа
+                    </label>
+
+
+                    <select
+                        name="old_key_status"
+                        required
+                    >
+
+                        <option value="replaced">
+                            Заменён
+                        </option>
+
+                        <option value="lost">
+                            Утерян
+                        </option>
+
+                        <option value="damaged">
+                            Повреждён
+                        </option>
+
+                        <option value="inactive">
+                            Деактивирован
+                        </option>
+
+                    </select>
+
+                </div>
+
+
+
+                <div>
+
+                    <label>
+                        Причина замены
+                    </label>
+
+
+                    <input
+                        name="old_key_reason"
+                        value="Выдан новый ключ"
+                        placeholder="Укажите причину"
+                        required
+                    >
+
+                </div>
+
+
+            </div>
+
+
+
+            <label>
+                Комментарий к старому ключу
+            </label>
+
+
+            <textarea
+                name="old_key_comment"
+                rows="3"
+                placeholder="Например: сотрудник сообщил об утере"
+            ></textarea>
+
+
+        </div>
+
+
+        {% else %}
+
+
+        <input
+            type="hidden"
+            name="old_key_status"
+            value="replaced"
+        >
+
+        <input
+            type="hidden"
+            name="old_key_reason"
+            value="Первая выдача ключа"
+        >
+
+
+        {% endif %}
+
+
+
+        <button
+            type="submit"
+            class="btn wide-action"
+        >
+
+            {% if active_key %}
+
+                Заменить ключ
+
+            {% else %}
+
+                Выдать ключ
+
+            {% endif %}
+
+        </button>
+
+
+    </form>
+
+</div>
+
+
+
+<!-- ИСТОРИЯ КЛЮЧЕЙ -->
+
+<div class="panel employee-history-panel">
+
+
+    <div class="panel-head">
+
+        <div>
+
+            <h2>
+                История ключей
+            </h2>
+
+            <p class="subtitle">
+
+                Старые ключи не удаляются.
+                Здесь сохраняются причины
+                замены и комментарии.
+
+            </p>
+
+        </div>
+
+
+        <div class="employee-history-counter">
+
+            {{ key_history|length }}
+
+        </div>
+
+    </div>
+
+
+
+    {% if key_history %}
+
+
+    <div class="employee-key-history-list">
+
+
+        {% for key in key_history %}
+
+
+        <details class="employee-history-card">
+
+
+            <summary>
+
+
+                <div class="employee-history-key">
+
+
+                    <span>
+                        Ключ
+                    </span>
+
+
+                    <strong>
+                        {{ key.number }}
+                    </strong>
+
+
+                    <small>
+                        {{ key.hex_value }}
+                    </small>
+
+
+                </div>
+
+
+
+                <div
+                    class="
+                        employee-key-status
+                        {{ key.status }}
+                    "
+                >
+
+                    {{
+                        status_labels.get(
+                            key.status,
+                            key.status
+                        )
+                    }}
+
+                </div>
+
+
+
+                <div class="employee-history-reason">
+
+
+                    <span>
+                        Причина
+                    </span>
+
+
+                    <b>
+                        {{
+                            key.close_reason
+                            or
+                            'Причина не указана'
+                        }}
+                    </b>
+
+
+                </div>
+
+
+
+                <div class="employee-history-date">
+
+
+                    <span>
+                        Закрыт
+                    </span>
+
+
+                    <b>
+                        {{
+                            key.closed_at
+                            or
+                            '—'
+                        }}
+                    </b>
+
+
+                </div>
+
+
+            </summary>
+
+
+
+            <div class="employee-history-body">
+
+
+                <div class="employee-history-info">
+
+
+                    <div>
+
+                        <span>
+                            Дата выдачи
+                        </span>
+
+                        <b>
+                            {{
+                                key.issued_at
+                                or
+                                '—'
+                            }}
+                        </b>
+
+                    </div>
+
+
+                    <div>
+
+                        <span>
+                            Тип ключа
+                        </span>
+
+                        <b>
+                            {{
+                                key.key_type
+                                or
+                                '—'
+                            }}
+                        </b>
+
+                    </div>
+
+
+                    <div>
+
+                        <span>
+                            HEX
+                        </span>
+
+                        <b>
+                            {{ key.hex_value }}
+                        </b>
+
+                    </div>
+
+
+                </div>
+
+
+
+                <form
+                    method="post"
+                    action="/employees/{{ employee.id }}/keys/history/edit"
+                    class="employee-detail-form"
+                >
+
+
+                    <input
+                        type="hidden"
+                        name="assignment_id"
+                        value="{{ key.assignment_id }}"
+                    >
+
+
+
+                    <div class="employee-form-grid">
+
+
+                        <div>
+
+                            <label>
+                                Статус
+                            </label>
+
+
+                            <select
+                                name="status"
+                                required
+                            >
+
+
+                                <option
+                                    value="replaced"
+                                    {% if key.status == 'replaced' %}
+                                        selected
+                                    {% endif %}
+                                >
+                                    Заменён
+                                </option>
+
+
+                                <option
+                                    value="lost"
+                                    {% if key.status == 'lost' %}
+                                        selected
+                                    {% endif %}
+                                >
+                                    Утерян
+                                </option>
+
+
+                                <option
+                                    value="damaged"
+                                    {% if key.status == 'damaged' %}
+                                        selected
+                                    {% endif %}
+                                >
+                                    Повреждён
+                                </option>
+
+
+                                <option
+                                    value="dismissed"
+                                    {% if key.status == 'dismissed' %}
+                                        selected
+                                    {% endif %}
+                                >
+                                    Сотрудник уволен
+                                </option>
+
+
+                                <option
+                                    value="inactive"
+                                    {% if key.status == 'inactive' %}
+                                        selected
+                                    {% endif %}
+                                >
+                                    Деактивирован
+                                </option>
+
+
+                            </select>
+
+                        </div>
+
+
+
+                        <div>
+
+                            <label>
+                                Причина
+                            </label>
+
+
+                            <input
+                                name="close_reason"
+                                value="{{ key.close_reason or '' }}"
+                                required
+                            >
+
+                        </div>
+
+
+                    </div>
+
+
+
+                    <label>
+                        Комментарий
+                    </label>
+
+
+                    <textarea
+                        name="comment"
+                        rows="3"
+                        placeholder="Комментарий к старому ключу"
+                    >{{ key.comment or '' }}</textarea>
+
+
+
+                    <button
+                        type="submit"
+                        class="btn btn-ghost"
+                    >
+                        Сохранить изменения
+                    </button>
+
+
+                </form>
+
+
+            </div>
+
+
+        </details>
+
+
+        {% endfor %}
+
+
+    </div>
+
+
+    {% else %}
+
+
+    <div class="employee-empty-history">
+
+
+        <h3>
+            История пока пустая
+        </h3>
+
+
+        <p>
+            После замены или закрытия ключа
+            предыдущий ключ появится здесь.
+        </p>
+
+
+    </div>
+
+
+    {% endif %}
+
+
+</div>
+
+
+
+<!-- УВОЛЬНЕНИЕ СОТРУДНИКА -->
+
+<div class="panel employee-dismiss-panel">
+
+
+    <div>
+
+
+        <h2>
+            Увольнение сотрудника
+        </h2>
+
+
+        <p class="subtitle">
+
+            Сотрудник будет скрыт из списка,
+            но вся история ключей сохранится.
+
+        </p>
+
+
+    </div>
+
+
+
+    <form
+        method="post"
+        action="/employees/{{ employee.id }}/dismiss"
+        class="employee-dismiss-form"
+        onsubmit="
+            return confirm(
+                'Перевести сотрудника в статус уволенного? История ключей будет сохранена.'
+            );
+        "
+    >
+
+
+        <input
+            name="comment"
+            placeholder="Комментарий или причина увольнения"
+            autocomplete="off"
+        >
+
+
+        <button
+            type="submit"
+            class="danger-btn"
+        >
+            Уволить сотрудника
+        </button>
+
+
+    </form>
+
+
+</div>
+
+
 {% endblock %}

@@ -533,3 +533,196 @@ body.light-theme .panel b,
 body.light-theme .card b {
     color: #102033;
 }
+
+/* ===============================
+   EMPLOYEES — NEW BLOCKS
+   =============================== */
+
+body.light-theme .employees-stat-card {
+    color: #102033;
+    background: #ffffff;
+    border-color: #cfe2f3;
+    box-shadow: 0 10px 28px rgba(35, 85, 140, 0.08);
+}
+
+body.light-theme .employees-stat-icon {
+    color: #087cff;
+    background: #eef7ff;
+    border: 1px solid #b9dcff;
+    box-shadow: 0 8px 20px rgba(0, 120, 220, 0.10);
+}
+
+body.light-theme .employee-picker {
+    color: #102033;
+    background: #ffffff;
+    border-color: #cfe2f3;
+    box-shadow: 0 10px 28px rgba(35, 85, 140, 0.10);
+}
+
+body.light-theme .employee-picker-item {
+    color: #102033;
+    background: #f1f8ff;
+    border: 1px solid #d7e9f7;
+}
+
+body.light-theme .employee-picker-item:hover {
+    color: #071827;
+    background: #e5f3ff;
+    border-color: #75c2ff;
+}
+
+body.light-theme .employee-card-stat {
+    color: #102033;
+    background: #f4f9fd;
+    border-color: #d7e9f7;
+}
+
+body.light-theme .employee-card-stat b {
+    color: #071827;
+}
+
+body.light-theme .employee-card-stat span,
+body.light-theme .employee-card-stat small,
+body.light-theme .employee-history-count {
+    color: #63778c;
+}
+
+body.light-theme .empty-state,
+body.light-theme .employee-no-key,
+body.light-theme .employee-empty-history {
+    color: #102033;
+    background: #f8fbff;
+    border-color: #cfe2f3;
+}
+
+body.light-theme .employee-active-key-card {
+    color: #102033;
+    background: linear-gradient(
+        135deg,
+        rgba(232, 255, 244, 0.95),
+        rgba(238, 247, 255, 0.95)
+    );
+    border-color: #9eddbf;
+    box-shadow: 0 10px 28px rgba(35, 85, 140, 0.08);
+}
+
+body.light-theme .employee-active-key-number,
+body.light-theme .employee-active-key-data > div,
+body.light-theme .employee-history-info > div {
+    color: #102033;
+    background: #ffffff;
+    border-color: #d7e9f7;
+}
+
+body.light-theme .employee-active-key-number strong,
+body.light-theme .employee-active-key-data b,
+body.light-theme .employee-history-key strong,
+body.light-theme .employee-history-reason b,
+body.light-theme .employee-history-date b,
+body.light-theme .employee-history-info b {
+    color: #071827;
+}
+
+body.light-theme .employee-active-key-number span,
+body.light-theme .employee-active-key-data span,
+body.light-theme .employee-history-key span,
+body.light-theme .employee-history-reason span,
+body.light-theme .employee-history-date span,
+body.light-theme .employee-history-info span,
+body.light-theme .employee-history-key small {
+    color: #63778c;
+}
+
+body.light-theme .employee-old-key-box {
+    color: #102033;
+    background: #fffaf0;
+    border-color: #f0d58a;
+}
+
+body.light-theme .employee-history-card {
+    color: #102033;
+    background: #ffffff;
+    border-color: #d7e9f7;
+    box-shadow: 0 6px 18px rgba(30, 90, 150, 0.05);
+}
+
+body.light-theme .employee-history-card[open] {
+    border-color: #75c2ff;
+    box-shadow: 0 10px 28px rgba(35, 85, 140, 0.10);
+}
+
+body.light-theme .employee-history-card summary {
+    background: #ffffff;
+}
+
+body.light-theme .employee-history-card summary:hover {
+    background: #f6fbff;
+}
+
+body.light-theme .employee-history-body {
+    background: #f8fbff;
+    border-top-color: #d7e9f7;
+}
+
+body.light-theme .employee-history-counter {
+    color: #087cff;
+    background: #eef7ff;
+    border-color: #b9dcff;
+}
+
+body.light-theme .employee-dismiss-panel {
+    background: #fffafa;
+    border-color: #f2b8c0;
+}
+
+body.light-theme .employee-alert-error {
+    color: #9f1d2f;
+    background: #fff1f3;
+    border-color: #f3a9b4;
+}
+
+body.light-theme .employee-alert-success {
+    color: #087747;
+    background: #edfff6;
+    border-color: #91ddb7;
+}
+
+body.light-theme .employee-key-status.active {
+    color: #087747;
+    background: #e9fff4;
+    border-color: #8be7b6;
+}
+
+body.light-theme .employee-key-status.replaced {
+    color: #006fd6;
+    background: #eef7ff;
+    border-color: #9ed0ff;
+}
+
+body.light-theme .employee-key-status.lost {
+    color: #c91f35;
+    background: #fff0f2;
+    border-color: #ffb6c1;
+}
+
+body.light-theme .employee-key-status.damaged {
+    color: #9c7300;
+    background: #fff8dc;
+    border-color: #f1d36b;
+}
+
+body.light-theme .employee-key-status.dismissed,
+body.light-theme .employee-key-status.inactive {
+    color: #5f7182;
+    background: #f1f5f8;
+    border-color: #cfdbe5;
+}
+
+body.light-theme .modal-window {
+    background: #ffffff;
+    color: #102033;
+}
+
+body.light-theme .modal-head {
+    border-color: #d7e9f7;
+}
