@@ -1,3 +1,7 @@
+/* =========================================================
+   ОБЩАЯ СТРАНИЦА УК
+   ========================================================= */
+
 .uk-hero {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 320px;
@@ -15,32 +19,46 @@
 
 .uk-stat-card {
     display: grid;
-    grid-template-columns: 70px 1fr;
+    grid-template-columns: 70px minmax(0, 1fr);
     gap: 18px;
     align-items: center;
+
     padding: 22px;
+
+    border: 1px solid rgba(0, 170, 255, .45);
     border-radius: 18px;
-    border: 1px solid rgba(0,170,255,.45);
-    background: rgba(0,18,36,.55);
+
+    background: rgba(0, 18, 36, .55);
+
     box-shadow:
-        inset 0 0 28px rgba(0,170,255,.06),
-        0 0 24px rgba(0,120,255,.12);
+        inset 0 0 28px rgba(0, 170, 255, .06),
+        0 0 24px rgba(0, 120, 255, .12);
 }
 
 .uk-stat-icon {
     width: 70px;
     height: 70px;
+
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 16px;
+
     color: var(--blue);
-    background: rgba(0,120,220,.18);
+
+    border: 1px solid rgba(0, 170, 255, .28);
+    border-radius: 16px;
+
+    background: rgba(0, 120, 220, .18);
+
+    box-shadow:
+        0 0 20px rgba(0, 170, 255, .18),
+        inset 0 0 14px rgba(0, 170, 255, .07);
 }
 
 .uk-stat-icon svg {
     width: 34px;
     height: 34px;
+
     fill: none;
     stroke: currentColor;
     stroke-width: 1.9;
@@ -50,7 +68,9 @@
 
 .uk-stat-card b {
     display: block;
+
     color: var(--text-strong);
+
     font-size: 34px;
     line-height: 1;
 }
@@ -58,9 +78,15 @@
 .uk-stat-card span {
     display: block;
     margin-top: 8px;
+
     color: var(--muted);
+
     font-size: 15px;
 }
+
+/* =========================================================
+   СОЗДАНИЕ УК
+   ========================================================= */
 
 .uk-create-panel {
     margin-bottom: 24px;
@@ -68,23 +94,38 @@
 
 .uk-create-form {
     display: grid;
-    grid-template-columns: minmax(260px, 1fr) minmax(260px, 1fr) auto;
-    gap: 18px;
+    grid-template-columns:
+        minmax(220px, 1fr)
+        minmax(220px, 1fr)
+        minmax(200px, .8fr)
+        minmax(200px, .8fr)
+        auto;
+    gap: 16px;
     align-items: end;
 }
 
+.uk-create-form > div {
+    min-width: 0;
+}
+
 .uk-create-form input {
-    min-height: 52px;
+    width: 100%;
+    min-height: 50px;
+
     border-radius: 14px;
 }
 
 .uk-create-form .btn {
-    min-width: 180px;
-    min-height: 52px;
+    min-width: 170px;
+    min-height: 50px;
 }
 
+/* =========================================================
+   СПИСОК И КАРТОЧКИ УК
+   ========================================================= */
+
 .uk-groups-panel {
-    max-width: 980px;
+    min-width: 0;
 }
 
 .uk-cards {
@@ -97,34 +138,56 @@
     grid-template-columns: 60px minmax(0, 1fr) auto;
     gap: 18px;
     align-items: center;
+
     padding: 18px;
-    border-radius: 16px;
+
     border: 1px solid var(--line-soft);
-    background: rgba(0, 10, 20, 0.30);
+    border-radius: 16px;
+
+    background: rgba(0, 10, 20, .30);
+
     transition: .18s;
 }
 
 .uk-card:hover {
     transform: translateY(-2px);
-    border-color: rgba(0,170,255,.42);
-    box-shadow: 0 8px 24px rgba(0,120,255,.10);
+
+    border-color: rgba(0, 170, 255, .42);
+
+    box-shadow:
+        0 8px 24px rgba(0, 120, 255, .10),
+        0 0 24px rgba(0, 150, 255, .08);
 }
 
 .uk-card-icon {
     width: 58px;
     height: 58px;
+
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 50%;
+
     color: var(--blue);
-    border: 1px solid rgba(0,170,255,.45);
-    background: radial-gradient(circle, rgba(0,132,255,.25), rgba(0,40,80,.18));
+
+    border: 1px solid rgba(0, 170, 255, .45);
+    border-radius: 50%;
+
+    background:
+        radial-gradient(
+            circle,
+            rgba(0, 132, 255, .25),
+            rgba(0, 40, 80, .18)
+        );
+
+    box-shadow:
+        0 0 18px rgba(0, 170, 255, .16),
+        inset 0 0 14px rgba(0, 170, 255, .08);
 }
 
 .uk-card-icon svg {
     width: 30px;
     height: 30px;
+
     fill: none;
     stroke: currentColor;
     stroke-width: 1.8;
@@ -132,43 +195,165 @@
     stroke-linejoin: round;
 }
 
-.uk-card-main b {
+.uk-card-main {
+    min-width: 0;
+}
+
+.uk-card-main > b {
     display: block;
+
     color: var(--text-strong);
+
     font-size: 19px;
     line-height: 1.2;
+
     overflow-wrap: anywhere;
 }
 
-.uk-card-main span {
+.uk-card-main > span {
     display: block;
     margin-top: 4px;
+
     color: var(--muted);
+
     font-size: 14px;
+}
+
+.uk-crm-info {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+
+    margin-top: 12px;
+}
+
+.uk-crm-value {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+
+    min-height: 34px;
+    padding: 6px 10px;
+
+    color: var(--text);
+
+    border: 1px solid rgba(0, 170, 255, .22);
+    border-radius: 10px;
+
+    background: rgba(0, 120, 220, .10);
+}
+
+.uk-crm-value svg {
+    width: 17px;
+    height: 17px;
+    flex: 0 0 auto;
+
+    color: var(--blue);
+
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.uk-crm-value span {
+    margin: 0;
+
+    color: var(--text);
+
+    font-size: 13px;
+    font-weight: 700;
+
+    overflow-wrap: anywhere;
+}
+
+.uk-password-toggle {
+    width: 28px;
+    height: 28px;
+    min-height: 28px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    margin-left: 2px;
+    padding: 0;
+
+    color: var(--muted);
+
+    border: none;
+    border-radius: 8px;
+
+    background: transparent;
+    box-shadow: none;
+
+    cursor: pointer;
+}
+
+.uk-password-toggle::after {
+    content: "";
+}
+
+.uk-password-toggle:hover {
+    transform: none;
+
+    color: var(--text-strong);
+    background: rgba(0, 170, 255, .12);
+    box-shadow: none;
+}
+
+.uk-password-toggle svg {
+    width: 18px;
+    height: 18px;
+}
+
+.uk-password-toggle .eye-hide {
+    display: none;
+}
+
+.uk-password-toggle.visible .eye-show {
+    display: none;
+}
+
+.uk-password-toggle.visible .eye-hide {
+    display: block;
 }
 
 .uk-card-meta {
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
+
     margin-top: 10px;
 }
 
 .uk-card-meta span {
     display: inline-flex;
+    align-items: center;
+
+    margin: 0;
     padding: 5px 10px;
-    border-radius: 999px;
+
     color: var(--text);
+
     border: 1px solid var(--line-soft);
-    background: rgba(0,120,220,.12);
+    border-radius: 999px;
+
+    background: rgba(0, 120, 220, .12);
+
     font-size: 13px;
     font-weight: 800;
 }
 
 .uk-card-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 10px;
     align-items: center;
+    justify-content: flex-end;
+
+    max-width: 390px;
 }
 
 .uk-card-actions form {
@@ -177,10 +362,61 @@
 
 .uk-card-actions .btn,
 .uk-card-actions .danger-btn {
-    min-width: 110px;
+    min-width: 108px;
+    min-height: 38px;
 }
 
-/* detail page */
+.uk-empty-state {
+    padding: 28px;
+
+    text-align: center;
+
+    border: 1px dashed var(--line-soft);
+    border-radius: 16px;
+
+    background: rgba(0, 10, 20, .20);
+}
+
+.uk-empty-state h3 {
+    margin: 0;
+
+    color: var(--text-strong);
+}
+
+.uk-empty-state p {
+    margin: 8px 0 0;
+
+    color: var(--muted);
+}
+
+/* =========================================================
+   МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ
+   ========================================================= */
+
+.uk-edit-form {
+    display: grid;
+    gap: 14px;
+}
+
+.uk-edit-form input {
+    width: 100%;
+    min-height: 48px;
+
+    border-radius: 14px;
+}
+
+.uk-edit-form .btn {
+    width: fit-content;
+    min-width: 210px;
+    min-height: 48px;
+
+    margin-top: 4px;
+}
+
+/* =========================================================
+   СТРАНИЦА КОНКРЕТНОЙ УК
+   ========================================================= */
+
 .uk-detail-hero {
     display: flex;
     justify-content: space-between;
@@ -188,8 +424,62 @@
     gap: 24px;
 }
 
+.uk-detail-hero > div:first-child {
+    min-width: 0;
+}
+
 .uk-detail-hero .btn {
     margin-bottom: 18px;
+}
+
+.uk-detail-crm {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+
+    margin-top: 18px;
+}
+
+.uk-detail-crm > div {
+    min-width: 210px;
+
+    padding: 12px 14px;
+
+    border: 1px solid var(--line-soft);
+    border-radius: 12px;
+
+    background: rgba(0, 10, 20, .28);
+}
+
+.uk-detail-crm span {
+    display: block;
+
+    color: var(--muted);
+
+    font-size: 12px;
+}
+
+.uk-detail-crm b {
+    display: inline-block;
+
+    margin-top: 5px;
+
+    color: var(--text-strong);
+
+    font-size: 15px;
+
+    word-break: break-all;
+}
+
+.uk-detail-password-toggle {
+    min-height: 30px;
+
+    margin-left: 8px;
+    padding: 0 10px;
+
+    border-radius: 8px;
+
+    font-size: 12px;
 }
 
 .uk-stats {
@@ -197,18 +487,24 @@
     gap: 12px;
 }
 
-.uk-stats div {
+.uk-stats > div {
     min-width: 120px;
+
     padding: 16px 18px;
-    border-radius: 16px;
+
     border: 1px solid var(--line-soft);
+    border-radius: 16px;
+
     background: var(--panel);
+
     box-shadow: var(--shadow-panel);
 }
 
 .uk-stats b {
     display: block;
+
     color: var(--text-strong);
+
     font-size: 26px;
     line-height: 1;
 }
@@ -216,27 +512,33 @@
 .uk-stats span {
     display: block;
     margin-top: 6px;
+
     color: var(--muted);
+
     font-size: 13px;
 }
 
 .uk-control-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 22px;
     align-items: start;
+
     margin-bottom: 22px;
 }
 
 .uk-manage-panel {
+    min-width: 0;
     min-height: 360px;
 }
 
 .uk-items-list {
     display: grid;
     gap: 12px;
+
     max-height: 440px;
     overflow: auto;
+
     padding-right: 6px;
 }
 
@@ -245,38 +547,50 @@
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 14px;
     align-items: center;
+
     padding: 14px 16px;
-    border-radius: 14px;
+
     border: 1px solid var(--line-soft);
-    background: rgba(0, 10, 20, 0.30);
+    border-radius: 14px;
+
+    background: rgba(0, 10, 20, .30);
+
     transition: .18s;
 }
 
 .uk-item-row:hover {
     transform: translateY(-2px);
-    border-color: rgba(0,170,255,.42);
-    box-shadow: 0 8px 24px rgba(0,120,255,.10);
+
+    border-color: rgba(0, 170, 255, .42);
+
+    box-shadow: 0 8px 24px rgba(0, 120, 255, .10);
 }
 
 .uk-item-row b {
     display: block;
+
     color: var(--text-strong);
+
     font-size: 15px;
 }
 
 .uk-item-row span {
     display: block;
     margin-top: 4px;
+
     color: var(--text);
+
     font-size: 14px;
 }
 
 .uk-item-row small {
     display: block;
     margin-top: 4px;
+
     color: var(--muted);
-    font-size: 12px;
+
     font-family: Consolas, monospace;
+    font-size: 12px;
 }
 
 .uk-item-row form {
@@ -294,10 +608,24 @@
     align-items: end;
 }
 
+.uk-write-form > div {
+    min-width: 0;
+}
+
 .uk-write-form input {
+    width: 100%;
     min-height: 48px;
+
     border-radius: 14px;
 }
+
+.uk-write-form .btn {
+    min-height: 48px;
+}
+
+/* =========================================================
+   МОДАЛЬНЫЕ ОКНА ПАНЕЛЕЙ И КЛЮЧЕЙ
+   ========================================================= */
 
 .uk-modal-form {
     display: flex;
@@ -307,6 +635,7 @@
 
 .uk-modal-form input {
     min-height: 48px;
+
     border-radius: 14px;
 }
 
@@ -318,20 +647,26 @@
 .uk-panel-list {
     max-height: 420px;
     overflow: auto;
-    padding-right: 6px;
-    border-radius: 12px;
+
     margin-bottom: 16px;
+    padding-right: 6px;
+
+    border-radius: 12px;
 }
 
 .modal-backdrop {
     position: fixed;
     inset: 0;
-    z-index: 50;
+    z-index: 100;
+
     display: none;
     align-items: center;
     justify-content: center;
+
     padding: 32px;
+
     background: rgba(0, 8, 17, .72);
+
     backdrop-filter: blur(12px);
 }
 
@@ -350,7 +685,12 @@
     justify-content: space-between;
     gap: 18px;
     align-items: flex-start;
+
     margin-bottom: 18px;
+}
+
+.modal-close::after {
+    content: "";
 }
 
 .wide-action {
@@ -358,24 +698,58 @@
     min-width: 220px;
 }
 
+/* =========================================================
+   СВЕТЛАЯ ТЕМА
+   ========================================================= */
+
+body.light-theme .uk-stat-card,
 body.light-theme .uk-card,
 body.light-theme .uk-item-row,
-body.light-theme .uk-stat-card {
-    background: rgba(255,255,255,.72);
+body.light-theme .uk-detail-crm > div,
+body.light-theme .uk-empty-state {
+    background: rgba(255, 255, 255, .76);
+}
+
+body.light-theme .uk-crm-value {
+    background: rgba(225, 244, 255, .90);
 }
 
 body.light-theme .modal-backdrop {
     background: rgba(210, 225, 240, .65);
 }
 
+/* =========================================================
+   АДАПТИВ
+   ========================================================= */
+
+@media (max-width: 1450px) {
+    .uk-create-form {
+        grid-template-columns:
+            minmax(220px, 1fr)
+            minmax(220px, 1fr);
+    }
+
+    .uk-create-form .btn {
+        width: fit-content;
+    }
+}
+
 @media (max-width: 1200px) {
-    .uk-hero,
-    .uk-create-form,
-    .uk-control-grid,
-    .uk-write-form,
-    .uk-detail-hero {
+    .uk-hero {
         grid-template-columns: 1fr;
+    }
+
+    .uk-stat-card {
+        width: min(360px, 100%);
+    }
+
+    .uk-detail-hero {
         flex-direction: column;
+    }
+
+    .uk-control-grid,
+    .uk-write-form {
+        grid-template-columns: 1fr;
     }
 
     .uk-card {
@@ -385,71 +759,249 @@ body.light-theme .modal-backdrop {
     .uk-card-actions {
         grid-column: 2;
         justify-content: flex-start;
-        flex-wrap: wrap;
+
+        max-width: none;
     }
 
     .uk-stats {
         width: 100%;
     }
 
-    .uk-stats div {
+    .uk-stats > div {
         flex: 1;
     }
 }
-.uk-credentials-panel {
-    margin-bottom: 22px;
-}
 
-.uk-credentials-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 14px;
-}
+@media (max-width: 760px) {
+    .uk-hero h1 {
+        font-size: 38px;
+    }
 
-.uk-credential-item {
-    padding: 16px 18px;
-    border-radius: 14px;
-    border: 1px solid var(--line-soft);
-    background: rgba(0, 10, 20, 0.30);
-}
-
-.uk-credential-item span {
-    display: block;
-    margin-bottom: 6px;
-    color: var(--muted);
-    font-size: 13px;
-}
-
-.uk-credential-item b {
-    display: block;
-    color: var(--text-strong);
-    font-size: 18px;
-    word-break: break-all;
-}
-
-body.light-theme .uk-credential-item {
-    background: rgba(255,255,255,.72);
-}
-
-@media (max-width: 900px) {
-    .uk-credentials-grid {
+    .uk-create-form {
         grid-template-columns: 1fr;
     }
+
+    .uk-card {
+        grid-template-columns: 1fr;
+    }
+
+    .uk-card-icon {
+        width: 52px;
+        height: 52px;
+    }
+
+    .uk-card-actions {
+        grid-column: 1;
+        justify-content: flex-start;
+    }
+
+    .uk-crm-info,
+    .uk-card-meta,
+    .uk-detail-crm,
+    .uk-stats {
+        flex-direction: column;
+    }
+
+    .uk-stats > div,
+    .uk-detail-crm > div {
+        width: 100%;
+    }
+
+    .modal-backdrop {
+        align-items: flex-start;
+
+        padding: 14px;
+    }
+
+    .modal-window {
+        margin-top: 20px;
+    }
 }
-.uk-credentials-form {
-    display: grid;
-    grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) minmax(220px, 1fr) auto;
-    gap: 14px;
-    align-items: end;
+/* =========================================================
+   ПОИСК УК
+   ========================================================= */
+
+.uk-list-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 24px;
+
+    margin-bottom: 18px;
 }
 
-.uk-credentials-form input {
+.uk-search-box {
+    position: relative;
+
+    width: min(470px, 100%);
+}
+
+.uk-search-box > svg {
+    position: absolute;
+
+    top: 50%;
+    left: 17px;
+
+    width: 20px;
+    height: 20px;
+
+    transform: translateY(-50%);
+
+    color: var(--blue);
+
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+
+    pointer-events: none;
+}
+
+.uk-search-box input {
+    width: 100%;
     min-height: 48px;
+
+    padding: 0 48px 0 50px;
+
     border-radius: 14px;
 }
 
-@media (max-width: 1100px) {
-    .uk-credentials-form {
-        grid-template-columns: 1fr;
+.uk-search-clear {
+    position: absolute;
+
+    top: 50%;
+    right: 10px;
+
+    width: 32px;
+    height: 32px;
+    min-height: 32px;
+
+    display: none;
+    align-items: center;
+    justify-content: center;
+
+    padding: 0;
+
+    transform: translateY(-50%);
+
+    color: var(--muted);
+
+    border: none;
+    border-radius: 9px;
+
+    background: transparent;
+    box-shadow: none;
+
+    font-size: 24px;
+    font-weight: 400;
+    line-height: 1;
+
+    cursor: pointer;
+}
+
+.uk-search-clear.visible {
+    display: flex;
+}
+
+.uk-search-clear:hover {
+    transform: translateY(-50%);
+
+    color: var(--text-strong);
+
+    background: rgba(0, 170, 255, .14);
+
+    box-shadow: none;
+}
+
+
+/* =========================================================
+   ПРОКРУТКА КАРТОЧЕК УК
+   ========================================================= */
+
+.uk-cards-scroll {
+    max-height: 610px;
+
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    padding-right: 10px;
+
+    scroll-behavior: smooth;
+
+    scrollbar-width: thin;
+    scrollbar-color:
+        rgba(0, 170, 255, .85)
+        rgba(0, 30, 55, .55);
+}
+
+
+/* Chrome, Edge */
+
+.uk-cards-scroll::-webkit-scrollbar {
+    width: 8px;
+}
+
+.uk-cards-scroll::-webkit-scrollbar-track {
+    border-radius: 999px;
+
+    background: rgba(0, 30, 55, .55);
+
+    box-shadow:
+        inset 0 0 5px rgba(0, 0, 0, .35);
+}
+
+.uk-cards-scroll::-webkit-scrollbar-thumb {
+    border: 2px solid rgba(0, 30, 55, .55);
+    border-radius: 999px;
+
+    background:
+        linear-gradient(
+            180deg,
+            rgba(0, 200, 255, .95),
+            rgba(0, 105, 255, .90)
+        );
+
+    box-shadow:
+        0 0 10px rgba(0, 170, 255, .55);
+}
+
+.uk-cards-scroll::-webkit-scrollbar-thumb:hover {
+    background:
+        linear-gradient(
+            180deg,
+            rgba(50, 220, 255, 1),
+            rgba(0, 135, 255, 1)
+        );
+}
+
+
+/* Светлая тема */
+
+body.light-theme .uk-cards-scroll {
+    scrollbar-color:
+        rgba(0, 125, 220, .80)
+        rgba(190, 215, 235, .60);
+}
+
+
+/* Адаптив */
+
+@media (max-width: 900px) {
+    .uk-list-head {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .uk-search-box {
+        width: 100%;
+    }
+
+    .uk-cards-scroll {
+        max-height: none;
+
+        overflow: visible;
+
+        padding-right: 0;
     }
 }

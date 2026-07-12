@@ -1,13 +1,15 @@
 from fastapi import APIRouter, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-
 from app.services import find_key, write_key_to_panels
 from app.templates_config import templates
+
 from app.repositories.uk_repository import (
     get_groups,
     get_group,
     save_group,
+    update_group,
+    delete_group,
     get_group_panels,
     get_available_panels,
     add_panels,
@@ -15,39 +17,111 @@ from app.repositories.uk_repository import (
     get_group_keys,
     add_keys,
     remove_key,
-    delete_group,
-    update_group_credentials
 )
 
 router = APIRouter()
 
 
+# =========================================================
+# СПИСОК УПРАВЛЯЮЩИХ КОМПАНИЙ
+# =========================================================
+
 @router.get("/uk", response_class=HTMLResponse)
 def uk_page(request: Request):
+    groups = get_groups()
+
     return templates.TemplateResponse(
         "uk.html",
         {
             "request": request,
-            "groups": get_groups(),
+            "groups": groups,
         },
     )
 
+
+# =========================================================
+# СОЗДАНИЕ УК
+# =========================================================
 
 @router.post("/uk/group")
 def uk_group(
     name: str = Form(...),
     note: str = Form(""),
+    crm_login: str = Form(""),
+    crm_password: str = Form(""),
 ):
-    save_group(name=name, note=note)
-    return RedirectResponse("/uk", status_code=303)
+    save_group(
+        name=name,
+        note=note,
+        crm_login=crm_login,
+        crm_password=crm_password,
+    )
 
+    return RedirectResponse(
+        url="/uk",
+        status_code=303,
+    )
+
+
+# =========================================================
+# УДАЛЕНИЕ УК
+# ВАЖНО: этот роут находится выше /uk/{group_id}
+# =========================================================
+
+@router.post("/uk/delete")
+def uk_delete(
+    group_id: int = Form(...),
+):
+    delete_group(group_id)
+
+    return RedirectResponse(
+        url="/uk",
+        status_code=303,
+    )
+
+
+# =========================================================
+# РЕДАКТИРОВАНИЕ УК
+# =========================================================
+
+@router.post("/uk/{group_id}/update")
+def uk_update(
+    group_id: int,
+    name: str = Form(...),
+    note: str = Form(""),
+    crm_login: str = Form(""),
+    crm_password: str = Form(""),
+):
+    update_group(
+        group_id=group_id,
+        name=name,
+        note=note,
+        crm_login=crm_login,
+        crm_password=crm_password,
+    )
+
+    return RedirectResponse(
+        url="/uk",
+        status_code=303,
+    )
+
+
+# =========================================================
+# СТРАНИЦА КОНКРЕТНОЙ УК
+# =========================================================
 
 @router.get("/uk/{group_id}", response_class=HTMLResponse)
-def uk_detail(request: Request, group_id: int):
+def uk_detail(
+    request: Request,
+    group_id: int,
+):
     group = get_group(group_id)
 
     if not group:
-        return RedirectResponse("/uk", status_code=303)
+        return RedirectResponse(
+            url="/uk",
+            status_code=303,
+        )
 
     return templates.TemplateResponse(
         "uk_detail.html",
@@ -62,39 +136,77 @@ def uk_detail(request: Request, group_id: int):
     )
 
 
+# =========================================================
+# ДОБАВЛЕНИЕ ПАНЕЛЕЙ В УК
+# =========================================================
+
 @router.post("/uk/{group_id}/panels/add")
 def uk_add_panels(
     group_id: int,
     panel_ids: list[int] = Form([]),
 ):
-    add_panels(group_id, panel_ids)
-    return RedirectResponse(f"/uk/{group_id}", status_code=303)
+    add_panels(
+        group_id=group_id,
+        panel_ids=panel_ids,
+    )
 
+    return RedirectResponse(
+        url=f"/uk/{group_id}",
+        status_code=303,
+    )
+
+
+# =========================================================
+# УДАЛЕНИЕ ПАНЕЛИ ИЗ УК
+# =========================================================
 
 @router.post("/uk/{group_id}/panels/remove")
 def uk_remove_panel(
     group_id: int,
     panel_id: int = Form(...),
 ):
-    remove_panel(group_id, panel_id)
-    return RedirectResponse(f"/uk/{group_id}", status_code=303)
+    remove_panel(
+        group_id=group_id,
+        panel_id=panel_id,
+    )
+
+    return RedirectResponse(
+        url=f"/uk/{group_id}",
+        status_code=303,
+    )
 
 
-@router.post("/uk/{group_id}/keys/add")
+# =========================================================
+# ДОБАВЛЕНИЕ КЛЮЧЕЙ В УК
+# =========================================================
+
+@router.post(
+    "/uk/{group_id}/keys/add",
+    response_class=HTMLResponse,
+)
 def uk_add_keys(
     request: Request,
     group_id: int,
     key_values: str = Form(...),
 ):
     numbers = [
-        x.strip()
-        for x in key_values.replace(",", " ").split()
-        if x.strip()
+        value.strip()
+        for value in key_values.replace(",", " ").split()
+        if value.strip()
     ]
 
-    result = add_keys(group_id, numbers)
+    result = add_keys(
+        group_id=group_id,
+        key_numbers=numbers,
+    )
 
     group = get_group(group_id)
+
+    if not group:
+        return RedirectResponse(
+            url="/uk",
+            status_code=303,
+        )
 
     return templates.TemplateResponse(
         "uk_detail.html",
@@ -109,16 +221,34 @@ def uk_add_keys(
     )
 
 
+# =========================================================
+# УДАЛЕНИЕ КЛЮЧА ИЗ УК
+# =========================================================
+
 @router.post("/uk/{group_id}/keys/remove")
 def uk_remove_key(
     group_id: int,
     key_id: int = Form(...),
 ):
-    remove_key(group_id, key_id)
-    return RedirectResponse(f"/uk/{group_id}", status_code=303)
+    remove_key(
+        group_id=group_id,
+        key_id=key_id,
+    )
+
+    return RedirectResponse(
+        url=f"/uk/{group_id}",
+        status_code=303,
+    )
 
 
-@router.post("/uk/{group_id}/write", response_class=HTMLResponse)
+# =========================================================
+# ЗАПИСЬ КЛЮЧЕЙ НА ПАНЕЛИ УК
+# =========================================================
+
+@router.post(
+    "/uk/{group_id}/write",
+    response_class=HTMLResponse,
+)
 def uk_write(
     request: Request,
     group_id: int,
@@ -126,30 +256,44 @@ def uk_write(
     flat_num: str = Form("0"),
     inner: int = Form(0),
 ):
+    group = get_group(group_id)
+
+    if not group:
+        return RedirectResponse(
+            url="/uk",
+            status_code=303,
+        )
+
     panels = get_group_panels(group_id)
 
     all_results = []
 
-    for value in [
-        x.strip()
-        for x in key_values.replace(",", " ").split()
-        if x.strip()
-    ]:
+    numbers = [
+        value.strip()
+        for value in key_values.replace(",", " ").split()
+        if value.strip()
+    ]
+
+    for value in numbers:
         item = find_key(value)
 
         if item:
+            results = write_key_to_panels(
+                "uk",
+                item,
+                panels,
+                flat_num=flat_num,
+                inner=inner,
+                address=f"УК: {group['name']}",
+            )
+
             all_results.append(
                 {
                     "key": item,
-                    "results": write_key_to_panels(
-                        "uk",
-                        item,
-                        panels,
-                        flat_num=flat_num,
-                        inner=inner,
-                    ),
+                    "results": results,
                 }
             )
+
         else:
             all_results.append(
                 {
@@ -165,29 +309,7 @@ def uk_write(
         "write_results.html",
         {
             "request": request,
-            "title": "Результат записи УК",
+            "title": f"Результат записи УК: {group['name']}",
             "all_results": all_results,
         },
     )
-
-
-@router.post("/uk/delete")
-def uk_delete(group_id: int = Form(...)):
-    delete_group(group_id)
-    return RedirectResponse("/uk", status_code=303)
-
-@router.post("/uk/{group_id}/update")
-def uk_update(
-    group_id: int,
-    note: str = Form(""),
-    crm_login: str = Form(""),
-    crm_password: str = Form(""),
-):
-    update_group_credentials(
-        group_id=group_id,
-        note=note,
-        crm_login=crm_login,
-        crm_password=crm_password,
-    )
-
-    return RedirectResponse(f"/uk/{group_id}", status_code=303)

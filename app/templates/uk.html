@@ -7,7 +7,9 @@
 <div class="uk-hero">
     <div>
         <h1>Управляющие компании</h1>
-        <p class="subtitle">Группы УК, закреплённые панели и служебные ключи</p>
+        <p class="subtitle">
+            Группы УК, закреплённые панели, служебные ключи и доступы CRM
+        </p>
     </div>
 
     <div class="uk-stat-card">
@@ -35,23 +37,53 @@
                         <path d="M3 21h18"/>
                         <path d="M5 21V7l7-4 7 4v14"/>
                         <path d="M9 21v-6h6v6"/>
+                        <path d="M19 3v6M16 6h6"/>
                     </svg>
                 </span>
                 Создать УК
             </h2>
-            <p class="subtitle">Создайте новую группу и затем добавьте панели и ключи</p>
+
+            <p class="subtitle">
+                Сразу укажите основные данные и доступ в CRM
+            </p>
         </div>
     </div>
 
     <form method="post" action="/uk/group" class="uk-create-form">
         <div>
             <label>Название УК</label>
-            <input name="name" placeholder="Например: УК Александрия" required>
+            <input
+                name="name"
+                placeholder="Например: УК Александрия"
+                required
+            >
         </div>
 
         <div>
             <label>Комментарий</label>
-            <input name="note" placeholder="Описание или примечание">
+            <input
+                name="note"
+                placeholder="Описание или примечание"
+            >
+        </div>
+
+        <div>
+            <label>Логин CRM</label>
+            <input
+                name="crm_login"
+                placeholder="Логин для входа в CRM"
+                autocomplete="off"
+            >
+        </div>
+
+        <div>
+            <label>Пароль CRM</label>
+            <input
+                type="text"
+                name="crm_password"
+                placeholder="Пароль для входа в CRM"
+                autocomplete="off"
+            >
         </div>
 
         <button type="submit" class="btn">
@@ -60,26 +92,55 @@
     </form>
 </div>
 
-<div class="panel uk-groups-panel">
-    <div class="panel-list-head">
-        <div>
-            <h2>
-                <span class="title-svg-icon">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M3 21h18"/>
-                        <path d="M5 21V7l7-4 7 4v14"/>
-                        <path d="M9 21v-6h6v6"/>
-                    </svg>
-                </span>
-                Группы УК
-            </h2>
-            <p class="subtitle">Всего: {{ groups|length }}</p>
-        </div>
+<div class="panel-list-head uk-list-head">
+    <div>
+        <h2>
+            <span class="title-svg-icon">
+                <svg viewBox="0 0 24 24">
+                    <path d="M3 21h18"/>
+                    <path d="M5 21V7l7-4 7 4v14"/>
+                    <path d="M9 21v-6h6v6"/>
+                </svg>
+            </span>
+
+            Группы УК
+        </h2>
+
+        <p class="subtitle">
+            Найдено:
+            <span id="ukFoundCount">{{ groups|length }}</span>
+            из {{ groups|length }}
+        </p>
     </div>
 
-    <div class="uk-cards">
+    <div class="uk-search-box">
+        <svg viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="7"/>
+            <path d="m20 20-4-4"/>
+        </svg>
+
+        <input
+            type="text"
+            id="ukSearch"
+            placeholder="Поиск по названию, комментарию или логину..."
+            autocomplete="off"
+        >
+
+        <button
+            type="button"
+            id="clearUkSearch"
+            class="uk-search-clear"
+            title="Очистить поиск"
+        >
+            ×
+        </button>
+    </div>
+</div>
+
+    <div class="uk-cards uk-cards-scroll" id="ukCards">
         {% for g in groups %}
         <div class="uk-card">
+
             <div class="uk-card-icon">
                 <svg viewBox="0 0 24 24">
                     <path d="M3 21h18"/>
@@ -92,6 +153,57 @@
                 <b>{{ g.name }}</b>
                 <span>{{ g.note or 'Без комментария' }}</span>
 
+                <div class="uk-crm-info">
+                    <div class="uk-crm-value">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M20 21a8 8 0 0 0-16 0"/>
+                            <circle cx="12" cy="7" r="4"/>
+                        </svg>
+
+                        <span>
+                            {{ g.crm_login or 'Логин не указан' }}
+                        </span>
+                    </div>
+
+                    <div class="uk-crm-value">
+                        <svg viewBox="0 0 24 24">
+                            <rect x="5" y="10" width="14" height="10" rx="2"/>
+                            <path d="M8 10V7a4 4 0 0 1 8 0v3"/>
+                        </svg>
+
+                        <span
+                            class="uk-password-value"
+                            data-password="{{ g.crm_password or '' }}"
+                        >
+                            {% if g.crm_password %}
+                                ••••••••
+                            {% else %}
+                                Пароль не указан
+                            {% endif %}
+                        </span>
+
+                        {% if g.crm_password %}
+                        <button
+                            type="button"
+                            class="uk-password-toggle"
+                            aria-label="Показать пароль"
+                        >
+                            <svg class="eye-show" viewBox="0 0 24 24">
+                                <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12"/>
+                                <circle cx="12" cy="12" r="3"/>
+                            </svg>
+
+                            <svg class="eye-hide" viewBox="0 0 24 24">
+                                <path d="m3 3 18 18"/>
+                                <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"/>
+                                <path d="M9.9 4.2A11 11 0 0 1 12 4c6.5 0 10 8 10 8a17 17 0 0 1-2.1 3.2"/>
+                                <path d="M6.6 6.6C3.5 8.5 2 12 2 12s3.5 8 10 8a10 10 0 0 0 5.4-1.6"/>
+                            </svg>
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+
                 <div class="uk-card-meta">
                     <span>{{ g.panels_count }} панелей</span>
                     <span>{{ g.keys_count }} ключей</span>
@@ -99,25 +211,239 @@
             </div>
 
             <div class="uk-card-actions">
-                <a href="/uk/{{ g.id }}" class="btn btn-small">
+                <a
+                    href="/uk/{{ g.id }}"
+                    class="btn btn-small"
+                >
                     Управлять
                 </a>
+
+                <button
+                    type="button"
+                    class="btn btn-small btn-ghost"
+                    data-open-uk-edit="{{ g.id }}"
+                >
+                    Редактировать
+                </button>
 
                 <form
                     method="post"
                     action="/uk/delete"
-                    onsubmit="return confirm('Удалить группу УК?')"
+                    onsubmit="return confirm('Удалить УК «{{ g.name }}»?')"
                 >
-                    <input type="hidden" name="group_id" value="{{ g.id }}">
+                    <input
+                        type="hidden"
+                        name="group_id"
+                        value="{{ g.id }}"
+                    >
 
-                    <button type="submit" class="danger-btn btn-small">
+                    <button
+                        type="submit"
+                        class="danger-btn btn-small"
+                    >
                         Удалить
                     </button>
                 </form>
             </div>
+
+        </div>
+        {% else %}
+        <div class="uk-empty-state">
+            <h3>Управляющие компании пока не созданы</h3>
+            <p>Заполните форму выше, чтобы добавить первую УК.</p>
         </div>
         {% endfor %}
     </div>
 </div>
+
+{% for g in groups %}
+<div
+    class="modal-backdrop uk-edit-modal"
+    id="ukEditModal{{ g.id }}"
+>
+    <div class="modal-window panel">
+        <div class="modal-head">
+            <div>
+                <h2>Редактировать УК</h2>
+                <p class="subtitle">
+                    Изменение данных {{ g.name }}
+                </p>
+            </div>
+
+            <button
+                type="button"
+                class="btn-small btn-ghost modal-close"
+                data-close="ukEditModal{{ g.id }}"
+            >
+                Закрыть
+            </button>
+        </div>
+
+        <form
+            method="post"
+            action="/uk/{{ g.id }}/update"
+            class="uk-edit-form"
+        >
+            <div>
+                <label>Название УК</label>
+                <input
+                    name="name"
+                    value="{{ g.name }}"
+                    required
+                >
+            </div>
+
+            <div>
+                <label>Комментарий</label>
+                <input
+                    name="note"
+                    value="{{ g.note or '' }}"
+                    placeholder="Описание или примечание"
+                >
+            </div>
+
+            <div>
+                <label>Логин CRM</label>
+                <input
+                    name="crm_login"
+                    value="{{ g.crm_login or '' }}"
+                    placeholder="Логин для входа в CRM"
+                    autocomplete="off"
+                >
+            </div>
+
+            <div>
+                <label>Пароль CRM</label>
+                <input
+                    type="text"
+                    name="crm_password"
+                    value="{{ g.crm_password or '' }}"
+                    placeholder="Пароль для входа в CRM"
+                    autocomplete="off"
+                >
+            </div>
+
+            <button type="submit" class="btn">
+                Сохранить изменения
+            </button>
+        </form>
+    </div>
+</div>
+{% endfor %}
+
+<script>
+document.querySelectorAll("[data-open-uk-edit]").forEach((button) => {
+    button.addEventListener("click", () => {
+        const groupId = button.dataset.openUkEdit;
+        const modal = document.getElementById("ukEditModal" + groupId);
+
+        if (modal) {
+            modal.classList.add("active");
+        }
+    });
+});
+
+document.querySelectorAll(".modal-close").forEach((button) => {
+    button.addEventListener("click", () => {
+        const modalId = button.dataset.close;
+        const modal = document.getElementById(modalId);
+
+        if (modal) {
+            modal.classList.remove("active");
+        }
+    });
+});
+
+document.querySelectorAll(".modal-backdrop").forEach((modal) => {
+    modal.addEventListener("click", (event) => {
+        if (event.target === modal) {
+            modal.classList.remove("active");
+        }
+    });
+});
+
+document.querySelectorAll(".uk-password-toggle").forEach((button) => {
+    button.addEventListener("click", () => {
+        const wrapper = button.closest(".uk-crm-value");
+        const valueElement = wrapper.querySelector(".uk-password-value");
+        const password = valueElement.dataset.password;
+        const isVisible = button.classList.toggle("visible");
+
+        valueElement.textContent = isVisible ? password : "••••••••";
+        button.setAttribute(
+            "aria-label",
+            isVisible ? "Скрыть пароль" : "Показать пароль"
+        );
+    });
+});
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const searchInput = document.getElementById("ukSearch");
+    const clearButton = document.getElementById("clearUkSearch");
+    const cardsContainer = document.getElementById("ukCards");
+    const foundCount = document.getElementById("ukFoundCount");
+
+    if (!searchInput || !cardsContainer) {
+        return;
+    }
+
+    const cards = Array.from(
+        cardsContainer.querySelectorAll(".uk-card")
+    );
+
+    function filterUkCards() {
+        const query = searchInput.value
+            .toLowerCase()
+            .trim();
+
+        let visibleCount = 0;
+
+        cards.forEach((card) => {
+            const cardText = card.innerText
+                .toLowerCase();
+
+            const isVisible =
+                query === "" ||
+                cardText.includes(query);
+
+            card.style.display = isVisible
+                ? ""
+                : "none";
+
+            if (isVisible) {
+                visibleCount++;
+            }
+        });
+
+        if (foundCount) {
+            foundCount.textContent = visibleCount;
+        }
+
+        if (clearButton) {
+            clearButton.classList.toggle(
+                "visible",
+                searchInput.value.length > 0
+            );
+        }
+    }
+
+    searchInput.addEventListener(
+        "input",
+        filterUkCards
+    );
+
+    if (clearButton) {
+        clearButton.addEventListener("click", () => {
+            searchInput.value = "";
+
+            filterUkCards();
+
+            searchInput.focus();
+        });
+    }
+});
+</script>
+
 
 {% endblock %}

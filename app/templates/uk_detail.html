@@ -6,12 +6,46 @@
 
 <div class="hero-title uk-detail-hero">
     <div>
-        <a class="btn btn-small btn-ghost" href="/uk">← Назад к УК</a>
+        <a class="btn btn-small btn-ghost" href="/uk">
+            ← Назад к УК
+        </a>
 
         <h1>{{ group.name }}</h1>
+
         <p class="subtitle">
             {{ group.note or 'Управление панелями и ключами этой УК' }}
         </p>
+
+        <div class="uk-detail-crm">
+            <div>
+                <span>Логин CRM</span>
+                <b>{{ group.crm_login or '—' }}</b>
+            </div>
+
+            <div>
+                <span>Пароль CRM</span>
+                <b
+                    id="detailCrmPassword"
+                    data-password="{{ group.crm_password or '' }}"
+                >
+                    {% if group.crm_password %}
+                        ••••••••
+                    {% else %}
+                        —
+                    {% endif %}
+                </b>
+
+                {% if group.crm_password %}
+                <button
+                    type="button"
+                    class="uk-detail-password-toggle"
+                    id="detailPasswordToggle"
+                >
+                    Показать
+                </button>
+                {% endif %}
+            </div>
+        </div>
     </div>
 
     <div class="uk-stats">
@@ -27,58 +61,22 @@
     </div>
 </div>
 
-<div class="panel uk-credentials-panel">
-    <div class="panel-head">
-        <div>
-            <h2>Доступ в CRM</h2>
-            <p class="subtitle">Логин, пароль и комментарий этой управляющей компании</p>
-        </div>
-    </div>
-
-    <form method="post" action="/uk/{{ group.id }}/update" class="uk-credentials-form">
-        <div>
-            <label>Комментарий</label>
-            <input
-                name="note"
-                value="{{ group.note or '' }}"
-                placeholder="Описание или примечание"
-            >
-        </div>
-
-        <div>
-            <label>Логин CRM</label>
-            <input
-                name="crm_login"
-                value="{{ group.crm_login or '' }}"
-                placeholder="Логин от CRM"
-            >
-        </div>
-
-        <div>
-            <label>Пароль CRM</label>
-            <input
-                name="crm_password"
-                value="{{ group.crm_password or '' }}"
-                placeholder="Пароль от CRM"
-            >
-        </div>
-
-        <button type="submit" class="btn">
-            Сохранить
-        </button>
-    </form>
-</div>
-
 <div class="uk-control-grid">
 
     <div class="panel uk-manage-panel">
         <div class="panel-head">
             <div>
                 <h2>Панели УК</h2>
-                <p class="subtitle">Адреса и входы, закреплённые за группой</p>
+                <p class="subtitle">
+                    Адреса и входы, закреплённые за группой
+                </p>
             </div>
 
-            <button type="button" class="btn btn-small" id="openPanelsModal">
+            <button
+                type="button"
+                class="btn btn-small"
+                id="openPanelsModal"
+            >
                 Добавить панели
             </button>
         </div>
@@ -93,9 +91,21 @@
                     <small>{{ p.mac }}</small>
                 </div>
 
-                <form method="post" action="/uk/{{ group.id }}/panels/remove">
-                    <input type="hidden" name="panel_id" value="{{ p.id }}">
-                    <button type="submit" class="danger-btn btn-small">
+                <form
+                    method="post"
+                    action="/uk/{{ group.id }}/panels/remove"
+                    onsubmit="return confirm('Убрать эту панель из УК?')"
+                >
+                    <input
+                        type="hidden"
+                        name="panel_id"
+                        value="{{ p.id }}"
+                    >
+
+                    <button
+                        type="submit"
+                        class="danger-btn btn-small"
+                    >
                         Удалить
                     </button>
                 </form>
@@ -111,10 +121,16 @@
         <div class="panel-head">
             <div>
                 <h2>Ключи УК</h2>
-                <p class="subtitle">Ключи, закреплённые за этой группой</p>
+                <p class="subtitle">
+                    Ключи, закреплённые за этой группой
+                </p>
             </div>
 
-            <button type="button" class="btn btn-small" id="openKeysModal">
+            <button
+                type="button"
+                class="btn btn-small"
+                id="openKeysModal"
+            >
                 Добавить ключи
             </button>
         </div>
@@ -144,10 +160,23 @@
                     <td><b>{{ k.number }}</b></td>
                     <td>{{ k.hex_value }}</td>
                     <td>{{ k.key_type or '—' }}</td>
+
                     <td>
-                        <form method="post" action="/uk/{{ group.id }}/keys/remove">
-                            <input type="hidden" name="key_id" value="{{ k.id }}">
-                            <button type="submit" class="danger-btn btn-small">
+                        <form
+                            method="post"
+                            action="/uk/{{ group.id }}/keys/remove"
+                            onsubmit="return confirm('Убрать ключ {{ k.number }} из УК?')"
+                        >
+                            <input
+                                type="hidden"
+                                name="key_id"
+                                value="{{ k.id }}"
+                            >
+
+                            <button
+                                type="submit"
+                                class="danger-btn btn-small"
+                            >
                                 Удалить
                             </button>
                         </form>
@@ -168,22 +197,39 @@
     <div class="panel-head">
         <div>
             <h2>Прописать ключи УК</h2>
-            <p class="subtitle">Запись ключей на все панели этой управляющей компании</p>
+            <p class="subtitle">
+                Запись ключей на все панели этой управляющей компании
+            </p>
         </div>
     </div>
 
-    <form method="post" action="/uk/{{ group.id }}/write" class="uk-write-form">
+    <form
+        method="post"
+        action="/uk/{{ group.id }}/write"
+        class="uk-write-form"
+    >
         <div>
             <label>Номера ключей</label>
-            <input name="key_values" placeholder="39068, 39139" required>
+            <input
+                name="key_values"
+                placeholder="39068, 39139"
+                required
+            >
         </div>
 
         <div>
             <label>Квартира / flatNum</label>
-            <input name="flat_num" value="0">
+            <input
+                name="flat_num"
+                value="0"
+            >
         </div>
 
-        <input type="hidden" name="inner" value="0">
+        <input
+            type="hidden"
+            name="inner"
+            value="0"
+        >
 
         <button type="submit" class="btn">
             Прописать ключи
@@ -196,10 +242,16 @@
         <div class="modal-head">
             <div>
                 <h2>Добавить панели</h2>
-                <p class="subtitle">Выберите адреса и входы для этой УК</p>
+                <p class="subtitle">
+                    Выберите адреса и входы для этой УК
+                </p>
             </div>
 
-            <button type="button" class="btn-small btn-ghost modal-close" data-close="panelsModal">
+            <button
+                type="button"
+                class="btn-small btn-ghost modal-close"
+                data-close="panelsModal"
+            >
                 Закрыть
             </button>
         </div>
@@ -213,24 +265,48 @@
             >
         </div>
 
-        <form method="post" action="/uk/{{ group.id }}/panels/add">
-            <div class="panel-list uk-panel-list" id="availablePanelList">
+        <form
+            method="post"
+            action="/uk/{{ group.id }}/panels/add"
+        >
+            <div
+                class="panel-list uk-panel-list"
+                id="availablePanelList"
+            >
                 {% for p in available_panels %}
                 <label class="panel-option">
-                    <input type="checkbox" name="panel_ids" value="{{ p.id }}">
+                    <input
+                        type="checkbox"
+                        name="panel_ids"
+                        value="{{ p.id }}"
+                    >
 
                     <span class="panel-option-body">
-                        <span class="panel-option-title">{{ p.entrance or '—' }}</span>
-                        <span class="panel-option-meta">{{ p.address }}</span>
-                        <span class="panel-option-mac">{{ p.mac }}</span>
+                        <span class="panel-option-title">
+                            {{ p.entrance or '—' }}
+                        </span>
+
+                        <span class="panel-option-meta">
+                            {{ p.address }}
+                        </span>
+
+                        <span class="panel-option-mac">
+                            {{ p.mac }}
+                        </span>
                     </span>
                 </label>
+                {% else %}
+                <p class="warn">
+                    Все доступные панели уже добавлены в эту УК.
+                </p>
                 {% endfor %}
             </div>
 
+            {% if available_panels %}
             <button type="submit" class="btn wide-action">
                 Добавить выбранные
             </button>
+            {% endif %}
         </form>
     </div>
 </div>
@@ -240,17 +316,32 @@
         <div class="modal-head">
             <div>
                 <h2>Добавить ключи</h2>
-                <p class="subtitle">Введите номера ключей через пробел или запятую</p>
+                <p class="subtitle">
+                    Введите номера ключей через пробел или запятую
+                </p>
             </div>
 
-            <button type="button" class="btn-small btn-ghost modal-close" data-close="keysModal">
+            <button
+                type="button"
+                class="btn-small btn-ghost modal-close"
+                data-close="keysModal"
+            >
                 Закрыть
             </button>
         </div>
 
-        <form method="post" action="/uk/{{ group.id }}/keys/add" class="uk-modal-form">
+        <form
+            method="post"
+            action="/uk/{{ group.id }}/keys/add"
+            class="uk-modal-form"
+        >
             <label>Номера ключей</label>
-            <input name="key_values" placeholder="39068, 39139, 001101" required>
+
+            <input
+                name="key_values"
+                placeholder="39068, 39139, 001101"
+                required
+            >
 
             <button type="submit" class="btn wide-action">
                 Добавить ключи
@@ -265,21 +356,25 @@ const keysModal = document.getElementById("keysModal");
 const openPanelsModal = document.getElementById("openPanelsModal");
 const openKeysModal = document.getElementById("openKeysModal");
 
-if (openPanelsModal) {
+if (openPanelsModal && panelsModal) {
     openPanelsModal.addEventListener("click", () => {
         panelsModal.classList.add("active");
     });
 }
 
-if (openKeysModal) {
+if (openKeysModal && keysModal) {
     openKeysModal.addEventListener("click", () => {
         keysModal.classList.add("active");
     });
 }
 
-document.querySelectorAll(".modal-close").forEach((btn) => {
-    btn.addEventListener("click", () => {
-        document.getElementById(btn.dataset.close).classList.remove("active");
+document.querySelectorAll(".modal-close").forEach((button) => {
+    button.addEventListener("click", () => {
+        const modal = document.getElementById(button.dataset.close);
+
+        if (modal) {
+            modal.classList.remove("active");
+        }
     });
 });
 
@@ -299,10 +394,32 @@ if (availablePanelSearch && availablePanelList) {
         const query = this.value.toLowerCase().trim();
 
         availablePanelList.querySelectorAll(".panel-option").forEach((row) => {
-            row.style.display = row.innerText.toLowerCase().includes(query)
-                ? ""
-                : "none";
+            const isVisible = row.innerText
+                .toLowerCase()
+                .includes(query);
+
+            row.style.display = isVisible ? "" : "none";
         });
+    });
+}
+
+const detailPasswordToggle = document.getElementById("detailPasswordToggle");
+const detailCrmPassword = document.getElementById("detailCrmPassword");
+
+if (detailPasswordToggle && detailCrmPassword) {
+    detailPasswordToggle.addEventListener("click", () => {
+        const password = detailCrmPassword.dataset.password;
+        const isVisible = detailPasswordToggle.dataset.visible === "true";
+
+        detailCrmPassword.textContent = isVisible
+            ? "••••••••"
+            : password;
+
+        detailPasswordToggle.textContent = isVisible
+            ? "Показать"
+            : "Скрыть";
+
+        detailPasswordToggle.dataset.visible = String(!isVisible);
     });
 }
 </script>
