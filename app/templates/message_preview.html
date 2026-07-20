@@ -99,6 +99,7 @@
             <thead>
             <tr>
                 <th>Номер</th>
+                <th>Тип</th>
                 <th>HEX</th>
                 <th>Статус</th>
             </tr>
@@ -108,9 +109,25 @@
             {% for k in keys %}
             <tr>
                 <td>{{ k.number }}</td>
+                <td>
+                    {% if k.ambiguous %}
+                    <select class="message-key-type-select" data-key-number="{{ k.number }}">
+                        <option value="0">Выберите тип</option>
+                        {% for match in k.matches %}
+                        <option value="{{ match.key_type_id }}">{{ match.type_name }}</option>
+                        {% endfor %}
+                    </select>
+                    {% elif k.item %}
+                        {{ k.item.type_name or k.item.key_type or '—' }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
                 <td>{{ k.item.hex_value if k.item else '—' }}</td>
                 <td>
-                    {% if k.item %}
+                    {% if k.ambiguous %}
+                        <span class="badge warning">Нужен тип</span>
+                    {% elif k.item %}
                         <span class="badge success">Найден</span>
                     {% else %}
                         <span class="badge error">Не найден</span>
@@ -127,7 +144,15 @@
     <form method="post" action="/message/write" id="messageWriteForm">
         <input type="hidden" name="address" value="{{ parsed.address }}">
         <input type="hidden" name="apartment" value="{{ parsed.apartment }}">
-        <input type="hidden" name="key_numbers" value="{{ parsed.key_numbers|join(' ') }}">
+        {% for k in keys %}
+        <input type="hidden" name="key_numbers" value="{{ k.number }}">
+        <input
+            type="hidden"
+            name="key_type_ids"
+            value="{{ k.item.key_type_id if k.item and k.item.key_type_id else 0 }}"
+            data-key-type-for="{{ k.number }}"
+        >
+        {% endfor %}
 
         <div id="selectedPanelsContainer"></div>
 
@@ -166,8 +191,20 @@
     }
 
     if (form) {
-        form.addEventListener("submit", function () {
+        form.addEventListener("submit", function (event) {
             selectedPanelsContainer.innerHTML = "";
+
+            const typeSelectors = Array.from(document.querySelectorAll(".message-key-type-select"));
+            if (typeSelectors.some((select) => select.value === "0")) {
+                event.preventDefault();
+                alert("Выберите тип для каждого неоднозначного номера ключа.");
+                return;
+            }
+
+            typeSelectors.forEach((select) => {
+                const hidden = form.querySelector(`[data-key-type-for="${select.dataset.keyNumber}"]`);
+                if (hidden) hidden.value = select.value;
+            });
 
             getPanelCheckboxes()
                 .filter((checkbox) => checkbox.checked)

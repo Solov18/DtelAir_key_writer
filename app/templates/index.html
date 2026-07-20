@@ -10,21 +10,35 @@
         <p class="subtitle">Запись ключей, поиск данных и контроль операций в единой панели.</p>
     </div>
 
-<!--    <div class="dashboard-status-card">-->
-<!--        <div class="status-shield">-->
-<!--            <svg viewBox="0 0 24 24">-->
-<!--                <path d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6l7-3z"/>-->
-<!--                <path d="M9 12l2 2 4-5"/>-->
-<!--            </svg>-->
-<!--        </div>-->
+    <div class="dashboard-status-card {% if dry_run %}status-warning{% elif crm_ready %}status-ok{% else %}status-error{% endif %}">
+        <div class="crm-sync-visual" aria-hidden="true">
+            <span></span>
+            <svg viewBox="0 0 24 24">
+                <path d="M20 7h-5V2"/>
+                <path d="M20 7a8 8 0 0 0-14.6-2"/>
+                <path d="M4 17h5v5"/>
+                <path d="M4 17a8 8 0 0 0 14.6 2"/>
+            </svg>
+        </div>
 
-<!--        <div>-->
-<!--            <b>{% if dry_run %}Тестовый режим{% else %}Система работает{% endif %}</b>-->
-<!--            <span>{% if dry_run %}Операции не отправляются в CRM{% else %}Все сервисы доступны{% endif %}</span>-->
-<!--        </div>-->
+        <div class="crm-sync-copy">
+            <small>Состояние синхронизации</small>
+            {% if dry_run %}
+            <b>Проверка без записи</b>
+            <span>Отправка ключей в CRM отключена</span>
+            {% elif crm_ready %}
+            <b>CRM подключена</b>
+            <span>Авторизация и запись доступны</span>
+            {% else %}
+            <b>CRM не подключена</b>
+            <span>Настройте данные для авторизации</span>
+            {% endif %}
 
-<!--        <i></i>-->
-<!--    </div>-->
+            <div class="crm-sync-track" aria-hidden="true">
+                <i></i><i></i><i></i>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="dashboard-actions">
@@ -162,14 +176,15 @@
                 <span>Действие</span>
                 <span>Объект</span>
                 <span>Пользователь</span>
+                <span>Статус</span>
             </div>
 
             {% if recent_operations %}
                 {% for r in recent_operations %}
                 <div class="operations-row">
-                    {% if r.status_name == 'Ошибка' or r.status_name == 'Ошибка CRM' %}
-                        <i class="op-orange"></i>
-                    {% elif r.status_name == 'Тест' %}
+                    {% if r.status_tone == 'error' %}
+                        <i class="op-red"></i>
+                    {% elif r.status_tone == 'warning' %}
                         <i class="op-blue"></i>
                     {% else %}
                         <i class="op-green"></i>
@@ -179,6 +194,9 @@
                     <span>{{ r.action_name }}</span>
                     <span>{{ r.object_name_view }}</span>
                     <span>{{ r.user_name }}</span>
+                    <span class="badge {% if r.status_tone == 'error' %}error{% elif r.status_tone == 'warning' %}dry-run{% else %}success{% endif %}">
+                        {{ r.status_name }}
+                    </span>
                 </div>
                 {% endfor %}
             {% else %}

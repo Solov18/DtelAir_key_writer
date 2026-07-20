@@ -1,0 +1,163 @@
+{% extends 'base.html' %}
+
+{% block page_name %}Карточка ключа{% endblock %}
+
+{% block content %}
+<div class="key-detail-page key-card-page">
+    <header class="key-detail-hero key-card-hero">
+        <div>
+            <a class="keys-back-link" href="/keys">← База ключей</a>
+            <div class="key-detail-title-line">
+                <span class="key-detail-type-color" style="--key-type-color: {{ key.type_color }}"></span>
+                <div>
+                    <small>Карточка физического ключа</small>
+                    <h1>{{ key.type_name }} №{{ key.number }}</h1>
+                </div>
+                <span class="key-status is-{{ key.status_tone }}">{{ key.status_name }}</span>
+            </div>
+            <p class="subtitle">Данные, текущее назначение и неизменяемая история использования.</p>
+        </div>
+        <div class="key-detail-hero-actions">
+            {% if key.hex_value and key.status not in ('blocked', 'lost', 'defective', 'archived') %}
+            <a class="btn" href="/write/manual?key_query={{ key.number|urlencode }}&key_type_id={{ key.key_type_id }}">Прописать на панели</a>
+            {% endif %}
+            <a class="btn btn-ghost" href="/keys?selected_key_id={{ key.id }}">К реестру</a>
+        </div>
+    </header>
+
+    {% if message %}<div class="keys-notice is-success">{{ message }}</div>{% endif %}
+    {% if error %}<div class="keys-notice is-error">{{ error }}</div>{% endif %}
+
+    <div class="key-card-dashboard">
+        <main class="key-card-main-column">
+            <section class="panel key-overview-card">
+                <header class="key-card-section-head">
+                    <span class="key-card-section-icon"><svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M16 7l3 3M14 9l2 2"/></svg></span>
+                    <div><small>Основная запись</small><h2>Данные ключа</h2></div>
+                </header>
+                <dl class="key-overview-grid">
+                    <div><dt>Тип ключа</dt><dd><span class="key-type-chip"><i style="--key-type-color: {{ key.type_color }}"></i>{{ key.type_name }}</span></dd></div>
+                    <div><dt>Порядковый номер</dt><dd class="is-emphasized">№{{ key.number }}</dd></div>
+                    <div><dt>HEX</dt><dd><code class="keys-hex{% if not key.hex_value %} is-empty{% endif %}">{{ key.hex_value or 'Не считан' }}</code></dd></div>
+                    <div><dt>Статус</dt><dd><span class="key-status is-{{ key.status_tone }}">{{ key.status_name }}</span></dd></div>
+                    <div><dt>Дата добавления</dt><dd>{{ key.created_at or '—' }}</dd></div>
+                    <div><dt>Кем добавлен</dt><dd>{{ key.created_by or 'Система' }}</dd></div>
+                    <div class="is-wide"><dt>Комментарий</dt><dd>{{ key.note or 'Комментарий не указан' }}</dd></div>
+                </dl>
+            </section>
+
+            <details class="panel key-edit-disclosure" id="key-edit" {% if error %}open{% endif %}>
+                <summary>
+                    <span class="key-card-section-icon"><svg viewBox="0 0 24 24"><path d="m4 20 4.5-1 10-10-3.5-3.5-10 10Z"/><path d="m13.5 7 3.5 3.5"/></svg></span>
+                    <span><small>Служебное действие</small><b>Редактировать данные ключа</b></span>
+                    <i>⌄</i>
+                </summary>
+                <form method="post" action="/keys/{{ key.id }}/update" class="key-edit-form key-card-edit-form">
+                    <label><span>Тип ключа</span><select name="key_type_id">{% for item in key_types %}<option value="{{ item.id }}" {% if item.id == key.key_type_id %}selected{% endif %}>{{ item.name }}</option>{% endfor %}</select></label>
+                    <label><span>Номер</span><input name="number" value="{{ key.number }}" required></label>
+                    <label class="is-wide"><span>HEX</span><input name="hex_value" value="{{ key.hex_value }}" autocomplete="off" required pattern="[0-9A-Fa-f :\-]{6,23}" title="Укажите HEX: от 6 до 16 символов 0–9/A–F"></label>
+                    <label class="is-wide"><span>Комментарий</span><textarea name="note" rows="3" placeholder="Назначение или служебная информация">{{ key.note or '' }}</textarea></label>
+                    <div class="key-edit-note">HEX обязателен. Изменение типа, номера или HEX записывается в журнал операций.</div>
+                    <button type="submit" class="btn">Сохранить изменения</button>
+                </form>
+            </details>
+        </main>
+
+        <aside class="key-card-side-column">
+            <section class="panel key-card-assignment">
+                <header class="key-card-section-head">
+                    <span class="key-card-section-icon"><svg viewBox="0 0 24 24"><path d="M12 21s7-5.2 7-12a7 7 0 1 0-14 0c0 6.8 7 12 7 12Z"/><circle cx="12" cy="9" r="2"/></svg></span>
+                    <div><small>Актуальные данные</small><h2>Текущее назначение</h2></div>
+                </header>
+                {% if key.assignment_type %}
+                <div class="key-card-assignment-body">
+                    <span class="key-assignment-kind">{% if key.assignment_type == 'resident' %}Жилец{% elif key.assignment_type == 'employee' %}Сотрудник{% else %}УК{% endif %}</span>
+                    <b>{{ key.assignment_text }}</b>
+                    <span>Назначен: {{ key.assigned_at or '—' }}</span>
+                    {% if key.assignment_note %}<p>{{ key.assignment_note }}</p>{% endif %}
+                </div>
+                <form method="post" action="/keys/{{ key.id }}/release" class="key-card-assignment-action" data-confirm="Освободить ключ и завершить текущее назначение?">
+                    <input name="note" value="Освобождён вручную" type="hidden">
+                    <button class="btn btn-ghost" type="submit">Освободить ключ</button>
+                </form>
+                {% else %}
+                <div class="key-card-free-state">
+                    <span>✓</span><b>Ключ свободен</b><p>Его можно назначить жильцу, сотруднику или управляющей компании.</p>
+                </div>
+                {% if key.hex_value and key.status not in ('blocked', 'lost', 'defective', 'archived') %}
+                <a class="btn key-card-primary-action" href="/write/manual?key_query={{ key.number|urlencode }}&key_type_id={{ key.key_type_id }}">Прописать на панель</a>
+                {% endif %}
+                {% endif %}
+            </section>
+
+            <section class="panel key-card-status-actions">
+                <header class="key-card-section-head">
+                    <span class="key-card-section-icon"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18"/></svg></span>
+                    <div><small>Состояние</small><h2>Служебные действия</h2></div>
+                </header>
+                <div class="key-status-action-list">
+                    {% if key.status != 'blocked' %}<form method="post" action="/keys/{{ key.id }}/status" data-confirm="Заблокировать этот ключ?"><input type="hidden" name="status" value="blocked"><input type="hidden" name="note" value="Ключ заблокирован вручную"><button class="key-action-button is-warning" type="submit"><span>Блокировка</span><b>Заблокировать</b></button></form>{% endif %}
+                    {% if key.status != 'lost' %}<form method="post" action="/keys/{{ key.id }}/status" data-confirm="Отметить ключ как утерянный?"><input type="hidden" name="status" value="lost"><input type="hidden" name="note" value="Ключ отмечен как утерянный"><button class="key-action-button is-danger" type="submit"><span>Учёт</span><b>Отметить утерянным</b></button></form>{% endif %}
+                    {% if key.status != 'defective' %}<form method="post" action="/keys/{{ key.id }}/status" data-confirm="Отметить ключ как брак?"><input type="hidden" name="status" value="defective"><input type="hidden" name="note" value="Ключ отмечен как брак"><button class="key-action-button is-warning" type="submit"><span>Качество</span><b>Отметить браком</b></button></form>{% endif %}
+                    {% if key.status != 'archived' %}<form method="post" action="/keys/{{ key.id }}/status" data-confirm="Перенести ключ в архив? Текущее назначение будет завершено."><input type="hidden" name="status" value="archived"><input type="hidden" name="note" value="Ключ перенесён в архив"><button class="key-action-button is-danger" type="submit"><span>Архив</span><b>Перенести в архив</b></button></form>{% endif %}
+                    {% if key.status != 'free' and not key.assignment_type %}<form method="post" action="/keys/{{ key.id }}/release"><input type="hidden" name="note" value="Ключ возвращён в свободные"><button class="btn" type="submit">Вернуть в свободные</button></form>{% endif %}
+                </div>
+            </section>
+        </aside>
+    </div>
+
+    <div class="key-card-history-grid">
+        <section class="panel key-history-panel" id="history">
+            <header class="key-card-section-head">
+                <span class="key-card-section-icon"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v6h6M12 7v5l3 2"/></svg></span>
+                <div><small>Неизменяемый журнал</small><h2>История операций</h2></div>
+            </header>
+            <div class="table-scroll key-history-scroll">
+                <table>
+                    <thead><tr><th>Дата</th><th>Операция</th><th>Адрес / квартира</th><th>Панель / MAC</th><th>Оператор</th><th>Результат</th></tr></thead>
+                    <tbody>
+                    {% for item in history %}
+                    <tr>
+                        <td>{{ item.created_at or '—' }}</td>
+                        <td><b>{{ item.action_name }}</b><small>{{ item.comment or item.details_view }}</small></td>
+                        <td>{{ item.address or '—' }}{% if item.apartment or item.flat_num %}<small>кв. {{ item.apartment or item.flat_num }}</small>{% endif %}</td>
+                        <td>{{ item.panel_name or '—' }}<small>{{ item.mac or '' }}</small></td>
+                        <td>{{ item.user_name }}</td>
+                        <td><span class="badge {{ item.status_tone }}">{{ item.status_name }}</span><small>{{ item.response or '' }}</small></td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="6"><div class="keys-empty"><b>История пока пуста</b><span>Операции появятся после использования или изменения ключа.</span></div></td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="panel key-assignment-history-panel">
+            <header class="key-card-section-head">
+                <span class="key-card-section-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="19" r="2"/><path d="M12 7v10"/></svg></span>
+                <div><small>Движение ключа</small><h2>История назначений</h2></div>
+            </header>
+            <div class="key-assignment-timeline">
+                {% for item in assignments %}
+                <div class="{% if item.active %}is-active{% endif %}">
+                    <i></i>
+                    <span><b>{% if item.assignment_type == 'resident' %}{{ item.address }}{% if item.apartment %} / кв. {{ item.apartment }}{% endif %}{% elif item.assignment_type == 'employee' %}{{ item.employee_name or 'Сотрудник' }}{% else %}{{ item.uk_name or 'УК' }}{% endif %}</b><small>{{ item.assigned_at }}{% if item.released_at %} — {{ item.released_at }}{% endif %}</small></span>
+                    <em>{% if item.active %}Текущее{% else %}Завершено{% endif %}</em>
+                </div>
+                {% else %}
+                <div class="is-empty"><span>Назначений пока не было.</span></div>
+                {% endfor %}
+            </div>
+        </section>
+    </div>
+</div>
+
+<script>
+document.querySelectorAll("form[data-confirm]").forEach((form) => {
+    form.addEventListener("submit", (event) => {
+        if (!window.confirm(form.dataset.confirm)) event.preventDefault();
+    });
+});
+</script>
+{% endblock %}

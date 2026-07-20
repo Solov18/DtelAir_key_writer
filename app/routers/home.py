@@ -5,6 +5,7 @@ from app.db import db
 from app.settings import settings
 from app.templates_config import templates
 from app.repositories.log_repository import get_recent_operations
+from app.services.crm import crm_auth_configured
 
 router = APIRouter()
 
@@ -37,5 +38,6 @@ def index(request: Request):
             "stats": stats,
             "recent_operations": get_recent_operations(5),
             "dry_run": settings.dry_run,
+            "crm_ready": crm_auth_configured(),
         },
     )

@@ -1,5 +1,7 @@
 from app.db import db
-from app.services.keys import find_key, normalize_hex_value
+from app.repositories.log_repository import normalize_operation_row
+from app.repositories.key_repository import get_keys_page
+from app.services.keys import find_keys, normalize_hex_value
 
 
 def universal_search(query: str):
@@ -12,28 +14,40 @@ def universal_search(query: str):
         "last_operation": None,
         "history": [],
         "address_results": [],
+        "inventory_results": [],
     }
 
     if not query:
         return result
 
-    key = find_key(query)
+    key_matches = find_keys(query)
+    key = key_matches[0] if len(key_matches) == 1 else None
     result["key"] = key
+    result["inventory_results"] = get_keys_page(
+        query=query,
+        page=1,
+        page_size=50,
+    )["items"]
 
     with db() as conn:
         if key:
             history = [
-                dict(row)
+                normalize_operation_row(dict(row))
                 for row in conn.execute(
                     """
                     SELECT *
                     FROM operation_log
-                    WHERE printed_number = ?
-                       OR UPPER(hex_value) = ?
+                    WHERE key_id = ?
+                       OR (
+                            key_id IS NULL
+                            AND printed_number = ?
+                            AND UPPER(hex_value) = ?
+                       )
                     ORDER BY id DESC
                     LIMIT 50
                     """,
                     (
+                        key.get("id"),
                         key.get("number", ""),
                         key.get("hex_value", "").upper(),
                     ),
@@ -44,7 +58,7 @@ def universal_search(query: str):
             result["last_operation"] = history[0] if history else None
 
         result["address_results"] = [
-            dict(row)
+            normalize_operation_row(dict(row))
             for row in conn.execute(
                 """
                 SELECT *

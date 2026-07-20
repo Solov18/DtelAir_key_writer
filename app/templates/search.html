@@ -85,6 +85,30 @@
 
 </div>
 
+{% if result and result.inventory_results %}
+<div class="panel search-address-panel">
+    <h2>Ключи в учётной базе</h2>
+    <p class="subtitle">Совпадения по номеру, HEX, типу, статусу, назначению или комментарию.</p>
+    <div class="table-scroll search-scroll">
+        <table>
+            <thead><tr><th>Номер</th><th>Тип</th><th>HEX</th><th>Статус</th><th>Текущее назначение</th><th></th></tr></thead>
+            <tbody>
+            {% for key in result.inventory_results %}
+            <tr>
+                <td><b>№{{ key.number }}</b></td>
+                <td>{{ key.type_name }}</td>
+                <td>{{ key.hex_value or 'Не считан' }}</td>
+                <td><span class="key-status is-{{ key.status_tone }}">{{ key.status_name }}</span></td>
+                <td>{{ key.assignment_text }}</td>
+                <td><a class="btn-small btn-ghost" href="/keys/{{ key.id }}">Открыть</a></td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
 {% if result and result.key %}
 <div class="search-result-grid">
 
@@ -160,12 +184,12 @@
                     <td>{{ row.apartment or row.flat_num or '—' }}</td>
                     <td>{{ row.panel_name or '—' }}</td>
                     <td>
-                        {% if row.status == 'DRY_RUN' %}
-                            <span class="badge dry-run">Тест</span>
-                        {% elif row.status == 'ERROR' or row.status == 'NO_COOKIE' %}
-                            <span class="badge error">{{ row.status }}</span>
+                        {% if row.status_tone == 'warning' %}
+                            <span class="badge dry-run">{{ row.status_name }}</span>
+                        {% elif row.status_tone == 'error' %}
+                            <span class="badge error">{{ row.status_name }}</span>
                         {% else %}
-                            <span class="badge success">{{ row.status }}</span>
+                            <span class="badge success">{{ row.status_name }}</span>
                         {% endif %}
                     </td>
                 </tr>
@@ -207,12 +231,12 @@
                 <td>{{ row.apartment or row.flat_num or '—' }}</td>
                 <td>{{ row.panel_name or '—' }}</td>
                 <td>
-                    {% if row.status == 'DRY_RUN' %}
-                        <span class="badge dry-run">Тест</span>
-                    {% elif row.status == 'ERROR' or row.status == 'NO_COOKIE' %}
-                        <span class="badge error">{{ row.status }}</span>
+                    {% if row.status_tone == 'warning' %}
+                        <span class="badge dry-run">{{ row.status_name }}</span>
+                    {% elif row.status_tone == 'error' %}
+                        <span class="badge error">{{ row.status_name }}</span>
                     {% else %}
-                        <span class="badge success">{{ row.status }}</span>
+                        <span class="badge success">{{ row.status_name }}</span>
                     {% endif %}
                 </td>
             </tr>
@@ -223,7 +247,7 @@
 </div>
 {% endif %}
 
-{% if result and not result.key and not result.history and not result.address_results %}
+{% if result and not result.key and not result.history and not result.address_results and not result.inventory_results %}
 <div class="panel compact-alert">
     <h2 class="warn">Ничего не найдено</h2>
     <p>Проверь номер ключа, HEX, адрес или квартиру.</p>

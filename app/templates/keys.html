@@ -3,157 +3,407 @@
 {% block page_name %}База ключей{% endblock %}
 
 {% block content %}
-<div class="hero-title">
-    <h1>База ключей</h1>
-    <p class="subtitle">
-        Импорт, проверка и поиск ключей в локальной базе системы.
-    </p>
+<div class="keys-page keys-console-page">
+    <header class="hero-title keys-hero keys-console-hero">
+        <div>
+            <h1>База ключей</h1>
+            <p class="subtitle">Управление ключами разных типов, их статусами и назначениями.</p>
+        </div>
+    </header>
+
+    {% if message %}<div class="keys-notice is-success">{{ message }}</div>{% endif %}
+    {% if error %}<div class="keys-notice is-error">{{ error }}</div>{% endif %}
+
+    {% if import_report %}
+    <section class="panel keys-import-result">
+        <div><h2>Импорт завершён</h2><p class="subtitle">Файл обработан, исходные данные сохранены.</p></div>
+        <div class="keys-import-result-grid">
+            <span><b>{{ import_report.created_types }}</b> типов создано</span>
+            <span><b>{{ import_report.added }}</b> ключей добавлено</span>
+            <span><b>{{ import_report.updated }}</b> обновлено</span>
+            <span><b>{{ import_report.duplicates }}</b> дубликатов</span>
+            <span class="{% if import_report.errors %}has-errors{% endif %}"><b>{{ import_report.errors }}</b> ошибок</span>
+        </div>
+    </section>
+    {% endif %}
+
+    <section class="keys-stat-grid keys-console-stats" aria-label="Статистика ключей">
+        <div class="panel keys-stat-card is-total">
+            <span class="keys-stat-icon"><svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M16 7l3 3M14 9l2 2"/></svg></span>
+            <span><small>Всего ключей</small><b>{{ statistics.total }}</b></span>
+        </div>
+        <div class="panel keys-stat-card is-free">
+            <span class="keys-stat-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg></span>
+            <span><small>Свободных</small><b>{{ statistics.free }}</b></span>
+        </div>
+        <div class="panel keys-stat-card is-resident">
+            <span class="keys-stat-icon"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="10" r="2.5"/><path d="M3 20a6 6 0 0 1 12 0M14 15a5 5 0 0 1 7 4.5"/></svg></span>
+            <span><small>Выдано жильцам</small><b>{{ statistics.residents }}</b></span>
+        </div>
+        <div class="panel keys-stat-card is-employee">
+            <span class="keys-stat-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>
+            <span><small>У сотрудников</small><b>{{ statistics.employees }}</b></span>
+        </div>
+        <div class="panel keys-stat-card is-uk">
+            <span class="keys-stat-icon"><svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></svg></span>
+            <span><small>У УК</small><b>{{ statistics.uk }}</b></span>
+        </div>
+        <div class="panel keys-stat-card is-blocked">
+            <span class="keys-stat-icon"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span>
+            <span><small>Заблокировано</small><b>{{ statistics.blocked }}</b></span>
+        </div>
+    </section>
+
+    <div class="keys-console-workspace">
+        <section class="panel keys-console-main">
+            <div class="keys-console-toolbar">
+                <button type="button" class="btn" data-keys-modal="keyTypesModal">
+                    <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+                    Добавить тип ключа
+                </button>
+                <button type="button" class="btn" data-keys-modal="keyPrepareModal">
+                    <svg viewBox="0 0 24 24"><circle cx="9" cy="15" r="4"/><path d="m12 12 8-8M16 8l3 3"/></svg>
+                    Подготовить ключи
+                </button>
+                <button type="button" class="btn btn-ghost" data-keys-modal="keyImportModal">
+                    <svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM14 3v5h5M9 15h6M12 12v6"/></svg>
+                    Импорт Excel
+                </button>
+                <a class="btn btn-ghost" href="/keys/export">
+                    <svg viewBox="0 0 24 24"><path d="M12 3v12M8 11l4 4 4-4M4 20h16"/></svg>
+                    Экспорт
+                </a>
+            </div>
+
+            <form method="get" action="/keys" class="keys-console-filters">
+                <div class="keys-console-search">
+                    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg>
+                    <input name="q" value="{{ filters.q }}" placeholder="Поиск по номеру, HEX, адресу, сотруднику..." aria-label="Поиск ключей">
+                </div>
+                <label class="keys-console-select">
+                    <span>Тип ключа</span>
+                    <select name="key_type_id">
+                        <option value="0">Все типы</option>
+                        {% for key_type in key_types %}
+                        <option value="{{ key_type.id }}" {% if filters.key_type_id == key_type.id %}selected{% endif %}>{{ key_type.name }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label class="keys-console-select">
+                    <span>Статус</span>
+                    <select name="status">
+                        <option value="">Все статусы</option>
+                        {% for value, label in key_statuses.items() %}
+                        <option value="{{ value }}" {% if filters.status == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label class="keys-free-toggle">
+                    <input type="checkbox" name="availability" value="free" {% if filters.availability == 'free' %}checked{% endif %}>
+                    <i></i><span>Только свободные</span>
+                </label>
+                <button type="submit" class="btn-small keys-apply-filter">Показать</button>
+                {% if filters.q or filters.key_type_id or filters.status or filters.availability or filters.added_from or filters.added_to or filters.assigned_from or filters.assigned_to %}
+                <a href="/keys" class="btn-small btn-ghost keys-reset-filter" title="Сбросить фильтры">
+                    <svg viewBox="0 0 24 24"><path d="M4 4v6h6M20 20v-6h-6M5.5 15a8 8 0 0 0 13-7M18.5 9a8 8 0 0 0-13 7"/></svg>
+                    Сбросить
+                </a>
+                {% endif %}
+                <details class="keys-advanced-filters" {% if filters.added_from or filters.added_to or filters.assigned_from or filters.assigned_to or filters.availability == 'used' %}open{% endif %}>
+                    <summary>Фильтр по периодам</summary>
+                    <div>
+                        <label><span>Занятость</span><select name="availability" data-availability-select {% if filters.availability == 'free' %}disabled{% endif %}><option value="">Все ключи</option><option value="used" {% if filters.availability == 'used' %}selected{% endif %}>Только занятые</option></select></label>
+                        <label><span>Добавлен с</span><input type="date" name="added_from" value="{{ filters.added_from }}"></label>
+                        <label><span>Добавлен по</span><input type="date" name="added_to" value="{{ filters.added_to }}"></label>
+                        <label><span>Выдан с</span><input type="date" name="assigned_from" value="{{ filters.assigned_from }}"></label>
+                        <label><span>Выдан по</span><input type="date" name="assigned_to" value="{{ filters.assigned_to }}"></label>
+                    </div>
+                </details>
+            </form>
+
+            <div class="table-scroll keys-table-scroll keys-console-table-scroll">
+                <table class="keys-register-table keys-console-table">
+                    <thead><tr>
+                        <th>№</th><th>Тип ключа</th><th>Номер</th><th>HEX</th><th>Статус</th>
+                        <th>Адрес / назначение</th><th>Квартира / сотрудник</th><th>Дата добавления</th><th>Действия</th>
+                    </tr></thead>
+                    <tbody>
+                    {% for key in keys %}
+                    <tr class="{% if selected_key and selected_key.id == key.id %}is-selected{% endif %}" data-select-url="/keys?{{ row_query }}&selected_key_id={{ key.id }}">
+                        <td class="keys-row-index">{{ row_offset + loop.index }}</td>
+                        <td><span class="key-type-chip"><i style="--key-type-color: {{ key.type_color }}"></i>{{ key.type_name }}</span></td>
+                        <td><a class="keys-number-link" href="/keys/{{ key.id }}">{{ key.number }}</a></td>
+                        <td><code class="keys-hex{% if not key.hex_value %} is-empty{% endif %}">{{ key.hex_value or 'Не считан' }}</code></td>
+                        <td><span class="key-status is-{{ key.status_tone }}">{{ key.status_name }}</span></td>
+                        <td>
+                            <span class="keys-assignment-main">
+                                {% if key.assignment_type == 'resident' %}{{ key.assignment_address or 'Жилец' }}
+                                {% elif key.assignment_type == 'employee' %}{{ key.employee_name or 'Сотрудник' }}
+                                {% elif key.assignment_type == 'uk' %}{{ key.uk_name or 'УК' }}
+                                {% else %}—{% endif %}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="keys-assignment-detail">
+                                {% if key.assignment_type == 'resident' and key.assignment_apartment %}кв. {{ key.assignment_apartment }}
+                                {% elif key.assignment_type == 'employee' %}Сотрудник
+                                {% elif key.assignment_type == 'uk' %}Управляющая компания
+                                {% else %}—{% endif %}
+                            </span>
+                        </td>
+                        <td><span class="keys-date">{{ key.created_at[:16] if key.created_at else '—' }}</span></td>
+                        <td>
+                            <div class="keys-row-actions">
+                                <a href="/keys?{{ row_query }}&selected_key_id={{ key.id }}" class="keys-icon-action" title="Показать справа" aria-label="Показать ключ">
+                                    <svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></svg>
+                                </a>
+                                <a href="/keys/{{ key.id }}#key-edit" class="keys-icon-action" title="Редактировать" aria-label="Редактировать ключ">
+                                    <svg viewBox="0 0 24 24"><path d="m4 20 4.5-1 10-10-3.5-3.5-10 10Z"/><path d="m13.5 7 3.5 3.5"/></svg>
+                                </a>
+                                <a href="/keys/{{ key.id }}" class="keys-icon-action" title="Открыть карточку" aria-label="Открыть карточку ключа">
+                                    <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="9"><div class="keys-empty"><b>Ключи не найдены</b><span>Измените фильтры или подготовьте новую партию.</span></div></td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <footer class="keys-console-table-footer">
+                <span>Показано {{ row_offset + (1 if keys else 0) }}–{{ row_offset + (keys|length) }} из {{ key_page.total }}</span>
+                {% if key_page.pages > 1 %}
+                <nav class="keys-pagination" aria-label="Страницы реестра">
+                    {% if key_page.page > 1 %}<a class="keys-page-button" href="?{{ base_query }}&page={{ key_page.page - 1 }}{% if selected_key %}&selected_key_id={{ selected_key.id }}{% endif %}" aria-label="Предыдущая страница">←</a>{% endif %}
+                    <span class="is-current">{{ key_page.page }}</span>
+                    {% if key_page.page < key_page.pages %}<span>из {{ key_page.pages }}</span><a class="keys-page-button" href="?{{ base_query }}&page={{ key_page.page + 1 }}{% if selected_key %}&selected_key_id={{ selected_key.id }}{% endif %}" aria-label="Следующая страница">→</a>{% endif %}
+                </nav>
+                {% endif %}
+            </footer>
+        </section>
+
+        <aside class="keys-console-sidebar">
+            {% if selected_key %}
+            <section class="panel keys-side-card keys-selected-card">
+                <header>
+                    <span class="keys-side-icon"><svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M16 7l3 3"/></svg></span>
+                    <div><small>Выбранный ключ</small><h2>Ключ №{{ selected_key.number }}</h2></div>
+                    <a href="/keys/{{ selected_key.id }}" class="keys-card-open" title="Полная карточка">↗</a>
+                </header>
+                <dl class="keys-side-facts">
+                    <div><dt>Тип ключа</dt><dd><span class="key-type-chip"><i style="--key-type-color: {{ selected_key.type_color }}"></i>{{ selected_key.type_name }}</span></dd></div>
+                    <div><dt>Номер</dt><dd>{{ selected_key.number }}</dd></div>
+                    <div><dt>HEX</dt><dd><code>{{ selected_key.hex_value or 'Не считан' }}</code></dd></div>
+                    <div><dt>Статус</dt><dd><span class="key-status is-{{ selected_key.status_tone }}">{{ selected_key.status_name }}</span></dd></div>
+                    <div><dt>Комментарий</dt><dd>{{ selected_key.note or '—' }}</dd></div>
+                    <div><dt>Дата добавления</dt><dd>{{ selected_key.created_at[:16] if selected_key.created_at else '—' }}</dd></div>
+                    <div><dt>Кем добавлен</dt><dd>{{ selected_key.created_by or 'Система' }}</dd></div>
+                </dl>
+            </section>
+
+            <section class="panel keys-side-card keys-current-card">
+                <header><div><small>Состояние</small><h2>Текущее назначение</h2></div><span class="key-status is-{{ selected_key.status_tone }}">{{ selected_key.status_name }}</span></header>
+                {% if selected_key.assignment_type %}
+                <div class="keys-current-summary">
+                    <b>{{ selected_key.assignment_text }}</b>
+                    <span>Назначен {{ selected_key.assigned_at[:16] if selected_key.assigned_at else '—' }}</span>
+                </div>
+                <form method="post" action="/keys/{{ selected_key.id }}/release" class="keys-side-release">
+                    <input type="hidden" name="note" value="Освобождён из реестра ключей">
+                    <button class="btn btn-ghost" type="submit">Освободить ключ</button>
+                </form>
+                {% else %}
+                <p class="keys-side-empty">Ключ сейчас не назначен жильцу, сотруднику или УК.</p>
+                {% endif %}
+                {% if selected_key.hex_value and selected_key.status not in ('blocked', 'lost', 'defective', 'archived') %}
+                <a class="btn keys-side-write" href="/write/manual?key_query={{ selected_key.number|urlencode }}&key_type_id={{ selected_key.key_type_id }}">Прописать на панель</a>
+                {% endif %}
+            </section>
+
+            <section class="panel keys-side-card keys-history-preview">
+                <header><div><small>Последние события</small><h2>История операций</h2></div><a href="/keys/{{ selected_key.id }}#history">Вся история</a></header>
+                <div class="keys-history-mini-list">
+                    {% for item in selected_history %}
+                    <article>
+                        <i class="is-{{ item.status_tone }}"></i>
+                        <div><b>{{ item.action_name }}</b><span>{{ item.details_view }}</span><small>{{ item.created_at[:16] if item.created_at else '—' }} · {{ item.user_name }}</small></div>
+                    </article>
+                    {% else %}
+                    <p class="keys-side-empty">Для этого ключа пока нет операций.</p>
+                    {% endfor %}
+                </div>
+            </section>
+            {% else %}
+            <section class="panel keys-side-card"><div class="keys-empty"><b>Выберите ключ</b><span>Карточка появится здесь.</span></div></section>
+            {% endif %}
+        </aside>
+    </div>
 </div>
 
-<div class="keys-layout">
-
-    <div class="panel keys-import-panel">
-        <h2>Импорт ключей</h2>
-        <p class="subtitle keys-import-subtitle">
-            Загрузите Excel или CSV-файл с номерами ключей, HEX и типом.
-        </p>
-
-        <form method="post" action="/keys/import" enctype="multipart/form-data">
-            <label>Файл с ключами</label>
-
-            <input
-                type="file"
-                name="file"
-                accept=".xlsx,.xls,.xlsm,.csv"
-                required
-            >
-
-            <button type="submit" class="btn keys-main-btn">
-                Импортировать ключи
-            </button>
+<div class="modal-backdrop" id="keyPrepareModal" data-dismiss="explicit" role="dialog" aria-modal="true" aria-labelledby="keyPrepareModalTitle">
+    <div class="modal-window panel keys-modal-window">
+        <div class="modal-head">
+            <div><h2 id="keyPrepareModalTitle">Подготовить ключи</h2><p class="subtitle">Создайте последовательность номеров для считывателя.</p></div>
+            <button type="button" class="btn-small btn-ghost modal-close" data-close="keyPrepareModal">Закрыть</button>
+        </div>
+        <form method="post" action="/keys/prepare" class="keys-modal-form">
+            <label>Тип ключа</label>
+            <select name="key_type_id" id="prepareKeyType" required>
+                {% for key_type in active_key_types %}
+                <option
+                    value="{{ key_type.id }}"
+                    data-last-number="{{ key_type.last_number }}"
+                    data-next-number="{{ key_type.next_number }}"
+                >{{ key_type.name }} — {{ key_type.keys_count_text }}{% if key_type.last_number %} · последний №{{ key_type.last_number }}{% else %} · нумерация не начата{% endif %}</option>
+                {% endfor %}
+            </select>
+            <div class="keys-sequence-hint" id="keySequenceHint" aria-live="polite">
+                <div>
+                    <small>Последний номер этого типа</small>
+                    <b id="lastKeyNumber">—</b>
+                </div>
+                <span class="keys-sequence-arrow">→</span>
+                <div>
+                    <small>Рекомендуем начать с</small>
+                    <b id="nextKeyNumber">—</b>
+                </div>
+                <button type="button" class="btn-small btn-ghost" id="useNextKeyNumber">Подставить</button>
+            </div>
+            <div class="keys-form-row">
+                <div><label>Начальный номер</label><input type="text" inputmode="numeric" pattern="[0-9]+" name="start_number" id="prepareStartNumber" placeholder="Введите первый номер" autocomplete="off" required></div>
+                <div><label>Количество</label><input type="number" min="1" max="1000" name="count" value="100" required></div>
+            </div>
+            <button type="submit" class="btn">Создать строки</button>
         </form>
     </div>
-
-    <div class="panel keys-help-panel">
-        <h2>Формат файла</h2>
-
-        <div class="help-list keys-help-list">
-
-            <div>
-                <span class="help-icon">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M8 3h8l2 3v15H6V6z"/>
-                        <path d="M9 10h6M9 14h6M9 18h3"/>
-                    </svg>
-                </span>
-
-                <p>
-                    <b>Номер</b>
-                    <span>39107 или 001101</span>
-                </p>
-            </div>
-
-            <div>
-                <span class="help-icon">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M4 7h16"/>
-                        <path d="M4 12h16"/>
-                        <path d="M4 17h16"/>
-                    </svg>
-                </span>
-
-                <p>
-                    <b>HEX</b>
-                    <span>363FFAD7</span>
-                </p>
-            </div>
-
-            <div>
-                <span class="help-icon">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M20 12l-8 8-8-8 8-8z"/>
-                        <path d="M12 4v16"/>
-                    </svg>
-                </span>
-
-                <p>
-                    <b>Тип</b>
-                    <span>простой, бесплатный, стикер</span>
-                </p>
-            </div>
-
-        </div>
-    </div>
-
 </div>
 
-<div class="panel keys-list-panel">
-    <div class="panel-list-head">
-        <div>
-            <h2>Последние ключи</h2>
-            <p class="subtitle">
-                Всего показано: <span id="keysFound">{{ keys|length }}</span>
-            </p>
+<div class="modal-backdrop" id="keyImportModal">
+    <div class="modal-window panel keys-modal-window">
+        <div class="modal-head">
+            <div><h2>Импорт из Excel</h2><p class="subtitle">Каждый лист файла будет отдельным типом ключа.</p></div>
+            <button type="button" class="btn-small btn-ghost modal-close" data-close="keyImportModal">Закрыть</button>
         </div>
-
-        <div class="panel-search">
-            <input
-                type="text"
-                id="keysSearch"
-                placeholder="Поиск по номеру, HEX или типу..."
-                autocomplete="off"
-            >
-        </div>
+        <form method="post" action="/keys/import" enctype="multipart/form-data" class="keys-modal-form">
+            <label>Excel или CSV</label>
+            <input type="file" name="file" accept=".xlsx,.xlsm,.csv" required>
+            <div class="keys-format-note">
+                Поддерживаются колонки: Номер, №, Number, HEX, Код, Тип, Комментарий.
+            </div>
+            <button type="submit" class="btn">Импортировать</button>
+        </form>
     </div>
+</div>
 
-    <div class="table-scroll">
-        <table id="keysTable">
-            <thead>
-            <tr>
-                <th>ID</th>
-                <th>Номер</th>
-                <th>HEX</th>
-                <th>Тип</th>
-            </tr>
-            </thead>
+<div class="modal-backdrop" id="keyTypesModal">
+    <div class="modal-window panel keys-modal-window is-wide">
+        <div class="modal-head">
+            <div><h2>Типы ключей</h2><p class="subtitle">Справочник расширяется без изменения программы.</p></div>
+            <button type="button" class="btn-small btn-ghost modal-close" data-close="keyTypesModal">Закрыть</button>
+        </div>
 
-            <tbody>
-            {% for k in keys %}
-            <tr>
-                <td>{{ k.id }}</td>
-                <td><b>{{ k.number }}</b></td>
-                <td>{{ k.hex_value }}</td>
-                <td>{{ k.key_type or '—' }}</td>
-            </tr>
+        <form method="post" action="/keys/types" class="key-type-create-form">
+            <div><label>Название</label><input name="name" placeholder="Например: Синий" required></div>
+            <div><label>Цвет</label><input type="color" name="color" value="#2A9DF4"></div>
+            <div><label>Комментарий</label><input name="note" placeholder="Назначение или примечание"></div>
+            <button type="submit" class="btn">Добавить тип</button>
+        </form>
+
+        <div class="key-types-list">
+            {% for key_type in key_types %}
+            <form method="post" action="/keys/types/{{ key_type.id }}" class="key-type-row{% if not key_type.enabled %} is-archived{% endif %}">
+                <input type="color" name="color" value="{{ key_type.color }}" aria-label="Цвет типа {{ key_type.name }}">
+                <div><label>Название</label><input name="name" value="{{ key_type.name }}" required></div>
+                <div><label>Комментарий</label><input name="note" value="{{ key_type.note or '' }}"></div>
+                <span class="key-type-count"><b>{{ key_type.keys_count }}</b> ключей</span>
+                <label class="key-type-enabled"><input type="checkbox" name="enabled" value="1" {% if key_type.enabled %}checked{% endif %}><span>Активен</span></label>
+                <button type="submit" class="btn-small btn-ghost">Сохранить</button>
+            </form>
             {% endfor %}
-            </tbody>
-        </table>
+        </div>
     </div>
 </div>
 
 <script>
-const keysSearch = document.getElementById("keysSearch");
-const keysTable = document.getElementById("keysTable");
-const keysFound = document.getElementById("keysFound");
-
-if (keysSearch && keysTable && keysFound) {
-    const rows = Array.from(keysTable.querySelectorAll("tbody tr"));
-
-    keysSearch.addEventListener("input", function () {
-        const query = this.value.toLowerCase().trim();
-        let visible = 0;
-
-        rows.forEach((row) => {
-            const match = row.innerText.toLowerCase().includes(query);
-            row.style.display = match ? "" : "none";
-
-            if (match) {
-                visible += 1;
-            }
-        });
-
-        keysFound.textContent = visible;
+document.querySelectorAll("[data-keys-modal]").forEach((button) => {
+    button.addEventListener("click", () => {
+        const modal = document.getElementById(button.dataset.keysModal);
+        if (modal) modal.classList.add("active");
     });
+});
+
+document.querySelectorAll(".modal-close").forEach((button) => {
+    button.addEventListener("click", () => {
+        const modal = document.getElementById(button.dataset.close);
+        if (modal) modal.classList.remove("active");
+    });
+});
+
+document.querySelectorAll(".modal-backdrop").forEach((modal) => {
+    modal.addEventListener("click", (event) => {
+        if (event.target === modal && modal.dataset.dismiss !== "explicit") {
+            modal.classList.remove("active");
+        }
+    });
+});
+
+document.addEventListener("keydown", (event) => {
+    const prepareModal = document.getElementById("keyPrepareModal");
+    if (event.key === "Escape" && prepareModal?.classList.contains("active")) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+    }
+}, true);
+
+const prepareKeyType = document.getElementById("prepareKeyType");
+const prepareStartNumber = document.getElementById("prepareStartNumber");
+const lastKeyNumber = document.getElementById("lastKeyNumber");
+const nextKeyNumber = document.getElementById("nextKeyNumber");
+const useNextKeyNumber = document.getElementById("useNextKeyNumber");
+
+function updateKeySequenceSuggestion(fillStart = false) {
+    const option = prepareKeyType?.selectedOptions[0];
+    const lastNumber = option?.dataset.lastNumber || "";
+    const suggestedNumber = option?.dataset.nextNumber || "";
+
+    if (lastKeyNumber) lastKeyNumber.textContent = lastNumber ? `№${lastNumber}` : "Номеров пока нет";
+    if (nextKeyNumber) nextKeyNumber.textContent = suggestedNumber ? `№${suggestedNumber}` : "Задайте первый номер";
+    if (useNextKeyNumber) useNextKeyNumber.disabled = !suggestedNumber;
+
+    if (fillStart && prepareStartNumber) {
+        prepareStartNumber.value = suggestedNumber;
+        prepareStartNumber.dataset.suggested = suggestedNumber;
+    }
 }
+
+prepareKeyType?.addEventListener("change", () => updateKeySequenceSuggestion(true));
+useNextKeyNumber?.addEventListener("click", () => {
+    updateKeySequenceSuggestion(true);
+    prepareStartNumber?.focus();
+    prepareStartNumber?.select();
+});
+updateKeySequenceSuggestion(true);
+
+const keysFilterForm = document.querySelector(".keys-console-filters");
+const freeToggle = keysFilterForm?.querySelector('input[name="availability"][type="checkbox"]');
+const availabilitySelect = keysFilterForm?.querySelector("[data-availability-select]");
+if (freeToggle && availabilitySelect) {
+    const syncAvailability = () => {
+        availabilitySelect.disabled = freeToggle.checked;
+        if (freeToggle.checked) availabilitySelect.value = "";
+    };
+    freeToggle.addEventListener("change", syncAvailability);
+    syncAvailability();
+}
+
+document.querySelectorAll("[data-select-url]").forEach((row) => {
+    row.addEventListener("click", (event) => {
+        if (event.target.closest("a, button, input, select, label")) return;
+        window.location.href = row.dataset.selectUrl;
+    });
+});
 </script>
 {% endblock %}

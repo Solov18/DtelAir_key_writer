@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Request, Form
 from fastapi.responses import HTMLResponse
 
-from app.db import db
+from app.repositories.key_repository import get_key_types
 from app.services import (
+    find_key,
     find_panels_by_address,
     get_panels,
+    is_ambiguous_key,
     write_key_to_panels,
 )
 from app.templates_config import templates
@@ -28,66 +30,24 @@ def is_hex_like(value: str) -> bool:
 
 
 def universal_find_key(query: str):
-    q = query.strip()
-
-    if not q:
-        return None
-
-    hex_candidate = normalize_hex(q)
-
-    with db() as conn:
-        row = conn.execute(
-            """
-            SELECT *
-            FROM keys
-            WHERE number = ?
-            LIMIT 1
-            """,
-            (q,),
-        ).fetchone()
-
-        if row:
-            return dict(row)
-
-        row = conn.execute(
-            """
-            SELECT *
-            FROM keys
-            WHERE number = ?
-            LIMIT 1
-            """,
-            (q.replace(" ", ""),),
-        ).fetchone()
-
-        if row:
-            return dict(row)
-
-        if is_hex_like(q):
-            row = conn.execute(
-                """
-                SELECT *
-                FROM keys
-                WHERE UPPER(hex_value) = ?
-                LIMIT 1
-                """,
-                (hex_candidate,),
-            ).fetchone()
-
-            if row:
-                return dict(row)
-
-    return None
+    return find_key(query)
 
 
 @router.get("/write/manual", response_class=HTMLResponse)
-def manual_write_form(request: Request):
+def manual_write_form(
+    request: Request,
+    key_query: str = "",
+    key_type_id: int = 0,
+):
     return templates.TemplateResponse(
         "manual_write.html",
         {
             "request": request,
             "key": None,
             "panels": [],
-            "query": "",
+            "query": key_query,
+            "key_type_id": key_type_id,
+            "key_types": get_key_types(include_archived=False),
             "address": "",
             "apartment": "",
             "error": None,
@@ -101,13 +61,17 @@ def manual_write_preview(
     key_query: str = Form(...),
     address: str = Form(...),
     apartment: str = Form(""),
+    key_type_id: int = Form(0),
 ):
-    key = universal_find_key(key_query)
+    key = find_key(key_query, key_type_id or None)
     panels = find_panels_by_address(address)
 
     error = None
 
-    if not key:
+    if is_ambiguous_key(key):
+        error = "Номер встречается в нескольких типах. Выберите тип ключа."
+        key = None
+    elif not key:
         error = "Ключ не найден в базе"
     elif not panels:
         error = "Панели по этому адресу не найдены"
@@ -119,6 +83,8 @@ def manual_write_preview(
             "key": key,
             "panels": panels,
             "query": key_query,
+            "key_type_id": key_type_id,
+            "key_types": get_key_types(include_archived=False),
             "address": address,
             "apartment": apartment,
             "error": error,
@@ -134,8 +100,12 @@ def manual_write_execute(
     apartment: str = Form(""),
     inner: int = Form(1),
     panel_ids: list[int] = Form([]),
+    key_type_id: int = Form(0),
 ):
-    key = universal_find_key(key_query)
+    key = find_key(key_query, key_type_id or None)
+
+    if is_ambiguous_key(key):
+        key = None
 
     if panel_ids:
         panels = get_panels(panel_ids=panel_ids)

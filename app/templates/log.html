@@ -61,9 +61,9 @@
                 <td>{{ r.details_view }}</td>
 
                 <td>
-                    {% if r.status_name == 'Ошибка' or r.status_name == 'Ошибка CRM' %}
+                    {% if r.status_tone == 'error' %}
                         <span class="badge error">{{ r.status_name }}</span>
-                    {% elif r.status_name == 'Тест' %}
+                    {% elif r.status_tone == 'warning' %}
                         <span class="badge dry-run">{{ r.status_name }}</span>
                     {% else %}
                         <span class="badge success">{{ r.status_name }}</span>

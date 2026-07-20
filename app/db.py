@@ -217,19 +217,285 @@ def _create_employee_key_indexes(conn: sqlite3.Connection) -> None:
     )
 
 
+def _create_keys_v2_table(
+    conn: sqlite3.Connection,
+    table_name: str = "keys",
+) -> None:
+    conn.execute(
+        f"""
+        CREATE TABLE {table_name} (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            key_type_id INTEGER NOT NULL,
+            number TEXT NOT NULL,
+            hex_value TEXT NOT NULL DEFAULT '',
+            key_type TEXT DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'free',
+            note TEXT DEFAULT '',
+            is_used INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            created_by TEXT DEFAULT '',
+            FOREIGN KEY(key_type_id)
+                REFERENCES key_types(id)
+                ON DELETE RESTRICT
+        )
+        """
+    )
+
+
+def _ensure_default_key_type(conn: sqlite3.Connection) -> int:
+    row = conn.execute(
+        "SELECT id FROM key_types WHERE name = ? COLLATE NOCASE",
+        ("Без типа",),
+    ).fetchone()
+
+    if row:
+        return int(row["id"])
+
+    cursor = conn.execute(
+        """
+        INSERT INTO key_types(name, color, note, enabled)
+        VALUES (?, ?, ?, 1)
+        """,
+        (
+            "Без типа",
+            "#2A9DF4",
+            "Тип для ключей, перенесённых из старой базы",
+        ),
+    )
+    return int(cursor.lastrowid)
+
+
+def _create_key_indexes(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_keys_type_number
+        ON keys(key_type_id, number COLLATE NOCASE)
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_keys_hex_lookup
+        ON keys(hex_value COLLATE NOCASE)
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_keys_status
+        ON keys(status, key_type_id)
+        """
+    )
+
+
+def _migrate_keys_inventory(conn: sqlite3.Connection) -> None:
+    """Переносит старую таблицу keys в учёт по типу без потери ID."""
+    columns = _get_table_columns(conn, "keys")
+
+    if "key_type_id" in columns and "status" in columns:
+        default_type_id = _ensure_default_key_type(conn)
+        conn.execute(
+            """
+            UPDATE keys
+            SET key_type_id = ?,
+                key_type = 'Без типа'
+            WHERE key_type_id IS NULL
+            """,
+            (default_type_id,),
+        )
+        _create_key_indexes(conn)
+        return
+
+    default_type_id = _ensure_default_key_type(conn)
+    legacy_types = conn.execute(
+        """
+        SELECT DISTINCT TRIM(COALESCE(key_type, '')) AS name
+        FROM keys
+        WHERE TRIM(COALESCE(key_type, '')) <> ''
+        """
+    ).fetchall()
+
+    for row in legacy_types:
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO key_types(name, color, note, enabled)
+            VALUES (?, '#2A9DF4', 'Перенесено из старой базы', 1)
+            """,
+            (row["name"],),
+        )
+
+    type_ids = {
+        row["name"].strip().lower(): int(row["id"])
+        for row in conn.execute("SELECT id, name FROM key_types")
+    }
+
+    legacy_rows = conn.execute(
+        """
+        SELECT
+            id,
+            number,
+            hex_value,
+            COALESCE(key_type, '') AS key_type,
+            COALESCE(note, '') AS note,
+            COALESCE(is_used, 0) AS is_used,
+            COALESCE(created_at, CURRENT_TIMESTAMP) AS created_at,
+            COALESCE(updated_at, CURRENT_TIMESTAMP) AS updated_at
+        FROM keys
+        ORDER BY id
+        """
+    ).fetchall()
+
+    conn.commit()
+    conn.execute("PRAGMA foreign_keys = OFF")
+    conn.execute("DROP TABLE IF EXISTS keys_v2")
+    _create_keys_v2_table(conn, "keys_v2")
+
+    for row in legacy_rows:
+        legacy_name = row["key_type"].strip()
+        key_type_id = type_ids.get(legacy_name.lower(), default_type_id)
+        key_type_name = legacy_name or "Без типа"
+        status = "issued_resident" if int(row["is_used"] or 0) else "free"
+
+        conn.execute(
+            """
+            INSERT INTO keys_v2(
+                id,
+                key_type_id,
+                number,
+                hex_value,
+                key_type,
+                status,
+                note,
+                is_used,
+                created_at,
+                updated_at,
+                created_by
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Система')
+            """,
+            (
+                row["id"],
+                key_type_id,
+                str(row["number"]).strip(),
+                str(row["hex_value"] or "").strip().upper(),
+                key_type_name,
+                status,
+                row["note"],
+                int(row["is_used"] or 0),
+                row["created_at"],
+                row["updated_at"],
+            ),
+        )
+
+    conn.execute("DROP TABLE keys")
+    conn.execute("ALTER TABLE keys_v2 RENAME TO keys")
+    conn.commit()
+    conn.execute("PRAGMA foreign_keys = ON")
+    _create_key_indexes(conn)
+
+
+def _seed_key_assignments(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO key_assignments(
+            key_id,
+            assignment_type,
+            employee_id,
+            assigned_at,
+            assigned_by,
+            active,
+            note
+        )
+        SELECT
+            ek.key_id,
+            'employee',
+            ek.employee_id,
+            ek.issued_at,
+            'Система',
+            1,
+            ek.comment
+        FROM employee_keys ek
+        WHERE ek.status = 'active'
+        """
+    )
+
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO key_assignments(
+            key_id,
+            assignment_type,
+            uk_group_id,
+            assigned_at,
+            assigned_by,
+            active,
+            note
+        )
+        SELECT
+            gk.key_id,
+            'uk',
+            gk.group_id,
+            CURRENT_TIMESTAMP,
+            'Система',
+            1,
+            'Перенесено из связи с УК'
+        FROM uk_group_keys gk
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM key_assignments ka
+            WHERE ka.key_id = gk.key_id AND ka.active = 1
+        )
+        """
+    )
+
+    conn.execute(
+        """
+        UPDATE keys
+        SET status = 'issued_employee', is_used = 1
+        WHERE id IN (
+            SELECT key_id FROM key_assignments
+            WHERE assignment_type = 'employee' AND active = 1
+        )
+        """
+    )
+    conn.execute(
+        """
+        UPDATE keys
+        SET status = 'assigned_uk', is_used = 1
+        WHERE id IN (
+            SELECT key_id FROM key_assignments
+            WHERE assignment_type = 'uk' AND active = 1
+        )
+        """
+    )
+
 def init_db():
     with db() as conn:
         conn.executescript(
             """
+            CREATE TABLE IF NOT EXISTS key_types (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE COLLATE NOCASE NOT NULL,
+                color TEXT NOT NULL DEFAULT '#2A9DF4',
+                note TEXT DEFAULT '',
+                enabled INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
             CREATE TABLE IF NOT EXISTS keys (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                number TEXT UNIQUE NOT NULL,
-                hex_value TEXT NOT NULL,
+                key_type_id INTEGER NOT NULL,
+                number TEXT NOT NULL,
+                hex_value TEXT NOT NULL DEFAULT '',
                 key_type TEXT DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'free',
                 note TEXT DEFAULT '',
-                is_used INTEGER DEFAULT 0,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                is_used INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                created_by TEXT DEFAULT '',
+                FOREIGN KEY(key_type_id)
+                    REFERENCES key_types(id)
+                    ON DELETE RESTRICT
             );
 
             CREATE TABLE IF NOT EXISTS employees (
@@ -280,6 +546,24 @@ def init_db():
                 UNIQUE(group_id, key_id)
             );
 
+            CREATE TABLE IF NOT EXISTS key_assignments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                key_id INTEGER NOT NULL,
+                assignment_type TEXT NOT NULL,
+                address TEXT DEFAULT '',
+                apartment TEXT DEFAULT '',
+                employee_id INTEGER DEFAULT NULL,
+                uk_group_id INTEGER DEFAULT NULL,
+                assigned_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                assigned_by TEXT DEFAULT '',
+                released_at TEXT DEFAULT NULL,
+                active INTEGER NOT NULL DEFAULT 1,
+                note TEXT DEFAULT '',
+                FOREIGN KEY(key_id) REFERENCES keys(id) ON DELETE RESTRICT,
+                FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE SET NULL,
+                FOREIGN KEY(uk_group_id) REFERENCES uk_groups(id) ON DELETE SET NULL
+            );
+
             CREATE TABLE IF NOT EXISTS operation_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
 
@@ -292,6 +576,7 @@ def init_db():
                 printed_number TEXT DEFAULT '',
                 hex_value TEXT DEFAULT '',
                 flat_num TEXT DEFAULT '',
+                panel_id INTEGER DEFAULT NULL,
                 mac TEXT DEFAULT '',
                 panel_name TEXT DEFAULT '',
 
@@ -308,8 +593,17 @@ def init_db():
 
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
+
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_key_assignments_one_active
+            ON key_assignments(key_id)
+            WHERE active = 1;
+
+            CREATE INDEX IF NOT EXISTS idx_key_assignments_lookup
+            ON key_assignments(assignment_type, active, assigned_at);
             """
         )
+
+        _migrate_keys_inventory(conn)
 
         # Добавляет IP-адрес в существующую таблицу панелей.
         # Старые данные при этом не удаляются.
@@ -335,6 +629,7 @@ def init_db():
         )
         _migrate_employee_keys(conn)
         _create_employee_key_indexes(conn)
+        _seed_key_assignments(conn)
 
         _add_column_if_missing(
             conn,
@@ -357,10 +652,16 @@ def init_db():
             "details": "details TEXT DEFAULT ''",
             "address": "address TEXT DEFAULT ''",
             "apartment": "apartment TEXT DEFAULT ''",
+            "panel_id": "panel_id INTEGER DEFAULT NULL",
             "username": "username TEXT DEFAULT ''",
             "user_full_name": "user_full_name TEXT DEFAULT ''",
             "user_role": "user_role TEXT DEFAULT ''",
             "ip_address": "ip_address TEXT DEFAULT ''",
+            "key_id": "key_id INTEGER DEFAULT NULL",
+            "key_type": "key_type TEXT DEFAULT ''",
+            "employee_id": "employee_id INTEGER DEFAULT NULL",
+            "uk_group_id": "uk_group_id INTEGER DEFAULT NULL",
+            "comment": "comment TEXT DEFAULT ''",
         }
 
         for column_name, column_sql in operation_log_columns.items():
@@ -370,6 +671,16 @@ def init_db():
                 column_name,
                 column_sql,
             )
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_operation_log_key_id ON operation_log(key_id)"
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_key_assignments_key_history
+            ON key_assignments(key_id, active, assigned_at)
+            """
+        )
 
         user_count = conn.execute(
             "SELECT COUNT(*) FROM users"

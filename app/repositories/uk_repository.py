@@ -1,4 +1,8 @@
 from app.db import db
+from app.repositories.key_repository import (
+    release_key_on_connection,
+    set_key_assignment_on_connection,
+)
 
 
 def get_groups() -> list[dict]:
@@ -126,6 +130,24 @@ def update_group_credentials(
 
 def delete_group(group_id: int) -> None:
     with db() as conn:
+        assigned_keys = conn.execute(
+            """
+            SELECT key_id
+            FROM key_assignments
+            WHERE assignment_type = 'uk'
+              AND uk_group_id = ?
+              AND active = 1
+            """,
+            (group_id,),
+        ).fetchall()
+
+        for item in assigned_keys:
+            release_key_on_connection(
+                conn,
+                int(item["key_id"]),
+                "Управляющая компания удалена",
+            )
+
         conn.execute(
             """
             DELETE FROM uk_group_panels
@@ -237,10 +259,12 @@ def get_group_keys(group_id: int) -> list[dict]:
             dict(row)
             for row in conn.execute(
                 """
-                SELECT k.*
+                SELECT k.*, kt.name AS type_name, kt.color AS type_color
                 FROM keys k
                 JOIN uk_group_keys gk
                     ON gk.key_id = k.id
+                LEFT JOIN key_types kt
+                    ON kt.id = k.key_type_id
                 WHERE gk.group_id = ?
                 ORDER BY k.number
                 """,
@@ -249,9 +273,14 @@ def get_group_keys(group_id: int) -> list[dict]:
         ]
 
 
-def add_keys(group_id: int, key_numbers: list[str]) -> dict:
+def add_keys(
+    group_id: int,
+    key_numbers: list[str],
+    key_type_id: int | None = None,
+) -> dict:
     added = []
     not_found = []
+    ambiguous = []
 
     with db() as conn:
         for number in key_numbers:
@@ -260,19 +289,27 @@ def add_keys(group_id: int, key_numbers: list[str]) -> dict:
             if not clean_number:
                 continue
 
-            key = conn.execute(
+            matches = conn.execute(
                 """
-                SELECT *
-                FROM keys
-                WHERE number = ?
-                LIMIT 1
+                SELECT k.*, kt.name AS type_name, kt.color AS type_color
+                FROM keys k
+                LEFT JOIN key_types kt ON kt.id = k.key_type_id
+                WHERE k.number = ?
+                  AND TRIM(k.hex_value) <> ''
+                  AND (? IS NULL OR k.key_type_id = ?)
+                ORDER BY k.id
                 """,
-                (clean_number,),
-            ).fetchone()
+                (clean_number, key_type_id, key_type_id),
+            ).fetchall()
 
-            if not key:
+            if not matches:
                 not_found.append(clean_number)
                 continue
+            if len(matches) > 1:
+                ambiguous.append(clean_number)
+                continue
+
+            key = matches[0]
 
             conn.execute(
                 """
@@ -288,11 +325,20 @@ def add_keys(group_id: int, key_numbers: list[str]) -> dict:
                 ),
             )
 
+            set_key_assignment_on_connection(
+                conn,
+                int(key["id"]),
+                "uk",
+                uk_group_id=group_id,
+                assigned_by="Учёт УК",
+            )
+
             added.append(dict(key))
 
     return {
         "added": added,
         "not_found": not_found,
+        "ambiguous": ambiguous,
     }
 
 
@@ -309,3 +355,23 @@ def remove_key(group_id: int, key_id: int) -> None:
                 key_id,
             ),
         )
+
+        active_assignment = conn.execute(
+            """
+            SELECT id
+            FROM key_assignments
+            WHERE key_id = ?
+              AND assignment_type = 'uk'
+              AND uk_group_id = ?
+              AND active = 1
+            LIMIT 1
+            """,
+            (key_id, group_id),
+        ).fetchone()
+
+        if active_assignment:
+            release_key_on_connection(
+                conn,
+                key_id,
+                "Удалён из управляющей компании",
+            )

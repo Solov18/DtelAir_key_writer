@@ -6,6 +6,7 @@ from app.services import (
     find_key,
     find_panels_by_address,
     get_panels,
+    is_ambiguous_key,
     write_key_to_panels,
 )
 from app.templates_config import templates
@@ -32,10 +33,14 @@ def message_preview(
 
     keys = []
     for n in parsed["key_numbers"]:
+        item = find_key(n)
+        ambiguous = is_ambiguous_key(item)
         keys.append(
             {
                 "number": n,
-                "item": find_key(n),
+                "item": None if ambiguous else item,
+                "ambiguous": ambiguous,
+                "matches": item.get("matches", []) if ambiguous else [],
             }
         )
 
@@ -58,7 +63,8 @@ def message_write(
     request: Request,
     address: str = Form(""),
     apartment: str = Form(""),
-    key_numbers: str = Form(""),
+    key_numbers: list[str] = Form([]),
+    key_type_ids: list[int] = Form([]),
     panel_ids: list[int] = Form([]),
 ):
     if panel_ids:
@@ -68,20 +74,28 @@ def message_write(
 
     all_results = []
 
-    for n in [x.strip() for x in key_numbers.replace(",", " ").split() if x.strip()]:
-        item = find_key(n)
+    for index, n in enumerate(key_numbers):
+        n = n.strip()
+        if not n:
+            continue
+        key_type_id = key_type_ids[index] if index < len(key_type_ids) else 0
+        item = find_key(n, key_type_id or None)
+
+        if is_ambiguous_key(item):
+            item = None
 
         if item:
             all_results.append(
                 {
                     "key": item,
                     "results": write_key_to_panels(
-                        "resident",
+                        "message",
                         item,
                         panels,
                         flat_num=apartment,
                         inner=1,
                         address=address,
+                        request=request,
                     ),
                 }
             )

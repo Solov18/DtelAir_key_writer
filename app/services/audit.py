@@ -17,14 +17,19 @@ def log_event(
     panel_name: str = "",
     address: str = "",
     apartment: str = "",
+    panel_id: int | None = None,
     response: str = "",
+    key_id: int | None = None,
+    key_type: str = "",
+    employee_id: int | None = None,
+    uk_group_id: int | None = None,
+    comment: str = "",
 ):
     user = request.session.get("user", {}) if request else {}
 
     ip_address = ""
     if request and request.client:
         ip_address = request.client.host
-    print(request.session.get("user"))
     with db() as conn:
         conn.execute(
             """
@@ -43,12 +48,18 @@ def log_event(
                 response,
                 address,
                 apartment,
+                panel_id,
                 username,
                 user_full_name,
                 user_role,
-                ip_address
+                ip_address,
+                key_id,
+                key_type,
+                employee_id,
+                uk_group_id,
+                comment
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 mode or action,
@@ -65,9 +76,15 @@ def log_event(
                 response,
                 address,
                 apartment,
+                panel_id,
                 user.get("login", ""),
                 user.get("full_name", ""),
                 user.get("role", ""),
                 ip_address,
+                key_id,
+                key_type,
+                employee_id,
+                uk_group_id,
+                comment,
             ),
         )

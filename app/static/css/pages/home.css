@@ -1,10 +1,134 @@
 .dashboard-hero {
-    display: block;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(340px, 390px);
+    gap: 24px;
+    align-items: start;
     margin-bottom: 26px;
 }
 
 .dashboard-hero h1 {
     margin-bottom: 12px;
+}
+
+.dashboard-status-card {
+    min-height: 108px;
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr);
+    gap: 18px;
+    align-items: center;
+    padding: 17px 20px;
+    border: 1px solid var(--line-soft);
+    border-radius: 16px;
+    background: var(--panel);
+    box-shadow: var(--shadow-panel);
+}
+
+.crm-sync-visual {
+    position: relative;
+    width: 62px;
+    height: 62px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    color: var(--blue-2);
+    background: rgba(0, 170, 255, 0.08);
+}
+
+.crm-sync-visual > span {
+    position: absolute;
+    inset: 3px;
+    border: 1px dashed currentColor;
+    border-radius: 50%;
+    opacity: 0.75;
+    animation: crm-sync-spin 8s linear infinite;
+}
+
+.crm-sync-visual svg {
+    width: 31px;
+    height: 31px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.9;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.crm-sync-copy small {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.crm-sync-copy b {
+    display: block;
+    margin-bottom: 3px;
+    color: var(--text-strong);
+    font-size: 16px;
+}
+
+.crm-sync-copy > span {
+    display: block;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.35;
+}
+
+.crm-sync-track {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 5px;
+    margin-top: 9px;
+}
+
+.crm-sync-track i {
+    height: 3px;
+    border-radius: 999px;
+    background: var(--soft);
+}
+
+.dashboard-status-card.status-ok .crm-sync-visual {
+    color: var(--green);
+    background: rgba(44, 255, 154, 0.10);
+}
+
+.dashboard-status-card.status-ok .crm-sync-track i {
+    background: var(--green);
+    box-shadow: 0 0 8px rgba(44, 255, 154, 0.55);
+}
+
+.dashboard-status-card.status-warning .crm-sync-visual {
+    color: #ffbd4a;
+    background: rgba(255, 189, 74, 0.10);
+}
+
+.dashboard-status-card.status-warning .crm-sync-track i:first-child {
+    background: #ffbd4a;
+    box-shadow: 0 0 8px rgba(255, 189, 74, 0.55);
+}
+
+.dashboard-status-card.status-error .crm-sync-visual {
+    color: var(--red);
+    background: rgba(255, 74, 95, 0.10);
+}
+
+.dashboard-status-card.status-error .crm-sync-track i:first-child {
+    background: var(--red);
+    box-shadow: 0 0 8px rgba(255, 74, 95, 0.55);
+}
+
+@keyframes crm-sync-spin {
+    to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .crm-sync-visual > span {
+        animation: none;
+    }
 }
 
 /* ===============================
@@ -219,8 +343,8 @@
 .operations-head,
 .operations-row {
     display: grid;
-    grid-template-columns: 80px 1.1fr 1.4fr 90px;
-    gap: 16px;
+    grid-template-columns: 90px minmax(120px, 1.15fr) minmax(70px, .75fr) minmax(90px, .85fr) minmax(110px, .9fr);
+    gap: 12px;
     align-items: center;
 }
 
@@ -253,7 +377,13 @@
 
 .op-green { background: var(--green); }
 .op-blue { background: var(--blue-2); }
-.op-orange { background: #ff9f1c; }
+.op-red { background: var(--red); }
+
+.operations-row .badge {
+    width: fit-content;
+    max-width: 100%;
+    white-space: normal;
+}
 
 .operations-empty {
     padding: 18px 0;
@@ -400,6 +530,7 @@
 }
 
 @media (max-width: 1100px) {
+    .dashboard-hero,
     .dashboard-actions {
         grid-template-columns: 1fr;
     }

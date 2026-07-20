@@ -1,4 +1,5 @@
 from app.db import db
+from app.presentation import operation_status_name, operation_status_tone
 
 
 ACTION_NAMES = {
@@ -7,33 +8,45 @@ ACTION_NAMES = {
     "user_password_change": "Смена пароля",
 
     "resident_manual": "Обычная запись",
+    "resident": "Из сообщения",
     "message": "Из сообщения",
     "uk": "Запись УК",
     "employee": "Запись сотрудника",
 
     "import_keys": "Импорт ключей",
+    "key_type_create": "Создание типа ключа",
+    "key_type_update": "Изменение типа ключа",
+    "keys_prepare": "Подготовка партии ключей",
+    "key_hex_scan": "Считывание HEX ключа",
+    "key_update": "Изменение ключа",
+    "key_status_change": "Изменение статуса ключа",
+    "key_release": "Освобождение ключа",
     "import_panels": "Импорт панелей",
 
     "panel_create": "Добавление панели",
+    "panel_update": "Изменение панели",
     "panel_delete": "Удаление панели",
     "employee_create": "Добавление сотрудника",
-    "employee_delete": "Удаление сотрудника",
+    "employee_update": "Изменение сотрудника",
+    "employee_dismiss": "Увольнение сотрудника",
+    "employee_restore": "Восстановление сотрудника",
+    "employee_key_issue": "Выдача ключа сотруднику",
+    "employee_key_close": "Закрытие ключа сотрудника",
+    "employee_key_comment": "Комментарий к ключу сотрудника",
+    "employee_key_history_update": "Изменение истории ключа",
+    "employee_key_remove": "Деактивация ключа сотрудника",
+    "employee_delete": "Увольнение сотрудника",
     "uk_create": "Создание УК",
+    "uk_update": "Изменение УК",
     "uk_delete": "Удаление УК",
+    "uk_panels_add": "Добавление панелей в УК",
+    "uk_panel_remove": "Удаление панели из УК",
+    "uk_keys_add": "Добавление ключей в УК",
+    "uk_key_remove": "Удаление ключа из УК",
 }
 
 
-STATUS_NAMES = {
-    "success": "Успешно",
-    "SUCCESS": "Успешно",
-    "DRY_RUN": "Тест",
-    "ERROR": "Ошибка",
-    "error": "Ошибка",
-    "NO_COOKIE": "Ошибка CRM",
-}
-
-
-def _normalize_row(row: dict) -> dict:
+def normalize_operation_row(row: dict) -> dict:
     action = row.get("action") or row.get("mode") or "unknown"
 
     action_name = ACTION_NAMES.get(action, action)
@@ -85,7 +98,8 @@ def _normalize_row(row: dict) -> dict:
         details = row.get("response") or "—"
 
     status = row.get("status") or "success"
-    status_name = STATUS_NAMES.get(status, status)
+    status_name = operation_status_name(status)
+    status_tone = operation_status_tone(status)
 
     return {
         **row,
@@ -97,6 +111,7 @@ def _normalize_row(row: dict) -> dict:
         "object_name_view": object_name,
         "details_view": details,
         "status_name": status_name,
+        "status_tone": status_tone,
     }
 
 
@@ -112,7 +127,7 @@ def get_last_operations(limit: int = 500) -> list[dict]:
             (limit,),
         ).fetchall()
 
-        return [_normalize_row(dict(row)) for row in rows]
+        return [normalize_operation_row(dict(row)) for row in rows]
 
 
 def get_recent_operations(limit: int = 5) -> list[dict]:

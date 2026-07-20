@@ -25,6 +25,14 @@
                 required
             >
 
+            <label>Тип ключа</label>
+            <select name="key_type_id">
+                <option value="0">Определить автоматически</option>
+                {% for item in key_types %}
+                <option value="{{ item.id }}" {% if key_type_id == item.id %}selected{% endif %}>{{ item.name }}</option>
+                {% endfor %}
+            </select>
+
             <label>Адрес</label>
             <input
                 name="address"
@@ -193,6 +201,7 @@
         {% if panels %}
         <form method="post" action="/write/manual/write">
             <input type="hidden" name="key_query" value="{{ query }}">
+            <input type="hidden" name="key_type_id" value="{{ key_type_id or 0 }}">
             <input type="hidden" name="address" value="{{ address }}">
             <input type="hidden" name="apartment" value="{{ apartment }}">
             <input type="hidden" name="inner" value="1">

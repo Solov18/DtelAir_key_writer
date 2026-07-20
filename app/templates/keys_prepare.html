@@ -1,0 +1,391 @@
+{% extends 'base.html' %}
+
+{% block page_name %}Подготовка ключей{% endblock %}
+
+{% block content %}
+<div class="keys-prepare-page keys-production-scanner">
+    <header class="keys-prepare-hero">
+        <div>
+            <a class="keys-back-link" href="/keys">← База ключей</a>
+            <h1>Подготовка ключей</h1>
+            <p class="subtitle">{{ batch.key_type.name }} · запрошены номера {{ batch.start }}–{{ batch.end }}</p>
+        </div>
+        <div class="panel keys-batch-summary">
+            <span><b>{{ batch.requested }}</b>запрошено</span>
+            <span><b>{{ batch.rows|length }}</b>к считыванию</span>
+            <span><b>{{ batch.filled_existing }}</b>уже готово</span>
+            <span><b id="savedCount">0</b>сохранено</span>
+        </div>
+    </header>
+
+    {% if batch.filled_existing %}
+    <div class="keys-range-warning" role="status">
+        <span class="keys-range-warning-icon">!</span>
+        <div>
+            <b>Часть номеров уже была заполнена</b>
+            <p>
+                {{ batch.filled_existing }} ключей не добавлены в форму повторно, чтобы случайно не перезаписать их HEX.
+                Номера: {{ batch.filled_rows[:8]|map(attribute='number')|join(', ') }}{% if batch.filled_existing > 8 %} и ещё {{ batch.filled_existing - 8 }}{% endif %}.
+            </p>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if batch.rows %}
+    <section class="panel keys-autosave-card" id="autosaveCard" aria-live="polite">
+        <span class="keys-autosave-state" id="autosaveDot"></span>
+        <div>
+            <h2 id="autosaveTitle">Автосохранение включено</h2>
+            <p id="autosaveText">Ключ появится в базе только после считывания и проверки HEX. Страница не закроется, пока есть несохранённые данные.</p>
+        </div>
+        <div class="keys-scan-progress"><span id="scanProgressBar"></span></div>
+    </section>
+
+    <section class="panel keys-scanner-guide">
+        <span class="keys-scanner-icon">
+            <svg viewBox="0 0 24 24"><path d="M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3M7 12h10M8 9h8M8 15h8"/></svg>
+        </span>
+        <div>
+            <h2>Считывайте ключи по порядку</h2>
+            <p class="subtitle">До считывания это временные строки. После подтверждённого сохранения номер и HEX вместе попадут в базу, а фокус перейдёт дальше.</p>
+        </div>
+        <div class="keys-scanner-hints">
+            <span><kbd>Enter</kbd> сохранить</span>
+            <span><kbd>Esc</kbd> отменить ввод</span>
+        </div>
+    </section>
+
+    <section class="panel keys-scan-panel">
+        <div class="keys-section-head keys-scan-head">
+            <div>
+                <h2>Партия «{{ batch.key_type.name }}»</h2>
+                <p class="subtitle">К заполнению: {{ batch.rows|length }}. Каждый HEX проверяется на формат и дубликаты.</p>
+            </div>
+            <div class="keys-scan-head-actions">
+                <button type="button" class="btn btn-ghost" id="saveAllButton">Сохранить всё</button>
+                <a href="/keys" class="btn" id="finishBatchButton">Завершить</a>
+            </div>
+        </div>
+
+        <div class="table-scroll keys-scan-scroll">
+            <table class="keys-scan-table" id="keysScanTable">
+                <thead><tr><th>Номер</th><th>Тип</th><th>HEX со считывателя</th><th>Состояние</th></tr></thead>
+                <tbody>
+                {% for key in batch.rows %}
+                <tr data-key-id="" data-key-type-id="{{ key.key_type_id }}" data-key-number="{{ key.number }}">
+                    <td><b>№{{ key.number }}</b></td>
+                    <td><span class="key-type-chip"><i style="--key-type-color: {{ batch.key_type.color }}"></i>{{ batch.key_type.name }}</span></td>
+                    <td>
+                        <input
+                            class="key-scan-input"
+                            value=""
+                            placeholder="Поднесите ключ к считывателю..."
+                            autocomplete="off"
+                            spellcheck="false"
+                            inputmode="text"
+                            data-original=""
+                        >
+                    </td>
+                    <td>
+                        <div class="key-scan-state-wrap">
+                            <span class="key-scan-state">Ожидает считывания</span>
+                            <button type="button" class="key-scan-edit" hidden>Исправить</button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <footer class="keys-scan-footer">
+            <span id="batchFooterText">Сохранено 0 из {{ batch.rows|length }}</span>
+            <span>Строки без HEX в базу не добавляются. После сохранения готовый ключ остаётся на экране.</span>
+        </footer>
+    </section>
+    {% else %}
+    <section class="panel keys-range-empty">
+        <span class="keys-range-empty-icon">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>
+        </span>
+        <div>
+            <h2>В этом диапазоне нечего подготавливать</h2>
+            <p>Все номера {{ batch.start }}–{{ batch.end }} уже существуют и имеют сохранённый HEX. Существующие данные не были изменены.</p>
+        </div>
+        <a href="/keys" class="btn">Выбрать другой диапазон</a>
+    </section>
+    {% endif %}
+</div>
+
+{% if batch.rows %}
+<div class="keys-scan-toast" id="scanToast" role="status" aria-live="polite"></div>
+
+<script>
+const scanRows = Array.from(document.querySelectorAll("#keysScanTable tbody tr"));
+const savedCount = document.getElementById("savedCount");
+const progressBar = document.getElementById("scanProgressBar");
+const autosaveCard = document.getElementById("autosaveCard");
+const autosaveTitle = document.getElementById("autosaveTitle");
+const autosaveText = document.getElementById("autosaveText");
+const batchFooterText = document.getElementById("batchFooterText");
+const saveAllButton = document.getElementById("saveAllButton");
+const finishBatchButton = document.getElementById("finishBatchButton");
+const scanToast = document.getElementById("scanToast");
+const draftStorageKey = "dtel-key-batch-{{ batch.key_type.id }}-{{ batch.start }}-{{ batch.count }}";
+let allowPageExit = false;
+let toastTimer;
+
+function cleanHex(value) {
+    return String(value || "").toUpperCase().replace(/[\s:-]/g, "");
+}
+
+function isValidHex(value) {
+    return /^[0-9A-F]{6,16}$/.test(value);
+}
+
+function loadDrafts() {
+    try {
+        return JSON.parse(localStorage.getItem(draftStorageKey) || "{}") || {};
+    } catch (_) {
+        return {};
+    }
+}
+
+function saveDraft(keyNumber, value) {
+    const drafts = loadDrafts();
+    if (value) drafts[keyNumber] = value;
+    else delete drafts[keyNumber];
+    if (Object.keys(drafts).length) localStorage.setItem(draftStorageKey, JSON.stringify(drafts));
+    else localStorage.removeItem(draftStorageKey);
+}
+
+function showToast(text, tone = "success") {
+    if (!scanToast) return;
+    clearTimeout(toastTimer);
+    scanToast.textContent = text;
+    scanToast.className = `keys-scan-toast is-visible is-${tone}`;
+    toastTimer = setTimeout(() => scanToast.classList.remove("is-visible"), 2600);
+}
+
+function setRowState(row, state, text) {
+    row.classList.remove("is-waiting", "is-dirty", "is-saving", "is-saved", "is-error");
+    row.classList.add(`is-${state}`);
+    row.querySelector(".key-scan-state").textContent = text;
+}
+
+function rowCounts() {
+    return {
+        saved: scanRows.filter((row) => cleanHex(row.querySelector(".key-scan-input").dataset.original)).length,
+        saving: scanRows.filter((row) => row.classList.contains("is-saving")).length,
+        dirty: scanRows.filter((row) => row.classList.contains("is-dirty")).length,
+        errors: scanRows.filter((row) => row.classList.contains("is-error")).length,
+    };
+}
+
+function updateScanProgress() {
+    const counts = rowCounts();
+    const total = scanRows.length;
+    if (savedCount) savedCount.textContent = counts.saved;
+    if (batchFooterText) batchFooterText.textContent = `Сохранено ${counts.saved} из ${total}`;
+    if (progressBar) progressBar.style.width = `${total ? (counts.saved / total) * 100 : 0}%`;
+
+    autosaveCard.classList.remove("is-saving", "is-success", "is-warning", "is-error");
+    if (counts.saving) {
+        autosaveCard.classList.add("is-saving");
+        autosaveTitle.textContent = "Сохраняем данные…";
+        autosaveText.textContent = `Сохраняется строк: ${counts.saving}. Не закрывайте страницу.`;
+    } else if (counts.errors) {
+        autosaveCard.classList.add("is-error");
+        autosaveTitle.textContent = "Есть несохранённые строки";
+        autosaveText.textContent = `Исправьте ${counts.errors} строк или нажмите «Сохранить всё» для повторной попытки.`;
+    } else if (counts.dirty) {
+        autosaveCard.classList.add("is-warning");
+        autosaveTitle.textContent = "Ожидается автосохранение";
+        autosaveText.textContent = `Несохранённых строк: ${counts.dirty}. Ввод не потеряется при случайном обновлении.`;
+    } else if (counts.saved === total) {
+        autosaveCard.classList.add("is-success");
+        autosaveTitle.textContent = "Партия полностью сохранена";
+        autosaveText.textContent = `Все ${total} HEX записаны в базу. Можно безопасно завершить работу.`;
+    } else {
+        autosaveTitle.textContent = "Автосохранение включено";
+        autosaveText.textContent = "Ключ появится в базе только после считывания и проверки HEX. Страница не закроется, пока есть несохранённые данные.";
+    }
+}
+
+function focusNextRow(row) {
+    const index = scanRows.indexOf(row);
+    const nextRow = scanRows.slice(index + 1).find((item) => !item.classList.contains("is-saved"));
+    const input = nextRow?.querySelector(".key-scan-input");
+    if (input) {
+        input.focus();
+        input.select();
+    }
+}
+
+async function saveScannedHex(input, moveNext = true) {
+    const row = input.closest("tr");
+    const hexValue = cleanHex(input.value);
+    const original = cleanHex(input.dataset.original);
+    if (row.dataset.saving === "1" || hexValue === original) return true;
+
+    input.value = hexValue;
+    if (!isValidHex(hexValue)) {
+        setRowState(row, "error", "Нужно 6–16 символов 0–9/A–F");
+        saveDraft(row.dataset.keyNumber, hexValue);
+        updateScanProgress();
+        return false;
+    }
+
+    row.dataset.saving = "1";
+    setRowState(row, "saving", "Сохраняется…");
+    updateScanProgress();
+
+    try {
+        const response = await fetch("/keys/scan", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+                key_type_id: Number(row.dataset.keyTypeId),
+                number: row.dataset.keyNumber,
+                hex_value: hexValue,
+                replace: input.dataset.replace === "1",
+            }),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(result.error || "Сервер не подтвердил сохранение");
+
+        input.value = result.hex_value;
+        input.dataset.original = result.hex_value;
+        input.dataset.replace = "0";
+        row.dataset.keyId = String(result.key_id);
+        input.readOnly = true;
+        row.querySelector(".key-scan-edit").hidden = false;
+        setRowState(row, "saved", "Сохранено в базе");
+        saveDraft(row.dataset.keyNumber, "");
+        showToast(`Ключ №${row.dataset.keyNumber}: HEX сохранён`);
+        updateScanProgress();
+        if (moveNext) focusNextRow(row);
+        return true;
+    } catch (error) {
+        setRowState(row, "error", error.message || "Ошибка сохранения");
+        saveDraft(row.dataset.keyNumber, hexValue);
+        showToast(error.message || "Ошибка сохранения", "error");
+        updateScanProgress();
+        input.focus();
+        input.select();
+        return false;
+    } finally {
+        row.dataset.saving = "0";
+    }
+}
+
+const drafts = loadDrafts();
+scanRows.forEach((row) => {
+    const input = row.querySelector(".key-scan-input");
+    const editButton = row.querySelector(".key-scan-edit");
+    let timer;
+
+    if (drafts[row.dataset.keyNumber]) {
+        input.value = cleanHex(drafts[row.dataset.keyNumber]);
+        setRowState(row, "dirty", "Восстановлено, не сохранено");
+    } else {
+        setRowState(row, "waiting", "Ожидает считывания");
+    }
+
+    input.addEventListener("input", () => {
+        clearTimeout(timer);
+        input.value = cleanHex(input.value);
+        const value = input.value;
+        saveDraft(row.dataset.keyNumber, value);
+
+        if (!value) setRowState(row, "waiting", "Ожидает считывания");
+        else if (isValidHex(value)) setRowState(row, "dirty", "Готов к сохранению");
+        else setRowState(row, "dirty", "Ввод продолжается…");
+        updateScanProgress();
+
+        if (isValidHex(value)) timer = setTimeout(() => saveScannedHex(input, true), 420);
+    });
+
+    input.addEventListener("blur", () => {
+        clearTimeout(timer);
+        if (input.value && cleanHex(input.value) !== cleanHex(input.dataset.original)) {
+            saveScannedHex(input, false);
+        }
+    });
+
+    input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            clearTimeout(timer);
+            saveScannedHex(input, true);
+        }
+        if (event.key === "Escape") {
+            event.preventDefault();
+            clearTimeout(timer);
+            input.value = input.dataset.original || "";
+            input.dataset.replace = "0";
+            saveDraft(row.dataset.keyNumber, "");
+            setRowState(row, input.dataset.original ? "saved" : "waiting", input.dataset.original ? "Сохранено в базе" : "Ожидает считывания");
+            if (input.dataset.original) {
+                input.readOnly = true;
+                editButton.hidden = false;
+            }
+            updateScanProgress();
+        }
+    });
+
+    editButton.addEventListener("click", () => {
+        input.readOnly = false;
+        input.dataset.replace = "1";
+        editButton.hidden = true;
+        setRowState(row, "dirty", "Режим исправления");
+        saveDraft(row.dataset.keyNumber, input.value);
+        updateScanProgress();
+        input.focus();
+        input.select();
+    });
+});
+
+saveAllButton.addEventListener("click", async () => {
+    const candidates = scanRows
+        .map((row) => row.querySelector(".key-scan-input"))
+        .filter((input) => !input.readOnly && cleanHex(input.value) !== cleanHex(input.dataset.original));
+    if (!candidates.length) {
+        showToast("Нет несохранённых строк", "info");
+        return;
+    }
+    for (const input of candidates) await saveScannedHex(input, false);
+});
+
+finishBatchButton.addEventListener("click", (event) => {
+    const counts = rowCounts();
+    if (counts.saving || counts.dirty || counts.errors) {
+        event.preventDefault();
+        showToast("Сначала дождитесь сохранения или исправьте строки с ошибкой", "error");
+        updateScanProgress();
+        return;
+    }
+    const untouched = scanRows.length - counts.saved;
+    if (untouched > 0 && !window.confirm(
+        `Без HEX осталось строк: ${untouched}. Они не будут добавлены в базу. Завершить подготовку?`
+    )) {
+        event.preventDefault();
+        return;
+    }
+    allowPageExit = true;
+});
+
+window.addEventListener("beforeunload", (event) => {
+    const counts = rowCounts();
+    if (!allowPageExit && (counts.saving || counts.dirty || counts.errors)) {
+        event.preventDefault();
+        event.returnValue = "";
+    }
+});
+
+updateScanProgress();
+const firstInput = scanRows.find((row) => !row.classList.contains("is-saved"))?.querySelector(".key-scan-input");
+if (firstInput) firstInput.focus();
+</script>
+{% endif %}
+{% endblock %}

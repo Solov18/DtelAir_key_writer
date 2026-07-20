@@ -1,4 +1,8 @@
 from app.db import db
+from app.repositories.key_repository import (
+    release_key_on_connection,
+    set_key_assignment_on_connection,
+)
 
 
 ACTIVE_KEY_STATUS = "active"
@@ -353,12 +357,14 @@ def issue_key_to_employee(
             raise ValueError("Сотрудник не найден или уже уволен.")
 
         key = conn.execute(
-            "SELECT id FROM keys WHERE id = ?",
+            "SELECT id, hex_value FROM keys WHERE id = ?",
             (key_id,),
         ).fetchone()
 
         if not key:
             raise ValueError("Ключ не найден.")
+        if not (key["hex_value"] or "").strip():
+            raise ValueError("Ключ без HEX нельзя выдать сотруднику.")
 
         key_owner = conn.execute(
             """
@@ -510,6 +516,22 @@ def issue_key_to_employee(
                 (current_key["key_id"], current_key["key_id"]),
             )
 
+        if current_key and int(current_key["key_id"]) != int(key_id):
+            release_key_on_connection(
+                conn,
+                int(current_key["key_id"]),
+                old_key_reason,
+            )
+
+        set_key_assignment_on_connection(
+            conn,
+            key_id,
+            "employee",
+            employee_id=employee_id,
+            assigned_by="Учёт сотрудников",
+            note=new_key_comment,
+        )
+
         return assignment_id
 
 
@@ -580,6 +602,23 @@ def close_employee_key(
             """,
             (assignment["key_id"],),
         )
+        release_key_on_connection(
+            conn,
+            int(assignment["key_id"]),
+            close_reason,
+        )
+        if status in {"lost", "damaged"}:
+            conn.execute(
+                """
+                UPDATE keys
+                SET status = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (
+                    "lost" if status == "lost" else "defective",
+                    assignment["key_id"],
+                ),
+            )
 
 
 def update_employee_key_comment(
@@ -697,6 +736,11 @@ def dismiss_employee(
                 WHERE id = ?
                 """,
                 (active_key["key_id"],),
+            )
+            release_key_on_connection(
+                conn,
+                int(active_key["key_id"]),
+                "Сотрудник уволен",
             )
 
         conn.execute(
