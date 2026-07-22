@@ -3,653 +3,269 @@
 {% block page_name %}Панели / Адреса{% endblock %}
 
 {% block content %}
-
-<div class="hero-title">
-    <h1>Панели / Адреса</h1>
-
-    <p class="subtitle">
-        Управление домофонными панелями и адресами
-    </p>
-</div>
-
-
-<div class="panels-top-grid">
-
-    <!-- ==================================================
-         ДОБАВЛЕНИЕ ПАНЕЛИ
-    ================================================== -->
-
-    <section class="panel panel-create-card">
-
-        <div class="panel-section-head">
+<div class="panels-page" id="panelsPage" data-panel-ids='{{ visible_panel_ids|tojson }}'>
+    <header class="panels-hero">
+        <div>
+            <span class="panels-eyebrow">Устройства доступа</span>
+            <h1>Панели / Адреса</h1>
+            <p class="subtitle">Список домофонных панелей, их состояние и параметры.</p>
+        </div>
+        <div class="panels-api-state {% if api_configured %}is-ready{% else %}is-warning{% endif %}">
+            <span></span>
             <div>
-                <h2>Добавить панель</h2>
+                <b>{% if api_configured %}Доступ API настроен{% else %}Нужны реквизиты API{% endif %}</b>
+                <small>{% if api_configured %}Общие для всех панелей{% else %}PANEL_API_LOGIN и PANEL_API_PASSWORD{% endif %}</small>
+            </div>
+        </div>
+    </header>
 
-                <p class="subtitle">
-                    Новая панель сразу появится во всех разделах системы
-                </p>
+    {% if message %}<div class="panels-alert is-success" role="status">{{ message }}</div>{% endif %}
+    {% if error %}<div class="panels-alert is-error" role="alert">{{ error }}</div>{% endif %}
+    {% if import_report %}
+    <div class="panels-alert {% if import_report.errors %}is-warning{% else %}is-success{% endif %}" role="status">
+        Импорт завершён: добавлено {{ import_report.added }}, обновлено {{ import_report.updated }},
+        пропущено {{ import_report.skipped }}, ошибок {{ import_report.errors }}.
+    </div>
+    {% endif %}
+
+    <section class="panels-stats" aria-label="Статистика панелей">
+        <article class="panel-stat is-total">
+            <span class="panel-stat-icon"><svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="3"/><circle cx="12" cy="14" r="3"/><path d="M9 7h6"/></svg></span>
+            <div><small>Всего панелей</small><b>{{ statistics.total }}</b></div>
+        </article>
+        <article class="panel-stat is-online">
+            <span class="panel-stat-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.6 2.6L16 9"/></svg></span>
+            <div><small>В сети</small><b>{{ statistics.online }} <em>{{ statistics.online_percent }}%</em></b></div>
+        </article>
+        <article class="panel-stat is-offline">
+            <span class="panel-stat-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 8l8 8M16 8l-8 8"/></svg></span>
+            <div><small>Нет связи</small><b>{{ statistics.offline }}</b></div>
+        </article>
+        <article class="panel-stat is-error">
+            <span class="panel-stat-icon"><svg viewBox="0 0 24 24"><path d="M12 3 2.8 20h18.4Z"/><path d="M12 9v5M12 17h.01"/></svg></span>
+            <div><small>Ошибки API</small><b>{{ statistics.errors }}</b></div>
+        </article>
+        <article class="panel-stat is-disabled">
+            <span class="panel-stat-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M8 16h8"/></svg></span>
+            <div><small>Отключены</small><b>{{ statistics.disabled }}</b></div>
+        </article>
+    </section>
+
+    <section class="panel panels-workspace">
+        <div class="panels-toolbar">
+            <div class="panels-toolbar-actions">
+                <button type="button" class="btn" data-open-modal="panelAddModal">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                    Добавить панель
+                </button>
+                <button type="button" class="btn btn-ghost" data-open-modal="panelImportModal">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l3 3v15H6Z"/><path d="M15 3v4h4M12 9v7M9 13l3 3 3-3"/></svg>
+                    Импорт Excel
+                </button>
+                <a class="btn btn-ghost" href="/panels/export">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 11l4 4 4-4M5 20h14"/></svg>
+                    Экспорт
+                </a>
+            </div>
+            <div class="panels-toolbar-status">
+                <button type="button" class="btn btn-ghost" id="refreshPanelsButton" {% if not visible_panel_ids %}disabled{% endif %}>
+                    <svg class="refresh-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/></svg>
+                    Проверить текущую страницу
+                </button>
+                <small>
+                    {% if statistics.last_checked_at %}Обновлено: {{ statistics.last_checked_at }}{% else %}Статусы ещё не проверялись{% endif %}
+                </small>
             </div>
         </div>
 
-
-        <form
-            method="post"
-            action="/panels/add"
-            class="panel-form"
-        >
-            <div class="form-grid">
-
-                <div class="form-field form-field-wide">
-                    <label for="panelAddress">
-                        Адрес
-                    </label>
-
-                    <input
-                        id="panelAddress"
-                        name="address"
-                        type="text"
-                        placeholder="Тепличная 65"
-                        autocomplete="off"
-                        required
-                    >
-                </div>
-
-
-                <div class="form-field">
-                    <label for="panelEntrance">
-                        Вход / подъезд
-                    </label>
-
-                    <input
-                        id="panelEntrance"
-                        name="entrance"
-                        type="text"
-                        placeholder="Калитка / подъезд 1 / КПП"
-                        autocomplete="off"
-                    >
-                </div>
-
-
-                <div class="form-field">
-                    <label for="panelMac">
-                        MAC-адрес
-                    </label>
-
-                    <input
-                        id="panelMac"
-                        name="mac"
-                        type="text"
-                        placeholder="08:13:CD:00:1D:C2"
-                        autocomplete="off"
-                        required
-                    >
-                </div>
-
-
-                <div class="form-field form-field-wide">
-                    <label for="panelIp">
-                        IP-адрес
-                    </label>
-
-                    <input
-                        id="panelIp"
-                        name="ip"
-                        type="text"
-                        placeholder="192.168.1.100"
-                        autocomplete="off"
-                    >
-                </div>
-
-            </div>
-
-
-            <div class="panel-form-actions">
-
-                <button
-                    type="submit"
-                    class="btn primary-btn"
-                >
-                    Сохранить панель
-                </button>
-
-            </div>
+        <form class="panels-filters" method="get" action="/panels">
+            <label class="panels-search-field">
+                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg>
+                <input name="q" value="{{ filters.q }}" placeholder="Поиск по адресу, названию, MAC, IP или ID..." aria-label="Поиск панелей">
+            </label>
+            <label><span>Статус сети</span><select name="status">
+                <option value="">Все состояния</option>
+                <option value="online" {% if filters.status == 'online' %}selected{% endif %}>В сети</option>
+                <option value="offline" {% if filters.status == 'offline' %}selected{% endif %}>Нет связи</option>
+                <option value="error" {% if filters.status == 'error' %}selected{% endif %}>Ошибки API</option>
+                <option value="unchecked" {% if filters.status == 'unchecked' %}selected{% endif %}>Не проверялись</option>
+                <option value="disabled" {% if filters.status == 'disabled' %}selected{% endif %}>Отключены</option>
+            </select></label>
+            <label><span>Адрес</span><select name="address">
+                <option value="">Все адреса</option>
+                {% for item in filter_options.addresses %}<option value="{{ item }}" {% if filters.address == item %}selected{% endif %}>{{ item }}</option>{% endfor %}
+            </select></label>
+            <label><span>Подъезд / вход</span><select name="entrance">
+                <option value="">Все</option>
+                {% for item in filter_options.entrances %}<option value="{{ item }}" {% if filters.entrance == item %}selected{% endif %}>{{ item }}</option>{% endfor %}
+            </select></label>
+            <button class="btn panels-filter-submit" type="submit">Показать</button>
+            {% if base_query %}<a class="btn btn-ghost panels-filter-reset" href="/panels">Сбросить</a>{% endif %}
         </form>
 
+        <div class="panels-main-grid">
+            <div class="panels-register">
+                <div class="panels-table-scroll custom-scroll">
+                    <table class="panels-table" id="panelsTable">
+                        <thead><tr>
+                            <th>ID</th><th>Адрес</th><th>Вход</th><th>Панель</th><th>MAC-адрес</th>
+                            <th>Состояние</th><th>Питание</th><th>Время работы</th><th>Последний онлайн</th><th>Действия</th>
+                        </tr></thead>
+                        <tbody>
+                        {% for panel in panels %}
+                        <tr class="{% if selected_panel and selected_panel.id == panel.id %}is-selected{% endif %}"
+                            data-panel-id="{{ panel.id }}"
+                            data-panel-url="/panels?{{ row_query }}{% if row_query %}&{% endif %}selected_panel_id={{ panel.id }}"
+                            tabindex="0">
+                            <td class="panel-id-cell">{{ panel.id }}</td>
+                            <td><b class="panel-address">{{ panel.address }}</b></td>
+                            <td>{{ panel.entrance or '—' }}</td>
+                            <td><span class="panel-name">{{ panel.name }}</span></td>
+                            <td><code class="panel-mac">{{ panel.mac }}</code></td>
+                            <td><span class="panel-status is-{{ panel.status_tone }}"><i></i>{{ panel.status_name }}</span></td>
+                            <td class="panel-voltage">{% if panel.supply_voltage is not none %}{{ "%.2f"|format(panel.supply_voltage) }} В{% else %}—{% endif %}</td>
+                            <td>{{ panel.uptime_text }}</td>
+                            <td>{{ panel.last_online_at or '—' }}</td>
+                            <td class="panel-row-actions">
+                                <a href="/panels?{{ row_query }}{% if row_query %}&{% endif %}selected_panel_id={{ panel.id }}" title="Открыть карточку" aria-label="Открыть панель {{ panel.id }}">
+                                    <svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></svg>
+                                </a>
+                                <button type="button" title="Редактировать" aria-label="Редактировать панель {{ panel.id }}"
+                                    data-edit-panel data-id="{{ panel.id }}" data-address="{{ panel.address }}"
+                                    data-entrance="{{ panel.entrance or '' }}" data-ip="{{ panel.ip or '' }}" data-mac="{{ panel.mac }}">
+                                    <svg viewBox="0 0 24 24"><path d="m4 20 4.5-1 10-10-3.5-3.5-10 10Z"/><path d="m13.5 7 3.5 3.5"/></svg>
+                                </button>
+                                {% if panel.ip %}<a href="http://{{ panel.ip }}" target="_blank" rel="noopener noreferrer" title="Открыть веб-интерфейс" aria-label="Веб-интерфейс панели {{ panel.id }}">
+                                    <svg viewBox="0 0 24 24"><path d="M14 5h5v5M19 5l-9 9"/><path d="M18 13v6H5V6h6"/></svg>
+                                </a>{% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="10" class="panels-empty-state">По заданным условиям панели не найдены.</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <footer class="panels-pagination">
+                    <span>
+                        {% if panel_page.total %}Показано {{ (panel_page.page - 1) * panel_page.page_size + 1 }}–{{ [panel_page.page * panel_page.page_size, panel_page.total]|min }} из {{ panel_page.total }}{% else %}Нет записей{% endif %}
+                    </span>
+                    {% if panel_page.pages > 1 %}
+                    <nav aria-label="Страницы панелей">
+                        {% if panel_page.page > 1 %}<a href="/panels?{{ base_query }}{% if base_query %}&{% endif %}page={{ panel_page.page - 1 }}">←</a>{% endif %}
+                        {% for number in range([1, panel_page.page - 2]|max, [panel_page.pages, panel_page.page + 2]|min + 1) %}
+                            {% if number == panel_page.page %}<b>{{ number }}</b>{% else %}<a href="/panels?{{ base_query }}{% if base_query %}&{% endif %}page={{ number }}">{{ number }}</a>{% endif %}
+                        {% endfor %}
+                        {% if panel_page.page < panel_page.pages %}<a href="/panels?{{ base_query }}{% if base_query %}&{% endif %}page={{ panel_page.page + 1 }}">→</a>{% endif %}
+                    </nav>
+                    {% endif %}
+                </footer>
+            </div>
+
+            <aside class="panel-inspector custom-scroll">
+                {% if selected_panel %}
+                <header>
+                    <div><small>Выбранное устройство</small><h2>Панель ID: {{ selected_panel.id }}</h2></div>
+                    <span class="panel-status is-{{ selected_panel.status_tone }}"><i></i>{{ selected_panel.status_name }}</span>
+                </header>
+
+                <div class="panel-camera">
+                    <div class="panel-camera-label"><span>Камера панели</span><small>кадр по запросу</small></div>
+                    {% if selected_panel.network_status == 'online' and selected_panel.ip and api_configured %}
+                    <img src="/panels/{{ selected_panel.id }}/snapshot?t={{ statistics.last_checked_at|urlencode }}" alt="Камера панели {{ selected_panel.id }}" loading="lazy" id="panelCameraImage">
+                    <span class="panel-live-badge">LIVE</span>
+                    {% else %}
+                    <div class="panel-camera-placeholder">
+                        <svg viewBox="0 0 24 24"><path d="M4 7h11a2 2 0 0 1 2 2v8H4Z"/><path d="m17 11 4-2v8l-4-2M8 7l1.5-2h3L14 7"/></svg>
+                        <b>Кадр недоступен</b>
+                        <span>{% if not selected_panel.ip %}Не указан IP-адрес{% elif not api_configured %}Не настроен доступ API{% else %}Сначала проверьте связь{% endif %}</span>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <dl class="panel-detail-list">
+                    <div><dt>Название</dt><dd>{{ selected_panel.name }}</dd></div>
+                    <div><dt>Адрес</dt><dd>{{ selected_panel.address }}</dd></div>
+                    <div><dt>Подъезд</dt><dd>{{ selected_panel.entrance or '—' }}</dd></div>
+                    <div><dt>MAC-адрес</dt><dd><code>{{ selected_panel.mac }}</code></dd></div>
+                    <div><dt>IP-адрес</dt><dd>{% if selected_panel.ip %}<a class="panel-external-link" href="http://{{ selected_panel.ip }}" target="_blank" rel="noopener"><span>{{ selected_panel.ip }}</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-9 9"/><path d="M18 13v6H5V6h6"/></svg></a>{% else %}—{% endif %}</dd></div>
+                    <div><dt>Модель</dt><dd>{{ selected_panel.device_model or '—' }}</dd></div>
+                    <div><dt>Прошивка</dt><dd>{{ selected_panel.firmware_version or '—' }}</dd></div>
+                    {% if not selected_panel.mac_matches %}<div class="is-problem"><dt>MAC из API</dt><dd>{{ selected_panel.reported_mac }}</dd></div>{% endif %}
+                </dl>
+
+                <section class="panel-health">
+                    <h3>Статус и параметры</h3>
+                    <dl>
+                        <div><dt>Состояние</dt><dd><span class="panel-status is-{{ selected_panel.status_tone }}"><i></i>{{ selected_panel.status_name }}</span></dd></div>
+                        <div class="panel-power-row"><dt>Напряжение питания</dt><dd>{% if selected_panel.supply_voltage is not none %}<b>{{ "%.2f"|format(selected_panel.supply_voltage) }} В</b>{% else %}—{% endif %}</dd></div>
+                        <div><dt>Температура</dt><dd>{% if selected_panel.temperature is not none %}{{ "%.1f"|format(selected_panel.temperature) }} °C{% else %}—{% endif %}</dd></div>
+                        <div><dt>Время работы</dt><dd>{{ selected_panel.uptime_text }}</dd></div>
+                        <div><dt>SIP-регистрация</dt><dd>{% if selected_panel.sip_registered is none %}—{% elif selected_panel.sip_registered %}Есть{% else %}Нет{% endif %}</dd></div>
+                    </dl>
+                    {% if selected_panel.last_error %}<p class="panel-last-error">{{ selected_panel.last_error }}</p>{% endif %}
+                </section>
+
+                <section class="panel-quick-actions">
+                    <h3>Быстрые действия</h3>
+                    <button type="button" class="btn btn-ghost" id="checkSelectedPanel" data-panel-id="{{ selected_panel.id }}">Проверить связь</button>
+                    {% if is_admin and selected_panel.enabled and selected_panel.ip %}<button type="button" class="btn btn-ghost" id="rebootPanelButton" data-panel-id="{{ selected_panel.id }}">Перезагрузить панель</button>{% endif %}
+                    <button type="button" class="btn btn-ghost" data-edit-panel data-id="{{ selected_panel.id }}" data-address="{{ selected_panel.address }}" data-entrance="{{ selected_panel.entrance or '' }}" data-ip="{{ selected_panel.ip or '' }}" data-mac="{{ selected_panel.mac }}">Редактировать данные</button>
+                    {% if is_admin %}
+                    <form method="post" action="/panels/{{ selected_panel.id }}/toggle" data-confirm="{% if selected_panel.enabled %}Отключить панель только в локальном учёте? Команда на устройство не отправляется.{% else %}Вернуть панель в рабочий реестр?{% endif %}">
+                        <input type="hidden" name="enabled" value="{% if selected_panel.enabled %}0{% else %}1{% endif %}">
+                        <button class="btn {% if selected_panel.enabled %}btn-danger-soft{% else %}btn-ghost{% endif %}" type="submit">{% if selected_panel.enabled %}Отключить в учёте{% else %}Вернуть в работу{% endif %}</button>
+                    </form>
+                    {% endif %}
+                </section>
+                {% else %}
+                <div class="panel-inspector-empty"><b>Панель не выбрана</b><span>Выберите устройство в таблице.</span></div>
+                {% endif %}
+            </aside>
+        </div>
     </section>
-
-
-    <!-- ==================================================
-         СОСТОЯНИЕ БАЗЫ
-    ================================================== -->
-
-    <section class="panel panels-summary-card">
-
-        <div class="panel-section-head">
-            <div>
-                <h2>Состояние базы</h2>
-
-                <p class="subtitle">
-                    Актуальная информация о панелях
-                </p>
-            </div>
-        </div>
-
-
-        <div class="panels-summary-main">
-
-            <div class="panels-summary-icon">
-
-                <svg
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                >
-                    <path
-                        d="M4 21V5.8c0-.7.4-1.3 1-1.6l6-3c.6-.3 1.3-.3 2 0l6 3c.6.3 1 1 1 1.6V21"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.7"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                    />
-
-                    <path
-                        d="M2 21h20M8 8h2M14 8h2M8 12h2M14 12h2M8 16h2M14 16h2"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.7"
-                        stroke-linecap="round"
-                    />
-                </svg>
-
-            </div>
-
-
-            <div>
-
-                <span class="panels-summary-label">
-                    Всего панелей
-                </span>
-
-                <strong class="panels-summary-value">
-                    {{ panels_count }}
-                </strong>
-
-            </div>
-
-        </div>
-
-
-        <div class="panels-summary-note">
-
-            <div class="summary-note-icon">
-
-                <svg
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                >
-                    <circle
-                        cx="12"
-                        cy="12"
-                        r="9"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.7"
-                    />
-
-                    <path
-                        d="M12 11v5M12 8h.01"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.9"
-                        stroke-linecap="round"
-                    />
-                </svg>
-
-            </div>
-
-
-            <p>
-                Проверку состояния панелей добавим через API
-                после определения запроса статуса устройства.
-            </p>
-
-        </div>
-
-    </section>
-
 </div>
 
-
-<!-- ==================================================
-     СПИСОК ПАНЕЛЕЙ
-================================================== -->
-
-<section class="panel panels-list-panel">
-
-    <div class="panel-list-head">
-
-        <div>
-
-            <h2>Список панелей</h2>
-
-            <p class="subtitle">
-
-                Всего:
-
-                <span id="panelsTotal">
-                    {{ panels|length }}
-                </span>
-
-                · Найдено:
-
-                <span id="panelsFound">
-                    {{ panels|length }}
-                </span>
-
-            </p>
-
-        </div>
-
-
-        <div class="panel-search">
-
-            <svg
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-            >
-                <circle
-                    cx="11"
-                    cy="11"
-                    r="7"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.8"
-                />
-
-                <path
-                    d="m16.5 16.5 4 4"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.8"
-                    stroke-linecap="round"
-                />
-            </svg>
-
-
-            <input
-                type="search"
-                id="panelSearch"
-                placeholder="Поиск по адресу, входу, IP или MAC..."
-                autocomplete="off"
-            >
-
-        </div>
-
-    </div>
-
-
-    <div class="table-scroll panels-table-scroll">
-
-        <table
-            id="panelsTable"
-            class="panels-table"
-        >
-
-            <thead>
-
-                <tr>
-                    <th>ID</th>
-                    <th>Адрес</th>
-                    <th>Вход</th>
-                    <th>IP-адрес</th>
-                    <th>MAC-адрес</th>
-                    <th>Действия</th>
-                </tr>
-
-            </thead>
-
-
-            <tbody>
-
-                {% for p in panels %}
-
-                <tr
-                    data-panel-row
-
-                    data-search="
-                        {{ p.id }}
-                        {{ p.address }}
-                        {{ p.entrance }}
-                        {{ p.ip }}
-                        {{ p.mac }}
-                    "
-                >
-
-                    <td class="panel-id-cell">
-
-                        #{{ p.id }}
-
-                    </td>
-
-
-                    <td>
-
-                        <div class="panel-address-cell">
-
-                            <strong>
-                                {{ p.address }}
-                            </strong>
-
-                        </div>
-
-                    </td>
-
-
-                    <td>
-
-                        {{ p.entrance or "—" }}
-
-                    </td>
-
-
-                    <td>
-
-                        {% if p.ip %}
-
-                        <a
-                            href="http://{{ p.ip }}"
-
-                            target="_blank"
-
-                            rel="noopener noreferrer"
-
-                            class="panel-ip-link"
-
-                            title="Открыть веб-интерфейс панели"
-                        >
-
-                            <span>
-                                {{ p.ip }}
-                            </span>
-
-
-                            <svg
-                                viewBox="0 0 24 24"
-
-                                aria-hidden="true"
-                            >
-
-                                <path
-                                    d="M14 5h5v5M13 11l6-6M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"
-
-                                    fill="none"
-
-                                    stroke="currentColor"
-
-                                    stroke-width="1.8"
-
-                                    stroke-linecap="round"
-
-                                    stroke-linejoin="round"
-                                />
-
-                            </svg>
-
-                        </a>
-
-
-                        {% else %}
-
-                        <span class="panel-empty-value">
-                            —
-                        </span>
-
-                        {% endif %}
-
-                    </td>
-
-
-                    <td>
-
-                        <span class="panel-mac">
-
-                            {{ p.mac }}
-
-                        </span>
-
-                    </td>
-
-
-                    <td class="panel-actions-cell">
-
-                        <details class="row-actions">
-
-                            <summary class="row-actions-button">
-
-                                <svg
-                                    viewBox="0 0 24 24"
-
-                                    aria-hidden="true"
-                                >
-
-                                    <path
-                                        d="M12 20h9"
-
-                                        fill="none"
-
-                                        stroke="currentColor"
-
-                                        stroke-width="1.8"
-
-                                        stroke-linecap="round"
-                                    />
-
-                                    <path
-                                        d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"
-
-                                        fill="none"
-
-                                        stroke="currentColor"
-
-                                        stroke-width="1.8"
-
-                                        stroke-linecap="round"
-
-                                        stroke-linejoin="round"
-                                    />
-
-                                </svg>
-
-
-                                <span>
-                                    Изменить
-                                </span>
-
-                            </summary>
-
-
-                            <div class="row-actions-content">
-
-                                <form
-                                    method="post"
-
-                                    action="/panels/edit"
-
-                                    class="panel-edit-form"
-                                >
-
-                                    <input
-                                        type="hidden"
-
-                                        name="panel_id"
-
-                                        value="{{ p.id }}"
-                                    >
-
-
-                                    <div class="form-field">
-
-                                        <label>
-                                            Адрес
-                                        </label>
-
-                                        <input
-                                            name="address"
-
-                                            value="{{ p.address }}"
-
-                                            required
-                                        >
-
-                                    </div>
-
-
-                                    <div class="form-field">
-
-                                        <label>
-                                            Вход / подъезд
-                                        </label>
-
-                                        <input
-                                            name="entrance"
-
-                                            value="{{ p.entrance or '' }}"
-                                        >
-
-                                    </div>
-
-
-                                    <div class="form-field">
-
-                                        <label>
-                                            MAC-адрес
-                                        </label>
-
-                                        <input
-                                            name="mac"
-
-                                            value="{{ p.mac }}"
-
-                                            required
-                                        >
-
-                                    </div>
-
-
-                                    <div class="form-field">
-
-                                        <label>
-                                            IP-адрес
-                                        </label>
-
-                                        <input
-                                            name="ip"
-
-                                            value="{{ p.ip or '' }}"
-
-                                            placeholder="192.168.1.100"
-                                        >
-
-                                    </div>
-
-
-                                    <button
-                                        type="submit"
-
-                                        class="btn primary-btn"
-                                    >
-
-                                        Сохранить изменения
-
-                                    </button>
-
-                                </form>
-
-
-                                <form
-                                    method="post"
-
-                                    action="/panels/delete"
-
-                                    class="panel-delete-form"
-
-                                    onsubmit="return confirm(
-                                        'Удалить панель по адресу «{{ p.address }}{% if p.entrance %}, {{ p.entrance }}{% endif %}»? Панель будет полностью удалена из базы.'
-                                    );"
-                                >
-
-                                    <input
-                                        type="hidden"
-
-                                        name="panel_id"
-
-                                        value="{{ p.id }}"
-                                    >
-
-
-                                    <button
-                                        type="submit"
-
-                                        class="btn danger-btn"
-                                    >
-
-                                        Удалить панель
-
-                                    </button>
-
-                                </form>
-
-                            </div>
-
-                        </details>
-
-                    </td>
-
-                </tr>
-
-
-                {% else %}
-
-
-                <tr>
-
-                    <td
-                        colspan="6"
-
-                        class="panels-empty-state"
-                    >
-
-                        Панели пока не добавлены
-
-                    </td>
-
-                </tr>
-
-
-                {% endfor %}
-
-            </tbody>
-
-        </table>
-
-
-        <div
-            id="panelsSearchEmpty"
-
-            class="panels-search-empty"
-
-            hidden
-        >
-
-            По вашему запросу панели не найдены
-
-        </div>
-
-    </div>
-
-</section>
-
-
-<script src="/static/js/panels.js?v=3"></script>
-
+<div class="modal-backdrop panels-modal" id="panelAddModal" hidden>
+    <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="panelAddTitle">
+        <header><div><small>Новое устройство</small><h2 id="panelAddTitle">Добавить панель</h2></div><button type="button" class="btn btn-ghost" data-close-modal>Закрыть</button></header>
+        <form method="post" action="/panels/add" class="panel-modal-form">
+            <label class="is-wide"><span>Адрес</span><input name="address" placeholder="Тепличная 63, корп. 1" required></label>
+            <label><span>Подъезд / вход</span><input name="entrance" placeholder="Подъезд 1"></label>
+            <label><span>IP-адрес</span><input name="ip" placeholder="10.10.1.15"></label>
+            <label class="is-wide"><span>MAC-адрес</span><input name="mac" placeholder="08:13:CD:00:1D:C2" required></label>
+            <p class="panel-modal-note">Доступ к API берётся из общих настроек и не хранится в карточке панели.</p>
+            <button class="btn is-wide" type="submit">Сохранить панель →</button>
+        </form>
+    </section>
+</div>
+
+<div class="modal-backdrop panels-modal" id="panelEditModal" hidden>
+    <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="panelEditTitle">
+        <header><div><small>Карточка устройства</small><h2 id="panelEditTitle">Редактировать панель</h2></div><button type="button" class="btn btn-ghost" data-close-modal>Закрыть</button></header>
+        <form method="post" action="/panels/edit" class="panel-modal-form" id="panelEditForm">
+            <input type="hidden" name="panel_id" id="editPanelId">
+            <label class="is-wide"><span>Адрес</span><input name="address" id="editPanelAddress" required></label>
+            <label><span>Подъезд / вход</span><input name="entrance" id="editPanelEntrance"></label>
+            <label><span>IP-адрес</span><input name="ip" id="editPanelIp"></label>
+            <label class="is-wide"><span>MAC-адрес</span><input name="mac" id="editPanelMac" required></label>
+            <button class="btn is-wide" type="submit">Сохранить изменения →</button>
+        </form>
+    </section>
+</div>
+
+<div class="modal-backdrop panels-modal" id="panelImportModal" hidden>
+    <section class="modal-card is-small" role="dialog" aria-modal="true" aria-labelledby="panelImportTitle">
+        <header><div><small>Массовая загрузка</small><h2 id="panelImportTitle">Импорт Excel</h2></div><button type="button" class="btn btn-ghost" data-close-modal>Закрыть</button></header>
+        <form method="post" action="/panels/import" enctype="multipart/form-data" class="panel-import-form">
+            <label><span>Файл .xlsx</span><input type="file" name="file" accept=".xlsx,.xlsm,.xls" required></label>
+            <p>Обязательные колонки: <b>Адрес</b> и <b>MAC</b>. Подъезд можно указать в строке адреса.</p>
+            <button class="btn" type="submit">Импортировать →</button>
+        </form>
+    </section>
+</div>
+
+<div class="panels-toast" id="panelsToast" role="status" aria-live="polite"></div>
+<script src="/static/js/panels.js?v=7"></script>
 {% endblock %}

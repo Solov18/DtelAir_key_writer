@@ -613,6 +613,29 @@ def init_db():
             "ip",
             "ip TEXT DEFAULT ''",
         )
+        panel_status_columns = {
+            "api_status": "api_status TEXT DEFAULT 'unknown'",
+            "last_checked_at": "last_checked_at TEXT DEFAULT ''",
+            "last_online_at": "last_online_at TEXT DEFAULT ''",
+            "response_time_ms": "response_time_ms INTEGER DEFAULT NULL",
+            "device_model": "device_model TEXT DEFAULT ''",
+            "firmware_version": "firmware_version TEXT DEFAULT ''",
+            "temperature": "temperature REAL DEFAULT NULL",
+            "supply_voltage": "supply_voltage REAL DEFAULT NULL",
+            "uptime_seconds": "uptime_seconds INTEGER DEFAULT NULL",
+            "sip_registered": "sip_registered INTEGER DEFAULT NULL",
+            "reported_mac": "reported_mac TEXT DEFAULT ''",
+            "last_error": "last_error TEXT DEFAULT ''",
+        }
+        for column_name, column_sql in panel_status_columns.items():
+            _add_column_if_missing(conn, "panels", column_name, column_sql)
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_panels_api_status ON panels(enabled, api_status)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_panels_address_entrance ON panels(address, entrance)"
+        )
 
         # Изменения только для учёта сотрудников и истории ключей.
         _add_column_if_missing(
