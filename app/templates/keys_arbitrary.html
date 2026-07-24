@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+
+{% block page_name %}Произвольные ключи{% endblock %}
+
+{% block content %}
+<div class="keys-prepare-page keys-production-scanner keys-pair-entry-page">
+    <header class="keys-prepare-hero">
+        <div>
+            <a class="keys-back-link" href="/keys">← База ключей</a>
+            <h1>Ключи не по порядку</h1>
+            <p class="subtitle">{{ key_type.name }} · заполните отдельный номер и HEX для каждого физического ключа.</p>
+        </div>
+        <div class="panel keys-batch-summary">
+            <span><b>{{ rows|length }}</b>строк</span>
+            <span><b id="savedCount">0</b>сохранено</span>
+            <span><b id="pendingCount">{{ rows|length }}</b>осталось</span>
+        </div>
+    </header>
+
+    <section class="panel keys-autosave-card" aria-live="polite">
+        <span class="keys-autosave-state"></span>
+        <div>
+            <h2>Черновик сохраняется в браузере</h2>
+            <p>Заполните номер и HEX, затем нажмите «Сохранить» или Enter. В базу не попадут пустые и незавершённые строки.</p>
+        </div>
+        <div class="keys-scan-progress"><span id="scanProgressBar"></span></div>
+    </section>
+
+    <section class="panel keys-scanner-guide">
+        <span class="keys-scanner-icon">
+            <svg viewBox="0 0 24 24"><circle cx="6" cy="7" r="2"/><circle cx="18" cy="12" r="2"/><circle cx="9" cy="18" r="2"/><path d="m8 7 7.5 4M16.5 13.5 11 17"/></svg>
+        </span>
+        <div>
+            <h2>Номера могут быть любыми</h2>
+            <p class="subtitle">Уникальность номера проверяется внутри типа «{{ key_type.name }}», а HEX — по всей базе.</p>
+        </div>
+        <div class="keys-scanner-hints">
+            <span><kbd>Enter</kbd> сохранить строку</span>
+        </div>
+    </section>
+
+    <section
+        class="panel keys-scan-panel keys-pair-panel"
+        data-key-pair-table
+        data-key-type-id="{{ key_type.id }}"
+        data-draft-key="dtel-arbitrary-keys-{{ key_type.id }}-{{ rows|length }}"
+    >
+        <div class="keys-section-head keys-scan-head">
+            <div>
+                <h2>Новые ключи «{{ key_type.name }}»</h2>
+                <p class="subtitle">Номер — только цифры. HEX — от 6 до 16 символов 0–9/A–F.</p>
+            </div>
+            <div class="keys-scan-head-actions">
+                <button type="button" class="btn btn-ghost" data-save-all>Сохранить заполненные</button>
+                <a href="/keys" class="btn" data-finish>Завершить</a>
+            </div>
+        </div>
+
+        <div class="table-scroll keys-scan-scroll">
+            <table class="keys-scan-table keys-pair-table">
+                <thead><tr><th>Строка</th><th>Номер ключа</th><th>HEX со считывателя</th><th>Состояние</th><th></th></tr></thead>
+                <tbody>
+                {% for row in rows %}
+                <tr class="keys-pair-row is-waiting" data-row-index="{{ row.index }}">
+                    <td><b>{{ row.index }}</b></td>
+                    <td>
+                        <input class="key-number-input" value="{{ row.number }}" inputmode="numeric" autocomplete="off" placeholder="Например: 456790">
+                    </td>
+                    <td>
+                        <input class="key-hex-input" value="" autocomplete="off" spellcheck="false" placeholder="Считайте или введите HEX">
+                    </td>
+                    <td><span class="key-scan-state">Заполните номер и HEX</span></td>
+                    <td><button type="button" class="btn-small btn-ghost key-pair-save">Сохранить</button></td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <footer class="keys-scan-footer">
+            <span>Строка создаётся в базе только после успешной проверки обоих полей.</span>
+            <span>Несохранённый ввод останется в черновике этого браузера.</span>
+        </footer>
+    </section>
+</div>
+
+<div class="keys-scan-toast" id="scanToast" role="status" aria-live="polite"></div>
+<script src="/static/js/keys-pair-entry.js?v=2"></script>
+{% endblock %}

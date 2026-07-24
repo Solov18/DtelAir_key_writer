@@ -63,7 +63,15 @@
                 </button>
                 <button type="button" class="btn" data-keys-modal="keyPrepareModal">
                     <svg viewBox="0 0 24 24"><circle cx="9" cy="15" r="4"/><path d="m12 12 8-8M16 8l3 3"/></svg>
-                    Подготовить ключи
+                    Добавить по порядку
+                </button>
+                <button type="button" class="btn btn-ghost" data-keys-modal="keyArbitraryModal">
+                    <svg viewBox="0 0 24 24"><circle cx="6" cy="7" r="2"/><circle cx="18" cy="12" r="2"/><circle cx="9" cy="18" r="2"/><path d="m8 7 7.5 4M16.5 13.5 11 17"/></svg>
+                    Добавить не по порядку
+                </button>
+                <button type="button" class="btn btn-ghost" data-keys-modal="keyMissingModal">
+                    <svg viewBox="0 0 24 24"><path d="M4 6h5M15 6h5M4 12h3M11 12h9M4 18h8M17 18h3"/><path d="M11 4v4M9 6h4"/></svg>
+                    Найти пропуски
                 </button>
                 <button type="button" class="btn btn-ghost" data-keys-modal="keyImportModal">
                     <svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM14 3v5h5M9 15h6M12 12v6"/></svg>
@@ -243,10 +251,70 @@
     </div>
 </div>
 
+<div class="modal-backdrop" id="keyArbitraryModal">
+    <div class="modal-window panel keys-modal-window">
+        <div class="modal-head">
+            <div>
+                <h2>Добавить ключи не по порядку</h2>
+                <p class="subtitle">Для каждого ключа вы самостоятельно укажете номер и HEX.</p>
+            </div>
+            <button type="button" class="btn-small btn-ghost modal-close" data-close="keyArbitraryModal">Закрыть</button>
+        </div>
+        <form method="get" action="/keys/arbitrary" class="keys-modal-form">
+            <label>Тип ключа</label>
+            <select name="key_type_id" required>
+                {% for key_type in active_key_types %}
+                <option value="{{ key_type.id }}">{{ key_type.name }} — {{ key_type.keys_count_text }}</option>
+                {% endfor %}
+            </select>
+            <label>Сколько строк подготовить</label>
+            <input type="number" name="count" value="10" min="1" max="500" required>
+            <div class="keys-format-note">
+                Номера могут идти в любом порядке. Строка попадёт в базу только тогда, когда заполнены и номер, и корректный HEX.
+            </div>
+            <button type="submit" class="btn">Открыть таблицу ввода</button>
+        </form>
+    </div>
+</div>
+
+<div class="modal-backdrop" id="keyMissingModal">
+    <div class="modal-window panel keys-modal-window">
+        <div class="modal-head">
+            <div>
+                <h2>Найти пропущенные номера</h2>
+                <p class="subtitle">Проверка выполняется отдельно внутри выбранного типа ключа.</p>
+            </div>
+            <button type="button" class="btn-small btn-ghost modal-close" data-close="keyMissingModal">Закрыть</button>
+        </div>
+        <form method="get" action="/keys/missing" class="keys-modal-form">
+            <label>Тип ключа</label>
+            <select name="key_type_id" required>
+                {% for key_type in active_key_types %}
+                <option value="{{ key_type.id }}">{{ key_type.name }} — {{ key_type.keys_count_text }}</option>
+                {% endfor %}
+            </select>
+            <div class="keys-form-row">
+                <div>
+                    <label>Проверить с номера</label>
+                    <input type="text" inputmode="numeric" pattern="[0-9]*" name="start_number" placeholder="Первый сохранённый">
+                </div>
+                <div>
+                    <label>Проверить по номер</label>
+                    <input type="text" inputmode="numeric" pattern="[0-9]*" name="end_number" placeholder="Последний сохранённый">
+                </div>
+            </div>
+            <div class="keys-format-note">
+                Если границы оставить пустыми, система проверит промежуток от первого до последнего сохранённого номера этого типа.
+            </div>
+            <button type="submit" class="btn">Проверить нумерацию</button>
+        </form>
+    </div>
+</div>
+
 <div class="modal-backdrop" id="keyPrepareModal" data-dismiss="explicit" role="dialog" aria-modal="true" aria-labelledby="keyPrepareModalTitle">
     <div class="modal-window panel keys-modal-window">
         <div class="modal-head">
-            <div><h2 id="keyPrepareModalTitle">Подготовить ключи</h2><p class="subtitle">Создайте последовательность номеров для считывателя.</p></div>
+            <div><h2 id="keyPrepareModalTitle">Добавить ключи по порядку</h2><p class="subtitle">Создайте последовательность номеров для считывателя.</p></div>
             <button type="button" class="btn-small btn-ghost modal-close" data-close="keyPrepareModal">Закрыть</button>
         </div>
         <form method="post" action="/keys/prepare" class="keys-modal-form">

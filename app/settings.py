@@ -1,6 +1,11 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
+    database_url: str = (
+        "postgresql+psycopg://dtel:change-me@127.0.0.1:5432/dtel"
+    )
+    database_echo: bool = False
+    database_connect_timeout: int = 5
     crm_base_url: str = 'https://crm.dtel.ru'
     crm_cookie: str = ''
     crm_login: str = ''

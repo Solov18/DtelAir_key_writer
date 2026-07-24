@@ -74,6 +74,48 @@ class KeyInventoryTests(unittest.TestCase):
         self.assertEqual(key_types[empty_id]["last_number"], "")
         self.assertEqual(key_types[empty_id]["next_number"], "")
 
+    def test_missing_numbers_are_found_inside_selected_key_type(self):
+        blue_id = key_repository.create_key_type("Синий", "#168EE8")
+        orange_id = key_repository.create_key_type("Оранжевый", "#FF982A")
+
+        self._create_key(blue_id, "0100", "AABB0100")
+        self._create_key(blue_id, "0102", "AABB0102")
+        self._create_key(blue_id, "0105", "AABB0105")
+        self._create_key(orange_id, "0101", "CCDD0101")
+
+        result = key_repository.get_missing_key_numbers(blue_id)
+
+        self.assertEqual(result["start"], "0100")
+        self.assertEqual(result["end"], "0105")
+        self.assertEqual(result["numbers"], ["0101", "0103", "0104"])
+        self.assertEqual(result["missing_count"], 3)
+        self.assertEqual(
+            [(item["start"], item["end"], item["count"]) for item in result["ranges"]],
+            [("0101", "0101", 1), ("0103", "0104", 2)],
+        )
+
+    def test_missing_numbers_support_explicit_range_and_ignore_blank_hex(self):
+        key_type_id = key_repository.create_key_type("Синий", "#168EE8")
+        self._create_key(key_type_id, "100", "AABB0100")
+        self._create_key(key_type_id, "102", "AABB0102")
+        with database.db() as conn:
+            conn.execute(
+                """
+                INSERT INTO keys(key_type_id, number, hex_value, key_type, status)
+                VALUES (?, '101', '', 'Синий', 'free')
+                """,
+                (key_type_id,),
+            )
+
+        result = key_repository.get_missing_key_numbers(
+            key_type_id,
+            "099",
+            "103",
+        )
+
+        self.assertEqual(result["numbers"], ["099", "101", "103"])
+        self.assertEqual(result["missing_count"], 3)
+
     def test_scanner_rejects_duplicate_hex(self):
         key_type_id = key_repository.create_key_type("Стикер", "#9B72E8")
         batch = key_repository.prepare_key_range(key_type_id, 10, 2, "Тест")

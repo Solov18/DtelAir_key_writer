@@ -2,7 +2,7 @@ import io
 import re
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, File, Form, Request, UploadFile
+from fastapi import APIRouter, File, Form, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from openpyxl import Workbook
 
@@ -14,8 +14,10 @@ from app.repositories.key_repository import (
     get_key_assignments,
     get_key_history,
     get_key_statistics,
+    get_key_type,
     get_key_types,
     get_keys_page,
+    get_missing_key_numbers,
     key_status_name,
     prepare_key_range,
     release_key,
@@ -234,6 +236,65 @@ def keys_prepare(
         {
             "request": request,
             "batch": batch,
+        },
+    )
+
+
+@router.get("/keys/arbitrary", response_class=HTMLResponse)
+def keys_arbitrary(
+    request: Request,
+    key_type_id: int = Query(...),
+    count: int = Query(1),
+    suggested_number: str = Query(""),
+):
+    key_type = get_key_type(key_type_id)
+    if not key_type or not key_type.get("enabled"):
+        return _keys_redirect(error="Выберите активный тип ключа.")
+    if count < 1 or count > 500:
+        return _keys_redirect(error="За один раз можно добавить от 1 до 500 произвольных ключей.")
+
+    clean_suggestion = suggested_number.strip()
+    if clean_suggestion and not re.fullmatch(r"[0-9]+", clean_suggestion):
+        return _keys_redirect(error="Предложенный номер должен состоять только из цифр.")
+
+    return templates.TemplateResponse(
+        "keys_arbitrary.html",
+        {
+            "request": request,
+            "key_type": key_type,
+            "rows": [
+                {
+                    "index": index + 1,
+                    "number": clean_suggestion if index == 0 else "",
+                }
+                for index in range(count)
+            ],
+        },
+    )
+
+
+@router.get("/keys/missing", response_class=HTMLResponse)
+def keys_missing(
+    request: Request,
+    key_type_id: int = Query(...),
+    start_number: str = Query(""),
+    end_number: str = Query(""),
+):
+    try:
+        result = get_missing_key_numbers(
+            key_type_id,
+            start_number,
+            end_number,
+        )
+    except ValueError as error:
+        return _keys_redirect(error=str(error))
+
+    return templates.TemplateResponse(
+        "keys_missing.html",
+        {
+            "request": request,
+            "result": result,
+            "active_key_types": get_key_types(include_archived=False),
         },
     )
 

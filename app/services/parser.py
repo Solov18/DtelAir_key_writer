@@ -272,15 +272,15 @@ def get_panel_addresses() -> list[dict]:
         rows = conn.execute(
             """
             SELECT
-                address,
+                MIN(address) AS address,
                 COUNT(*) AS panel_count,
                 GROUP_CONCAT(DISTINCT entrance) AS entrances
             FROM panels
             WHERE enabled = 1
               AND address IS NOT NULL
               AND TRIM(address) != ''
-            GROUP BY address COLLATE NOCASE
-            ORDER BY address COLLATE NOCASE
+            GROUP BY SMART_NORM(address)
+            ORDER BY SMART_NORM(MIN(address))
             """
         ).fetchall()
 

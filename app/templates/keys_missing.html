@@ -1,0 +1,122 @@
+{% extends 'base.html' %}
+
+{% block page_name %}Пропуски нумерации{% endblock %}
+
+{% block content %}
+<div class="keys-prepare-page keys-production-scanner keys-missing-page">
+    <header class="keys-prepare-hero">
+        <div>
+            <a class="keys-back-link" href="/keys">← База ключей</a>
+            <h1>Пропущенные номера</h1>
+            <p class="subtitle">{{ result.key_type.name }}{% if result.start %} · диапазон {{ result.start }}–{{ result.end }}{% endif %}</p>
+        </div>
+        <div class="panel keys-batch-summary">
+            <span><b>{{ result.missing_count }}</b>пропущено</span>
+            <span><b>{{ result.ranges|length }}</b>диапазонов</span>
+            <span><b id="savedCount">0</b>добавлено</span>
+        </div>
+    </header>
+
+    <section class="panel keys-missing-filter">
+        <div>
+            <h2>Проверить другой диапазон</h2>
+            <p class="subtitle">Границы можно уточнить, если у типа несколько независимых серий номеров.</p>
+        </div>
+        <form method="get" action="/keys/missing">
+            <select name="key_type_id" required>
+                {% for key_type in active_key_types %}
+                <option value="{{ key_type.id }}" {% if key_type.id == result.key_type.id %}selected{% endif %}>{{ key_type.name }}</option>
+                {% endfor %}
+            </select>
+            <input name="start_number" inputmode="numeric" pattern="[0-9]*" value="{{ result.start }}" placeholder="С номера">
+            <input name="end_number" inputmode="numeric" pattern="[0-9]*" value="{{ result.end }}" placeholder="По номер">
+            <button class="btn-small" type="submit">Проверить</button>
+        </form>
+    </section>
+
+    {% if result.empty_type %}
+    <section class="panel keys-range-empty">
+        <span class="keys-range-empty-icon">i</span>
+        <div>
+            <h2>У этого типа пока нет сохранённых ключей</h2>
+            <p>Автоматически определить границы невозможно. Вернитесь в реестр и укажите диапазон проверки вручную.</p>
+        </div>
+        <a href="/keys" class="btn">Вернуться в реестр</a>
+    </section>
+    {% elif not result.missing_count %}
+    <section class="panel keys-range-empty">
+        <span class="keys-range-empty-icon">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>
+        </span>
+        <div>
+            <h2>Пропусков не найдено</h2>
+            <p>Все номера {{ result.start }}–{{ result.end }} типа «{{ result.key_type.name }}» сохранены с HEX.</p>
+        </div>
+        <a href="/keys" class="btn">Вернуться в реестр</a>
+    </section>
+    {% else %}
+    <section class="panel keys-gap-summary">
+        <div class="keys-section-head">
+            <div>
+                <h2>Найденные пропуски</h2>
+                <p class="subtitle">Диапазоны помогают быстро понять, где нарушена нумерация.</p>
+            </div>
+        </div>
+        <div class="keys-gap-ranges">
+            {% for gap in result.ranges %}
+            <span>
+                <b>{% if gap.start == gap.end %}№{{ gap.start }}{% else %}№{{ gap.start }}–{{ gap.end }}{% endif %}</b>
+                <small>{{ gap.count }} пропущено</small>
+            </span>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section
+        class="panel keys-scan-panel keys-pair-panel"
+        data-key-pair-table
+        data-key-type-id="{{ result.key_type.id }}"
+        data-draft-key="dtel-missing-keys-{{ result.key_type.id }}-{{ result.start }}-{{ result.end }}"
+    >
+        <div class="keys-section-head keys-scan-head">
+            <div>
+                <h2>Добавить найденные номера</h2>
+                <p class="subtitle">
+                    Введите HEX напротив нужного номера.
+                    {% if result.truncated %}Показаны первые {{ result.shown_count }} из {{ result.missing_count }} — уточните диапазон для остальных.{% endif %}
+                </p>
+            </div>
+            <div class="keys-scan-head-actions">
+                <button type="button" class="btn btn-ghost" data-save-all>Сохранить заполненные</button>
+                <a href="/keys" class="btn" data-finish>Завершить</a>
+            </div>
+        </div>
+        <div class="table-scroll keys-scan-scroll">
+            <table class="keys-scan-table keys-pair-table">
+                <thead><tr><th>№</th><th>Пропущенный номер</th><th>HEX со считывателя</th><th>Состояние</th><th></th></tr></thead>
+                <tbody>
+                {% for number in result.numbers %}
+                <tr class="keys-pair-row is-waiting" data-row-index="{{ loop.index }}">
+                    <td><b>{{ loop.index }}</b></td>
+                    <td><input class="key-number-input" value="{{ number }}" readonly></td>
+                    <td><input class="key-hex-input" value="" autocomplete="off" spellcheck="false" placeholder="Считайте HEX для №{{ number }}"></td>
+                    <td><span class="key-scan-state">Ожидает HEX</span></td>
+                    <td><button type="button" class="btn-small btn-ghost key-pair-save">Сохранить</button></td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <footer class="keys-scan-footer">
+            <span>Номер уже подставлен, остаётся только считать HEX.</span>
+            <span>После сохранения пропуск исчезнет при следующей проверке.</span>
+        </footer>
+    </section>
+    {% endif %}
+</div>
+
+{% if result.missing_count %}
+<div class="keys-scan-toast" id="scanToast" role="status" aria-live="polite"></div>
+<script src="/static/js/keys-pair-entry.js?v=2"></script>
+{% endif %}
+{% endblock %}

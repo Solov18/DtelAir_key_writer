@@ -244,13 +244,25 @@ def get_panel_filter_options() -> dict:
         addresses = [
             row[0]
             for row in conn.execute(
-                "SELECT DISTINCT address FROM panels WHERE address <> '' ORDER BY address COLLATE NOCASE"
+                """
+                SELECT MIN(address) AS address
+                FROM panels
+                WHERE address <> ''
+                GROUP BY SMART_NORM(address)
+                ORDER BY SMART_NORM(MIN(address))
+                """
             )
         ]
         entrances = [
             row[0]
             for row in conn.execute(
-                "SELECT DISTINCT entrance FROM panels WHERE entrance <> '' ORDER BY entrance COLLATE NOCASE"
+                """
+                SELECT MIN(entrance) AS entrance
+                FROM panels
+                WHERE entrance <> ''
+                GROUP BY SMART_NORM(entrance)
+                ORDER BY SMART_NORM(MIN(entrance))
+                """
             )
         ]
     return {"addresses": addresses, "entrances": entrances}

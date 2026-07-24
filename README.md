@@ -1,105 +1,160 @@
-# Key Writer Simple v2
+# Dtel Access Manager
 
-Минимальное веб-приложение вместо старого скрипта.
+FastAPI-приложение для учёта ключей, сотрудников, управляющих компаний и
+домофонных панелей, а также для записи ключей в CRM.
 
-Главная задача:
+Основная база данных — PostgreSQL. Доступ к ней выполняется через SQLAlchemy 2
+Session и драйвер psycopg 3. Структурой управляет Alembic.
 
-1. Вставить сообщение из чата.
-2. Найти номер ключа в базе и получить HEX.
-3. Найти панели по адресу.
-4. Прописать ключи в CRM.
+## Требования
 
-Дополнительно:
+- Python 3.12+;
+- Docker Compose или отдельный PostgreSQL;
+- учётные данные CRM/панелей для реальных внешних операций.
 
-- ключи сотрудников на все панели или выборочно;
-- ключи управляющих компаний по заранее настроенным наборам домов/входов;
-- импорт базы ключей из Excel/CSV;
-- импорт базы адресов и панелей из CSV;
-- журнал операций;
-- безопасный режим DRY_RUN.
+## Первый запуск
 
-## Запуск в PyCharm Terminal
+Создайте виртуальное окружение и установите зависимости:
 
 ```powershell
-cd key_writer_simple_v2
-scripts\run_dev.bat
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
 ```
 
-Открыть:
+Создайте локальный `.env`:
 
-```text
-http://127.0.0.1:8000
+```powershell
+Copy-Item .env.example .env
 ```
 
-## Боевой режим
+Обязательно смените `POSTGRES_PASSWORD`, ту же строку укажите в
+`DATABASE_URL`. `.env` не должен попадать в Git.
 
-В файле `.env`:
+Запустите PostgreSQL:
+
+```powershell
+docker compose up -d postgres
+docker compose ps
+```
+
+Создайте схему:
+
+```powershell
+alembic upgrade head
+alembic current
+```
+
+## Перенос сотрудников и пользователей из SQLite
+
+Скрипт переносит только `employees` и `users`, сохраняет ID и сверяет
+количество строк:
+
+```powershell
+python scripts\migrate_sqlite_to_postgres.py --source data\app.db
+```
+
+Повторная проверка без записи:
+
+```powershell
+python scripts\migrate_sqlite_to_postgres.py `
+  --source data\app.db `
+  --verify-only
+```
+
+SQLite открывается в неизменяемом read-only режиме. Скрипт сверяет SHA-256 до
+и после и не удаляет `data/app.db`. Если в PostgreSQL уже есть конфликтующая
+строка с тем же ID, транзакция прерывается без перезаписи.
+
+В исходном файле фактически найдены не только сотрудники и пользователи, но и
+5 типов ключей, 3 ключа и 13 событий журнала. В соответствии с правилами
+переноса эти записи игнорируются. Контрольные количества переносимых таблиц в
+текущем снимке: `employees = 77`, `users = 2`.
+
+## Проверка PostgreSQL
+
+Транзакционный smoke-тест создаёт, читает, меняет и удаляет временные записи,
+после чего полностью откатывает транзакцию:
+
+```powershell
+python scripts\smoke_postgres_crud.py
+```
+
+Запуск тестов проекта:
+
+```powershell
+python -m unittest discover -s tests -v
+```
+
+## Запуск приложения
+
+```powershell
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Открыть: <http://127.0.0.1:8000>
+
+Приложение при старте проверяет соединение и наличие таблиц. Оно не создаёт
+схему автоматически: если миграции не применены, будет показана подсказка
+`alembic upgrade head`.
+
+## Основные переменные окружения
 
 ```env
+DATABASE_URL=postgresql+psycopg://dtel:change-me@127.0.0.1:5432/dtel
+DATABASE_ECHO=false
+DATABASE_CONNECT_TIMEOUT=5
+
 CRM_BASE_URL=https://crm.dtel.ru
-DRY_RUN=false
-```
-
-Для авторизации выберите один из двух вариантов.
-
-Вариант 1 — готовая cookie из авторизованной CRM-сессии:
-
-```env
-CRM_COOKIE=PHPSESSID=...
-```
-
-Можно вставить как само значение cookie, так и строку, начинающуюся с `Cookie:`.
-
-Вариант 2 — автоматический вход в CRM:
-
-```env
 CRM_COOKIE=
-CRM_LOGIN=логин
-CRM_PASSWORD=пароль
-CRM_BUYER_ID=ID_компании
+CRM_LOGIN=
+CRM_PASSWORD=
+CRM_BUYER_ID=
+DRY_RUN=false
+
+PANEL_API_LOGIN=
+PANEL_API_PASSWORD=
+PANEL_API_TIMEOUT=3
 ```
 
-Приложение получает CSRF-токен на `/site/auth`, входит через
-`/site/auth/login`, сохраняет сессию и повторяет вход при её истечении.
+`DRY_RUN=true` запрещает реальные изменения во внешних системах.
 
-При `DRY_RUN=true` запросы не отправляются. При `DRY_RUN=false`, но без cookie
-или полного набора реквизитов, запись завершается явной ошибкой авторизации.
+## Alembic
 
-## Импорт панелей CSV
+Текущая версия:
 
-Файл `panels.csv`:
-
-```csv
-address;entrance;name;mac;tags
-Тепличная 65;калитка;Тепличная 65 калитка;D4:A0:FB:1B:36:90;employee,uk,gate
-Тепличная 65;общий вход;Тепличная 65 общий вход;08:13:CD:00:1D:C2;employee,uk
+```powershell
+alembic current
 ```
 
-Теги нужны для выборок:
+Обновление:
 
-- `employee` — можно писать ключи сотрудников;
-- `uk` — можно добавлять в наборы управляющих компаний;
-- `gate` — калитка/ворота.
+```powershell
+alembic upgrade head
+```
 
-## Импорт ключей Excel
+Создавать следующую ревизию после изменения `app/models.py`:
 
-Поддерживаются все вкладки Excel. Главное, чтобы были колонки:
+```powershell
+alembic revision --autogenerate -m "описание изменения"
+```
 
-- `номер` или `number`;
-- `код`, `hex`, `hex_value` или `код для вшития`;
-- необязательно: `тип`, `type`, `вид`.
+Автогенерацию всегда нужно проверить вручную до применения.
 
-Пример:
+## Документация базы
 
-| номер | код для вшития | тип |
-|---|---|---|
-| 5654 | 363FFAD7 | простой синий |
-| 001101 | 362E0847 | бесплатный |
+Фактические таблицы, колонки, индексы, внешние ключи, `ON DELETE`, жизненный
+цикл ключа, ER-схема и резервное копирование описаны в
+[docs/database.md](docs/database.md).
 
-## Что важно
+## Резервное копирование
 
-Приложение не создает дома/панели в CRM. Оно хранит только локальное соответствие:
+Перед миграциями:
 
-`адрес -> вход -> MAC панели`
+```powershell
+$pgUrl = $env:DATABASE_URL -replace '^postgresql\+psycopg:', 'postgresql:'
+pg_dump --format=custom --no-owner --file=dtel_backup.dump --dbname=$pgUrl
+```
 
-Если поставили новую панель и уже добавили ее в CRM, здесь нужно добавить ее MAC в раздел “Адреса/панели”.
+Порядок восстановления и дополнительные рекомендации приведены в
+[docs/database.md](docs/database.md#резервное-копирование-и-восстановление).

@@ -1,795 +1,478 @@
-import os
-import sqlite3
+"""SQLAlchemy 2 database access.
+
+Application repositories historically use small SQL strings.  ``db()`` keeps
+their compact API while every statement now runs through a SQLAlchemy
+``Session``.  The adapter is intentionally temporary-friendly: it accepts the
+old positional ``?`` parameters and rewrites the small SQLite-only SQL surface
+for PostgreSQL without changing repository business rules.
+"""
+
+from __future__ import annotations
+
+import re
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from pathlib import Path
+from threading import RLock
+from typing import Any
 
+from sqlalchemy import Engine, create_engine, event, inspect, text
+from sqlalchemy.engine import Result
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import NullPool
+
+from app.models import TABLES_WITH_ID, metadata
 from app.search_utils import normalize_search_text
+from app.settings import settings
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = BASE_DIR / "data"
-DATA_DIR.mkdir(exist_ok=True)
 
-DB_PATH = Path(os.environ.get("APP_DB_PATH", DATA_DIR / "app.db"))
+# Compatibility for the existing isolated unit tests.  Production never reads
+# APP_DB_PATH and always uses DATABASE_URL from settings/.env.
+DB_PATH: Path | None = None
+
+_engine: Engine | None = None
+_session_factory: sessionmaker[Session] | None = None
+_configured_url = ""
+_lock = RLock()
+
+
+class DatabaseNotMigratedError(RuntimeError):
+    """Raised when PostgreSQL is reachable but Alembic was not applied."""
+
+
+class CompatRow(Mapping[str, Any]):
+    """Mapping row that also supports the legacy integer index access."""
+
+    def __init__(self, values: Sequence[Any], keys: Sequence[str]):
+        self._values = tuple(values)
+        self._keys = tuple(keys)
+        self._mapping = dict(zip(self._keys, self._values))
+
+    def __getitem__(self, key: str | int) -> Any:
+        if isinstance(key, int):
+            return self._values[key]
+        return self._mapping[key]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._keys)
+
+    def __len__(self) -> int:
+        return len(self._keys)
+
+
+class CompatResult:
+    """Small result facade used by the existing repositories."""
+
+    def __init__(self, result: Result[Any], *, returns_insert_id: bool = False):
+        self._result = result
+        self._keys = tuple(result.keys()) if result.returns_rows else ()
+        self._returns_insert_id = returns_insert_id
+        self._lastrowid_loaded = False
+        self._lastrowid: int | None = None
+
+    def _wrap(self, row: Any | None) -> CompatRow | None:
+        if row is None:
+            return None
+        return CompatRow(tuple(row), self._keys)
+
+    def fetchone(self) -> CompatRow | None:
+        return self._wrap(self._result.fetchone())
+
+    def fetchall(self) -> list[CompatRow]:
+        return [self._wrap(row) for row in self._result.fetchall()]  # type: ignore[misc]
+
+    def __iter__(self) -> Iterator[CompatRow]:
+        for row in self._result:
+            yield self._wrap(row)  # type: ignore[misc]
+
+    @property
+    def rowcount(self) -> int:
+        return int(getattr(self._result, "rowcount", -1) or 0)
+
+    @property
+    def lastrowid(self) -> int | None:
+        if self._lastrowid_loaded:
+            return self._lastrowid
+        self._lastrowid_loaded = True
+
+        if self._returns_insert_id:
+            row = self._result.fetchone()
+            self._lastrowid = int(row[0]) if row is not None else None
+            return self._lastrowid
+
+        raw = getattr(self._result, "lastrowid", None)
+        self._lastrowid = int(raw) if raw is not None else None
+        return self._lastrowid
+
+
+def _current_database_url() -> str:
+    if DB_PATH is not None:
+        return f"sqlite+pysqlite:///{Path(DB_PATH).resolve().as_posix()}"
+    return settings.database_url
+
+
+def configure_database(database_url: str | None = None) -> Engine:
+    """Configure and return the shared SQLAlchemy engine."""
+
+    global _engine, _session_factory, _configured_url
+    target_url = database_url or _current_database_url()
+
+    with _lock:
+        if _engine is not None and _configured_url == target_url:
+            return _engine
+        if _engine is not None:
+            _engine.dispose()
+
+        connect_args: dict[str, Any] = {}
+        if target_url.startswith("postgresql"):
+            connect_args["connect_timeout"] = settings.database_connect_timeout
+
+        engine_options: dict[str, Any] = {
+            "pool_pre_ping": True,
+            "echo": settings.database_echo,
+            "connect_args": connect_args,
+        }
+        if target_url.startswith("sqlite"):
+            engine_options["poolclass"] = NullPool
+
+        engine = create_engine(
+            target_url,
+            **engine_options,
+        )
+        if engine.dialect.name == "sqlite":
+            _configure_sqlite_test_engine(engine)
+
+        _engine = engine
+        _session_factory = sessionmaker(
+            bind=engine,
+            class_=Session,
+            autoflush=False,
+            expire_on_commit=False,
+        )
+        _configured_url = target_url
+        return engine
+
+
+def get_engine() -> Engine:
+    return configure_database()
+
+
+def _configure_sqlite_test_engine(engine: Engine) -> None:
+    """SQLite support is restricted to tests and the one-way import source."""
+
+    @event.listens_for(engine, "connect")
+    def _on_connect(dbapi_connection: Any, _connection_record: Any) -> None:
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys = ON")
+        cursor.close()
+        dbapi_connection.create_function(
+            "SMART_NORM",
+            1,
+            normalize_search_text,
+            deterministic=True,
+        )
+
+
+def _convert_qmark_parameters(
+    sql: str,
+    params: Sequence[Any],
+) -> tuple[str, dict[str, Any]]:
+    """Convert qmark placeholders while ignoring quoted string literals."""
+
+    values = list(params)
+    output: list[str] = []
+    bindings: dict[str, Any] = {}
+    value_index = 0
+    quote: str | None = None
+    index = 0
+
+    while index < len(sql):
+        char = sql[index]
+        if quote:
+            output.append(char)
+            if char == quote:
+                if index + 1 < len(sql) and sql[index + 1] == quote:
+                    output.append(sql[index + 1])
+                    index += 1
+                else:
+                    quote = None
+        elif char in {"'", '"'}:
+            quote = char
+            output.append(char)
+        elif char == "?":
+            if value_index >= len(values):
+                raise ValueError("SQL parameters are fewer than placeholders")
+            name = f"p{value_index}"
+            output.append(f":{name}")
+            bindings[name] = values[value_index]
+            value_index += 1
+        else:
+            output.append(char)
+        index += 1
+
+    if value_index != len(values):
+        raise ValueError("SQL parameters are greater than placeholders")
+    return "".join(output), bindings
+
+
+def _strip_function(sql: str, function_name: str) -> str:
+    """Remove a one-argument wrapper while preserving nested expressions."""
+
+    needle = function_name.lower() + "("
+    result = sql
+    search_from = 0
+    while True:
+        start = result.lower().find(needle, search_from)
+        if start < 0:
+            return result
+        open_paren = start + len(function_name)
+        depth = 0
+        quote: str | None = None
+        close_paren = -1
+        for index in range(open_paren, len(result)):
+            char = result[index]
+            if quote:
+                if char == quote:
+                    quote = None
+                continue
+            if char in {"'", '"'}:
+                quote = char
+            elif char == "(":
+                depth += 1
+            elif char == ")":
+                depth -= 1
+                if depth == 0:
+                    close_paren = index
+                    break
+        if close_paren < 0:
+            return result
+        inner = result[open_paren + 1 : close_paren]
+        result = result[:start] + inner + result[close_paren + 1 :]
+        search_from = start + len(inner)
+
+
+def _split_top_level_comma(value: str) -> tuple[str, str | None]:
+    depth = 0
+    quote: str | None = None
+    for index, char in enumerate(value):
+        if quote:
+            if char == quote:
+                quote = None
+            continue
+        if char in {"'", '"'}:
+            quote = char
+        elif char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+        elif char == "," and depth == 0:
+            return value[:index].strip(), value[index + 1 :].strip()
+    return value.strip(), None
+
+
+def _replace_group_concat(sql: str) -> str:
+    result = sql
+    search_from = 0
+    needle = "group_concat("
+    while True:
+        start = result.lower().find(needle, search_from)
+        if start < 0:
+            return result
+        open_paren = start + len("group_concat")
+        depth = 0
+        quote: str | None = None
+        close_paren = -1
+        for index in range(open_paren, len(result)):
+            char = result[index]
+            if quote:
+                if char == quote:
+                    quote = None
+                continue
+            if char in {"'", '"'}:
+                quote = char
+            elif char == "(":
+                depth += 1
+            elif char == ")":
+                depth -= 1
+                if depth == 0:
+                    close_paren = index
+                    break
+        if close_paren < 0:
+            return result
+
+        expression, separator = _split_top_level_comma(
+            result[open_paren + 1 : close_paren]
+        )
+        separator = separator or "','"
+        if expression.upper().startswith("DISTINCT "):
+            expression = expression[9:].strip()
+            replacement = (
+                f"STRING_AGG(DISTINCT CAST({expression} AS TEXT), {separator})"
+            )
+        else:
+            replacement = f"STRING_AGG(CAST({expression} AS TEXT), {separator})"
+        result = result[:start] + replacement + result[close_paren + 1 :]
+        search_from = start + len(replacement)
+
+
+def _rewrite_postgresql_sql(sql: str) -> str:
+    rewritten = _replace_group_concat(sql)
+    rewritten = _strip_function(rewritten, "datetime")
+    rewritten = re.sub(
+        r"\bCURRENT_TIMESTAMP\b",
+        "CAST(CURRENT_TIMESTAMP AS TEXT)",
+        rewritten,
+        flags=re.IGNORECASE,
+    )
+    rewritten = re.sub(
+        r"([\w.]+)\s*=\s*\?\s+COLLATE\s+NOCASE",
+        r"LOWER(\1) = LOWER(?)",
+        rewritten,
+        flags=re.IGNORECASE,
+    )
+    rewritten = re.sub(
+        r"([\w.]+)\s+COLLATE\s+NOCASE",
+        r"LOWER(\1)",
+        rewritten,
+        flags=re.IGNORECASE,
+    )
+    rewritten = re.sub(
+        r"([\w.]+)\s+NOT\s+GLOB\s+'\*\[\^0-9\]\*'",
+        r"\1 !~ '[^0-9]'",
+        rewritten,
+        flags=re.IGNORECASE,
+    )
+    is_insert_ignore = bool(
+        re.search(r"\bINSERT\s+OR\s+IGNORE\s+INTO\b", rewritten, re.IGNORECASE)
+    )
+    rewritten = re.sub(
+        r"\bINSERT\s+OR\s+IGNORE\s+INTO\b",
+        "INSERT INTO",
+        rewritten,
+        flags=re.IGNORECASE,
+    )
+    if is_insert_ignore:
+        rewritten = rewritten.rstrip().rstrip(";") + " ON CONFLICT DO NOTHING"
+    return rewritten
+
+
+def _insert_table_name(sql: str) -> str | None:
+    match = re.match(
+        r"^\s*INSERT\s+(?:OR\s+IGNORE\s+)?INTO\s+([A-Za-z_][A-Za-z0-9_]*)",
+        sql,
+        re.IGNORECASE,
+    )
+    return match.group(1).lower() if match else None
+
+
+class DatabaseSession:
+    """Repository-facing facade backed by one SQLAlchemy Session."""
+
+    def __init__(self, session: Session):
+        self.session = session
+        bind = session.get_bind()
+        self.dialect_name = bind.dialect.name
+
+    def execute(
+        self,
+        sql: str,
+        params: Sequence[Any] | Mapping[str, Any] | None = None,
+    ) -> CompatResult:
+        original_sql = sql
+        if self.dialect_name == "postgresql":
+            sql = _rewrite_postgresql_sql(sql)
+
+        parameters: Mapping[str, Any]
+        if params is None:
+            parameters = {}
+        elif isinstance(params, Mapping):
+            parameters = params
+        else:
+            sql, parameters = _convert_qmark_parameters(sql, params)
+
+        insert_table = _insert_table_name(original_sql)
+        returns_insert_id = False
+        if (
+            self.dialect_name == "postgresql"
+            and insert_table in TABLES_WITH_ID
+            and not re.search(r"\bRETURNING\b", sql, re.IGNORECASE)
+        ):
+            sql = sql.rstrip().rstrip(";") + " RETURNING id"
+            returns_insert_id = True
+
+        result = self.session.execute(text(sql), dict(parameters))
+        return CompatResult(result, returns_insert_id=returns_insert_id)
+
+    def executemany(
+        self,
+        sql: str,
+        parameters: Sequence[Sequence[Any] | Mapping[str, Any]],
+    ) -> CompatResult:
+        parameter_sets = list(parameters)
+        if not parameter_sets:
+            result = self.session.execute(text("SELECT 1 WHERE 0 = 1"))
+            return CompatResult(result)
+        if self.dialect_name == "postgresql":
+            sql = _rewrite_postgresql_sql(sql)
+
+        first = parameter_sets[0]
+        if isinstance(first, Mapping):
+            bindings = [dict(item) for item in parameter_sets]  # type: ignore[arg-type]
+        else:
+            converted_sql, _ = _convert_qmark_parameters(sql, first)
+            sql = converted_sql
+            bindings = []
+            for item in parameter_sets:
+                if isinstance(item, Mapping):
+                    raise TypeError("Mixed executemany parameter styles")
+                bindings.append(
+                    {f"p{index}": value for index, value in enumerate(item)}
+                )
+
+        result = self.session.execute(text(sql), bindings)
+        return CompatResult(result)
+
+    def commit(self) -> None:
+        self.session.commit()
+
+    def rollback(self) -> None:
+        self.session.rollback()
 
 
 @contextmanager
-def db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    conn.create_function(
-        "SMART_NORM",
-        1,
-        normalize_search_text,
-        deterministic=True,
-    )
-
+def db() -> Iterator[DatabaseSession]:
+    configure_database()
+    if _session_factory is None:  # pragma: no cover - defensive invariant
+        raise RuntimeError("Database session factory is not configured")
+    session = _session_factory()
+    connection = DatabaseSession(session)
     try:
-        yield conn
-        conn.commit()
+        yield connection
+        session.commit()
     except Exception:
-        conn.rollback()
+        session.rollback()
         raise
     finally:
-        conn.close()
+        session.close()
 
 
-def _add_column_if_missing(
-    conn: sqlite3.Connection,
-    table_name: str,
-    column_name: str,
-    column_sql: str,
-) -> None:
-    columns = {
-        row["name"]
-        for row in conn.execute(
-            f"PRAGMA table_info({table_name})"
-        ).fetchall()
-    }
+def init_db() -> None:
+    """Validate PostgreSQL schema; create metadata only for isolated tests."""
 
-    if column_name not in columns:
-        conn.execute(
-            f"ALTER TABLE {table_name} ADD COLUMN {column_sql}"
-        )
-
-
-def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
-    row = conn.execute(
-        """
-        SELECT 1
-        FROM sqlite_master
-        WHERE type = 'table' AND name = ?
-        """,
-        (table_name,),
-    ).fetchone()
-
-    return row is not None
-
-
-def _get_table_columns(
-    conn: sqlite3.Connection,
-    table_name: str,
-) -> set[str]:
-    return {
-        row["name"]
-        for row in conn.execute(
-            f"PRAGMA table_info({table_name})"
-        ).fetchall()
-    }
-
-
-def _create_employee_keys_table(conn: sqlite3.Connection) -> None:
-    conn.execute(
-        """
-        CREATE TABLE employee_keys (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            employee_id INTEGER NOT NULL,
-            key_id INTEGER NOT NULL,
-            status TEXT NOT NULL DEFAULT 'active',
-            issued_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            closed_at TEXT DEFAULT NULL,
-            close_reason TEXT DEFAULT '',
-            comment TEXT DEFAULT '',
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(employee_id, key_id),
-            FOREIGN KEY(employee_id)
-                REFERENCES employees(id)
-                ON DELETE RESTRICT,
-            FOREIGN KEY(key_id)
-                REFERENCES keys(id)
-                ON DELETE RESTRICT
-        )
-        """
-    )
-
-
-def _migrate_employee_keys(conn: sqlite3.Connection) -> None:
-    """Безопасно обновляет старую таблицу employee_keys, сохраняя данные."""
-    if not _table_exists(conn, "employee_keys"):
-        _create_employee_keys_table(conn)
+    engine = configure_database()
+    if engine.dialect.name == "sqlite":
+        metadata.create_all(engine)
         return
 
-    columns = _get_table_columns(conn, "employee_keys")
-    required_columns = {
-        "id",
-        "employee_id",
-        "key_id",
-        "status",
-        "issued_at",
-        "closed_at",
-        "close_reason",
-        "comment",
-        "created_at",
-        "updated_at",
-    }
+    with engine.connect() as connection:
+        connection.execute(text("SELECT 1"))
 
-    if required_columns.issubset(columns):
-        return
-
-    old_rows = conn.execute(
-        """
-        SELECT
-            employee_id,
-            key_id,
-            COALESCE(created_at, CURRENT_TIMESTAMP) AS created_at
-        FROM employee_keys
-        ORDER BY
-            employee_id,
-            datetime(COALESCE(created_at, CURRENT_TIMESTAMP)) DESC,
-            key_id DESC
-        """
-    ).fetchall()
-
-    conn.execute("ALTER TABLE employee_keys RENAME TO employee_keys_old")
-    _create_employee_keys_table(conn)
-
-    active_employee_ids: set[int] = set()
-    active_key_ids: set[int] = set()
-
-    for row in old_rows:
-        employee_id = int(row["employee_id"])
-        key_id = int(row["key_id"])
-        created_at = row["created_at"]
-
-        can_be_active = (
-            employee_id not in active_employee_ids
-            and key_id not in active_key_ids
+    existing_tables = set(inspect(engine).get_table_names())
+    required_tables = set(metadata.tables)
+    missing = sorted(required_tables - existing_tables)
+    if missing:
+        raise DatabaseNotMigratedError(
+            "PostgreSQL доступен, но схема не создана. "
+            "Выполните `alembic upgrade head`. "
+            f"Отсутствуют таблицы: {', '.join(missing)}"
         )
-
-        if can_be_active:
-            status = "active"
-            closed_at = None
-            close_reason = ""
-            active_employee_ids.add(employee_id)
-            active_key_ids.add(key_id)
-        else:
-            status = "replaced"
-            closed_at = created_at
-            close_reason = "Перенесён из старой структуры"
-
-        conn.execute(
-            """
-            INSERT OR IGNORE INTO employee_keys(
-                employee_id,
-                key_id,
-                status,
-                issued_at,
-                closed_at,
-                close_reason,
-                comment,
-                created_at,
-                updated_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, '', ?, ?)
-            """,
-            (
-                employee_id,
-                key_id,
-                status,
-                created_at,
-                closed_at,
-                close_reason,
-                created_at,
-                created_at,
-            ),
-        )
-
-    conn.execute("DROP TABLE employee_keys_old")
-
-
-def _create_employee_key_indexes(conn: sqlite3.Connection) -> None:
-    conn.execute(
-        "DROP INDEX IF EXISTS idx_employee_keys_one_active_per_employee"
-    )
-
-    conn.execute(
-        """
-        CREATE UNIQUE INDEX IF NOT EXISTS
-            idx_employee_keys_one_active_employee_per_key
-        ON employee_keys(key_id)
-        WHERE status = 'active'
-        """
-    )
-
-    conn.execute(
-        """
-        CREATE INDEX IF NOT EXISTS
-            idx_employee_keys_employee_history
-        ON employee_keys(employee_id, status, issued_at)
-        """
-    )
-
-
-def _create_keys_v2_table(
-    conn: sqlite3.Connection,
-    table_name: str = "keys",
-) -> None:
-    conn.execute(
-        f"""
-        CREATE TABLE {table_name} (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            key_type_id INTEGER NOT NULL,
-            number TEXT NOT NULL,
-            hex_value TEXT NOT NULL DEFAULT '',
-            key_type TEXT DEFAULT '',
-            status TEXT NOT NULL DEFAULT 'free',
-            note TEXT DEFAULT '',
-            is_used INTEGER NOT NULL DEFAULT 0,
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            created_by TEXT DEFAULT '',
-            FOREIGN KEY(key_type_id)
-                REFERENCES key_types(id)
-                ON DELETE RESTRICT
-        )
-        """
-    )
-
-
-def _ensure_default_key_type(conn: sqlite3.Connection) -> int:
-    row = conn.execute(
-        "SELECT id FROM key_types WHERE name = ? COLLATE NOCASE",
-        ("Без типа",),
-    ).fetchone()
-
-    if row:
-        return int(row["id"])
-
-    cursor = conn.execute(
-        """
-        INSERT INTO key_types(name, color, note, enabled)
-        VALUES (?, ?, ?, 1)
-        """,
-        (
-            "Без типа",
-            "#2A9DF4",
-            "Тип для ключей, перенесённых из старой базы",
-        ),
-    )
-    return int(cursor.lastrowid)
-
-
-def _create_key_indexes(conn: sqlite3.Connection) -> None:
-    conn.execute(
-        """
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_keys_type_number
-        ON keys(key_type_id, number COLLATE NOCASE)
-        """
-    )
-    conn.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_keys_hex_lookup
-        ON keys(hex_value COLLATE NOCASE)
-        """
-    )
-    conn.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_keys_status
-        ON keys(status, key_type_id)
-        """
-    )
-
-
-def _migrate_keys_inventory(conn: sqlite3.Connection) -> None:
-    """Переносит старую таблицу keys в учёт по типу без потери ID."""
-    columns = _get_table_columns(conn, "keys")
-
-    if "key_type_id" in columns and "status" in columns:
-        default_type_id = _ensure_default_key_type(conn)
-        conn.execute(
-            """
-            UPDATE keys
-            SET key_type_id = ?,
-                key_type = 'Без типа'
-            WHERE key_type_id IS NULL
-            """,
-            (default_type_id,),
-        )
-        _create_key_indexes(conn)
-        return
-
-    default_type_id = _ensure_default_key_type(conn)
-    legacy_types = conn.execute(
-        """
-        SELECT DISTINCT TRIM(COALESCE(key_type, '')) AS name
-        FROM keys
-        WHERE TRIM(COALESCE(key_type, '')) <> ''
-        """
-    ).fetchall()
-
-    for row in legacy_types:
-        conn.execute(
-            """
-            INSERT OR IGNORE INTO key_types(name, color, note, enabled)
-            VALUES (?, '#2A9DF4', 'Перенесено из старой базы', 1)
-            """,
-            (row["name"],),
-        )
-
-    type_ids = {
-        row["name"].strip().lower(): int(row["id"])
-        for row in conn.execute("SELECT id, name FROM key_types")
-    }
-
-    legacy_rows = conn.execute(
-        """
-        SELECT
-            id,
-            number,
-            hex_value,
-            COALESCE(key_type, '') AS key_type,
-            COALESCE(note, '') AS note,
-            COALESCE(is_used, 0) AS is_used,
-            COALESCE(created_at, CURRENT_TIMESTAMP) AS created_at,
-            COALESCE(updated_at, CURRENT_TIMESTAMP) AS updated_at
-        FROM keys
-        ORDER BY id
-        """
-    ).fetchall()
-
-    conn.commit()
-    conn.execute("PRAGMA foreign_keys = OFF")
-    conn.execute("DROP TABLE IF EXISTS keys_v2")
-    _create_keys_v2_table(conn, "keys_v2")
-
-    for row in legacy_rows:
-        legacy_name = row["key_type"].strip()
-        key_type_id = type_ids.get(legacy_name.lower(), default_type_id)
-        key_type_name = legacy_name or "Без типа"
-        status = "issued_resident" if int(row["is_used"] or 0) else "free"
-
-        conn.execute(
-            """
-            INSERT INTO keys_v2(
-                id,
-                key_type_id,
-                number,
-                hex_value,
-                key_type,
-                status,
-                note,
-                is_used,
-                created_at,
-                updated_at,
-                created_by
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Система')
-            """,
-            (
-                row["id"],
-                key_type_id,
-                str(row["number"]).strip(),
-                str(row["hex_value"] or "").strip().upper(),
-                key_type_name,
-                status,
-                row["note"],
-                int(row["is_used"] or 0),
-                row["created_at"],
-                row["updated_at"],
-            ),
-        )
-
-    conn.execute("DROP TABLE keys")
-    conn.execute("ALTER TABLE keys_v2 RENAME TO keys")
-    conn.commit()
-    conn.execute("PRAGMA foreign_keys = ON")
-    _create_key_indexes(conn)
-
-
-def _seed_key_assignments(conn: sqlite3.Connection) -> None:
-    conn.execute(
-        """
-        INSERT OR IGNORE INTO key_assignments(
-            key_id,
-            assignment_type,
-            employee_id,
-            assigned_at,
-            assigned_by,
-            active,
-            note
-        )
-        SELECT
-            ek.key_id,
-            'employee',
-            ek.employee_id,
-            ek.issued_at,
-            'Система',
-            1,
-            ek.comment
-        FROM employee_keys ek
-        WHERE ek.status = 'active'
-        """
-    )
-
-    conn.execute(
-        """
-        INSERT OR IGNORE INTO key_assignments(
-            key_id,
-            assignment_type,
-            uk_group_id,
-            assigned_at,
-            assigned_by,
-            active,
-            note
-        )
-        SELECT
-            gk.key_id,
-            'uk',
-            gk.group_id,
-            CURRENT_TIMESTAMP,
-            'Система',
-            1,
-            'Перенесено из связи с УК'
-        FROM uk_group_keys gk
-        WHERE NOT EXISTS (
-            SELECT 1
-            FROM key_assignments ka
-            WHERE ka.key_id = gk.key_id AND ka.active = 1
-        )
-        """
-    )
-
-    conn.execute(
-        """
-        UPDATE keys
-        SET status = 'issued_employee', is_used = 1
-        WHERE id IN (
-            SELECT key_id FROM key_assignments
-            WHERE assignment_type = 'employee' AND active = 1
-        )
-        """
-    )
-    conn.execute(
-        """
-        UPDATE keys
-        SET status = 'assigned_uk', is_used = 1
-        WHERE id IN (
-            SELECT key_id FROM key_assignments
-            WHERE assignment_type = 'uk' AND active = 1
-        )
-        """
-    )
-
-def init_db():
-    with db() as conn:
-        conn.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS key_types (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT UNIQUE COLLATE NOCASE NOT NULL,
-                color TEXT NOT NULL DEFAULT '#2A9DF4',
-                note TEXT DEFAULT '',
-                enabled INTEGER NOT NULL DEFAULT 1,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE IF NOT EXISTS keys (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                key_type_id INTEGER NOT NULL,
-                number TEXT NOT NULL,
-                hex_value TEXT NOT NULL DEFAULT '',
-                key_type TEXT DEFAULT '',
-                status TEXT NOT NULL DEFAULT 'free',
-                note TEXT DEFAULT '',
-                is_used INTEGER NOT NULL DEFAULT 0,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                created_by TEXT DEFAULT '',
-                FOREIGN KEY(key_type_id)
-                    REFERENCES key_types(id)
-                    ON DELETE RESTRICT
-            );
-
-            CREATE TABLE IF NOT EXISTS employees (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                full_name TEXT NOT NULL,
-                note TEXT DEFAULT '',
-                enabled INTEGER DEFAULT 1,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                full_name TEXT NOT NULL,
-                login TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                role TEXT NOT NULL DEFAULT 'operator',
-                active INTEGER DEFAULT 1,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                last_login TEXT DEFAULT ''
-            );
-
-            CREATE TABLE IF NOT EXISTS panels (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                address TEXT NOT NULL,
-                entrance TEXT DEFAULT '',
-                name TEXT NOT NULL,
-                mac TEXT UNIQUE NOT NULL,
-                tags TEXT DEFAULT '',
-                enabled INTEGER DEFAULT 1,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE IF NOT EXISTS uk_groups (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT UNIQUE NOT NULL,
-                note TEXT DEFAULT ''
-            );
-
-            CREATE TABLE IF NOT EXISTS uk_group_panels (
-                group_id INTEGER NOT NULL,
-                panel_id INTEGER NOT NULL,
-                UNIQUE(group_id, panel_id)
-            );
-
-            CREATE TABLE IF NOT EXISTS uk_group_keys (
-                group_id INTEGER NOT NULL,
-                key_id INTEGER NOT NULL,
-                UNIQUE(group_id, key_id)
-            );
-
-            CREATE TABLE IF NOT EXISTS key_assignments (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                key_id INTEGER NOT NULL,
-                assignment_type TEXT NOT NULL,
-                address TEXT DEFAULT '',
-                apartment TEXT DEFAULT '',
-                employee_id INTEGER DEFAULT NULL,
-                uk_group_id INTEGER DEFAULT NULL,
-                assigned_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                assigned_by TEXT DEFAULT '',
-                released_at TEXT DEFAULT NULL,
-                active INTEGER NOT NULL DEFAULT 1,
-                note TEXT DEFAULT '',
-                FOREIGN KEY(key_id) REFERENCES keys(id) ON DELETE RESTRICT,
-                FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE SET NULL,
-                FOREIGN KEY(uk_group_id) REFERENCES uk_groups(id) ON DELETE SET NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS operation_log (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-
-                mode TEXT NOT NULL DEFAULT '',
-                action TEXT DEFAULT '',
-                object_type TEXT DEFAULT '',
-                object_name TEXT DEFAULT '',
-                details TEXT DEFAULT '',
-
-                printed_number TEXT DEFAULT '',
-                hex_value TEXT DEFAULT '',
-                flat_num TEXT DEFAULT '',
-                panel_id INTEGER DEFAULT NULL,
-                mac TEXT DEFAULT '',
-                panel_name TEXT DEFAULT '',
-
-                address TEXT DEFAULT '',
-                apartment TEXT DEFAULT '',
-
-                status TEXT NOT NULL DEFAULT 'success',
-                response TEXT DEFAULT '',
-
-                username TEXT DEFAULT '',
-                user_full_name TEXT DEFAULT '',
-                user_role TEXT DEFAULT '',
-                ip_address TEXT DEFAULT '',
-
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_key_assignments_one_active
-            ON key_assignments(key_id)
-            WHERE active = 1;
-
-            CREATE INDEX IF NOT EXISTS idx_key_assignments_lookup
-            ON key_assignments(assignment_type, active, assigned_at);
-            """
-        )
-
-        _migrate_keys_inventory(conn)
-
-        # Добавляет IP-адрес в существующую таблицу панелей.
-        # Старые данные при этом не удаляются.
-        _add_column_if_missing(
-            conn,
-            "panels",
-            "ip",
-            "ip TEXT DEFAULT ''",
-        )
-        panel_status_columns = {
-            "api_status": "api_status TEXT DEFAULT 'unknown'",
-            "last_checked_at": "last_checked_at TEXT DEFAULT ''",
-            "last_online_at": "last_online_at TEXT DEFAULT ''",
-            "response_time_ms": "response_time_ms INTEGER DEFAULT NULL",
-            "device_model": "device_model TEXT DEFAULT ''",
-            "firmware_version": "firmware_version TEXT DEFAULT ''",
-            "temperature": "temperature REAL DEFAULT NULL",
-            "supply_voltage": "supply_voltage REAL DEFAULT NULL",
-            "uptime_seconds": "uptime_seconds INTEGER DEFAULT NULL",
-            "sip_registered": "sip_registered INTEGER DEFAULT NULL",
-            "reported_mac": "reported_mac TEXT DEFAULT ''",
-            "last_error": "last_error TEXT DEFAULT ''",
-        }
-        for column_name, column_sql in panel_status_columns.items():
-            _add_column_if_missing(conn, "panels", column_name, column_sql)
-
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_panels_api_status ON panels(enabled, api_status)"
-        )
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_panels_address_entrance ON panels(address, entrance)"
-        )
-
-        # Изменения только для учёта сотрудников и истории ключей.
-        _add_column_if_missing(
-            conn,
-            "employees",
-            "updated_at",
-            "updated_at TEXT DEFAULT ''",
-        )
-        _add_column_if_missing(
-            conn,
-            "employees",
-            "dismissed_at",
-            "dismissed_at TEXT DEFAULT NULL",
-        )
-        employee_profile_columns = {
-            "position": "position TEXT DEFAULT ''",
-            "department": "department TEXT DEFAULT ''",
-            "phone": "phone TEXT DEFAULT ''",
-            "email": "email TEXT DEFAULT ''",
-            "created_by": "created_by TEXT DEFAULT ''",
-        }
-        for column_name, column_sql in employee_profile_columns.items():
-            _add_column_if_missing(
-                conn,
-                "employees",
-                column_name,
-                column_sql,
-            )
-        _migrate_employee_keys(conn)
-        _create_employee_key_indexes(conn)
-        _seed_key_assignments(conn)
-
-        _add_column_if_missing(
-            conn,
-            "uk_groups",
-            "crm_login",
-            "crm_login TEXT DEFAULT ''",
-        )
-        _add_column_if_missing(
-            conn,
-            "uk_groups",
-            "crm_password",
-            "crm_password TEXT DEFAULT ''",
-        )
-        uk_profile_columns = {
-            "legal_name": "legal_name TEXT DEFAULT ''",
-            "contact_name": "contact_name TEXT DEFAULT ''",
-            "phone": "phone TEXT DEFAULT ''",
-            "email": "email TEXT DEFAULT ''",
-            "legal_address": "legal_address TEXT DEFAULT ''",
-            "contract_number": "contract_number TEXT DEFAULT ''",
-            "created_by": "created_by TEXT DEFAULT ''",
-            "updated_at": "updated_at TEXT DEFAULT ''",
-            "cooperation_status": "cooperation_status TEXT NOT NULL DEFAULT 'potential'",
-            "account_manager": "account_manager TEXT DEFAULT ''",
-            "next_contact_at": "next_contact_at TEXT DEFAULT ''",
-            "cooperation_note": "cooperation_note TEXT DEFAULT ''",
-        }
-        for column_name, column_sql in uk_profile_columns.items():
-            _add_column_if_missing(
-                conn,
-                "uk_groups",
-                column_name,
-                column_sql,
-            )
-
-        conn.executescript(
-            """
-            CREATE INDEX IF NOT EXISTS idx_uk_groups_name
-            ON uk_groups(name);
-
-            CREATE TABLE IF NOT EXISTS uk_notification_drafts (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                group_id INTEGER NOT NULL,
-                title TEXT NOT NULL,
-                body TEXT NOT NULL,
-                category TEXT NOT NULL DEFAULT 'announcement',
-                channel TEXT NOT NULL DEFAULT 'dtel',
-                audience TEXT NOT NULL DEFAULT 'all',
-                audience_details TEXT DEFAULT '',
-                created_by TEXT DEFAULT '',
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(group_id)
-                    REFERENCES uk_groups(id)
-                    ON DELETE CASCADE
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_uk_notification_drafts_group
-            ON uk_notification_drafts(group_id, created_at DESC);
-            """
-        )
-
-        # Обновление старой таблицы operation_log, если база создана раньше.
-        operation_log_columns = {
-            "action": "action TEXT DEFAULT ''",
-            "object_type": "object_type TEXT DEFAULT ''",
-            "object_name": "object_name TEXT DEFAULT ''",
-            "details": "details TEXT DEFAULT ''",
-            "address": "address TEXT DEFAULT ''",
-            "apartment": "apartment TEXT DEFAULT ''",
-            "panel_id": "panel_id INTEGER DEFAULT NULL",
-            "username": "username TEXT DEFAULT ''",
-            "user_full_name": "user_full_name TEXT DEFAULT ''",
-            "user_role": "user_role TEXT DEFAULT ''",
-            "ip_address": "ip_address TEXT DEFAULT ''",
-            "key_id": "key_id INTEGER DEFAULT NULL",
-            "key_type": "key_type TEXT DEFAULT ''",
-            "employee_id": "employee_id INTEGER DEFAULT NULL",
-            "uk_group_id": "uk_group_id INTEGER DEFAULT NULL",
-            "comment": "comment TEXT DEFAULT ''",
-        }
-
-        for column_name, column_sql in operation_log_columns.items():
-            _add_column_if_missing(
-                conn,
-                "operation_log",
-                column_name,
-                column_sql,
-            )
-
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_operation_log_key_id ON operation_log(key_id)"
-        )
-        conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_key_assignments_key_history
-            ON key_assignments(key_id, active, assigned_at)
-            """
-        )
-
-        user_count = conn.execute(
-            "SELECT COUNT(*) FROM users"
-        ).fetchone()[0]
-
-        if user_count == 0:
-            conn.execute(
-                """
-                INSERT INTO users(
-                    full_name,
-                    login,
-                    password_hash,
-                    role
-                )
-                VALUES (?, ?, ?, ?)
-                """,
-                (
-                    "Главный администратор",
-                    "admin",
-                    "admin",
-                    "admin",
-                ),
-            )

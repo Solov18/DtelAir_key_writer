@@ -1,6 +1,6 @@
 import math
 import re
-import sqlite3
+from sqlalchemy.exc import IntegrityError
 
 from app.db import db
 from app.search_utils import normalize_search_text
@@ -141,6 +141,117 @@ def get_key_type(key_type_id: int) -> dict | None:
         return dict(row) if row else None
 
 
+def get_missing_key_numbers(
+    key_type_id: int,
+    start_number: str = "",
+    end_number: str = "",
+    limit: int = 500,
+) -> dict:
+    """Return missing numeric key numbers without expanding huge ranges in memory."""
+    key_type = get_key_type(key_type_id)
+    if not key_type:
+        raise ValueError("Тип ключа не найден.")
+
+    clean_start = (start_number or "").strip()
+    clean_end = (end_number or "").strip()
+    if clean_start and not re.fullmatch(r"[0-9]+", clean_start):
+        raise ValueError("Начало диапазона должно состоять только из цифр.")
+    if clean_end and not re.fullmatch(r"[0-9]+", clean_end):
+        raise ValueError("Конец диапазона должен состоять только из цифр.")
+
+    with db() as conn:
+        rows = conn.execute(
+            """
+            SELECT number
+            FROM keys
+            WHERE key_type_id = ?
+              AND TRIM(hex_value) <> ''
+              AND number <> ''
+              AND number NOT GLOB '*[^0-9]*'
+            ORDER BY CAST(number AS INTEGER), LENGTH(number), number
+            """,
+            (key_type_id,),
+        ).fetchall()
+
+    stored_numbers = sorted({int(row["number"]) for row in rows})
+    if not stored_numbers and not (clean_start and clean_end):
+        return {
+            "key_type": key_type,
+            "start": "",
+            "end": "",
+            "ranges": [],
+            "numbers": [],
+            "missing_count": 0,
+            "shown_count": 0,
+            "truncated": False,
+            "empty_type": True,
+        }
+
+    start_value = int(clean_start) if clean_start else stored_numbers[0]
+    end_value = int(clean_end) if clean_end else stored_numbers[-1]
+    if end_value < start_value:
+        raise ValueError("Конец диапазона не может быть меньше начала.")
+    if end_value - start_value > 10_000_000:
+        raise ValueError("Диапазон слишком большой. Уточните начало и конец проверки.")
+
+    width = max(
+        len(clean_start),
+        len(clean_end),
+        max((len(str(row["number"])) for row in rows), default=1),
+    )
+    present = [
+        number
+        for number in stored_numbers
+        if start_value <= number <= end_value
+    ]
+
+    ranges: list[dict] = []
+    numbers: list[str] = []
+    missing_count = 0
+    cursor = start_value
+
+    def add_gap(gap_start: int, gap_end: int) -> None:
+        nonlocal missing_count
+        if gap_end < gap_start:
+            return
+        count = gap_end - gap_start + 1
+        missing_count += count
+        ranges.append(
+            {
+                "start": str(gap_start).zfill(width),
+                "end": str(gap_end).zfill(width),
+                "count": count,
+            }
+        )
+        remaining = max(0, limit - len(numbers))
+        if remaining:
+            numbers.extend(
+                str(value).zfill(width)
+                for value in range(
+                    gap_start,
+                    min(gap_end + 1, gap_start + remaining),
+                )
+            )
+
+    for number in present:
+        if number > cursor:
+            add_gap(cursor, number - 1)
+        cursor = max(cursor, number + 1)
+    add_gap(cursor, end_value)
+
+    return {
+        "key_type": key_type,
+        "start": str(start_value).zfill(width),
+        "end": str(end_value).zfill(width),
+        "ranges": ranges,
+        "numbers": numbers,
+        "missing_count": missing_count,
+        "shown_count": len(numbers),
+        "truncated": missing_count > len(numbers),
+        "empty_type": False,
+    }
+
+
 def create_key_type(
     name: str,
     color: str,
@@ -165,7 +276,7 @@ def create_key_type(
                 (clean_name, clean_color.upper(), (note or "").strip()),
             )
             return int(cursor.lastrowid)
-    except sqlite3.IntegrityError as error:
+    except IntegrityError as error:
         raise ValueError("Тип ключа с таким названием уже существует.") from error
 
 
@@ -216,7 +327,7 @@ def update_key_type(
                 """,
                 (clean_name, key_type_id),
             )
-    except sqlite3.IntegrityError as error:
+    except IntegrityError as error:
         raise ValueError("Тип ключа с таким названием уже существует.") from error
 
 
@@ -320,19 +431,19 @@ def _keys_filter_sql(
         conditions.append("k.status <> 'free'")
 
     if added_from:
-        conditions.append("date(k.created_at) >= date(?)")
+        conditions.append("substr(k.created_at, 1, 10) >= ?")
         params.append(added_from)
 
     if added_to:
-        conditions.append("date(k.created_at) <= date(?)")
+        conditions.append("substr(k.created_at, 1, 10) <= ?")
         params.append(added_to)
 
     if assigned_from:
-        conditions.append("date(ka.assigned_at) >= date(?)")
+        conditions.append("substr(ka.assigned_at, 1, 10) >= ?")
         params.append(assigned_from)
 
     if assigned_to:
-        conditions.append("date(ka.assigned_at) <= date(?)")
+        conditions.append("substr(ka.assigned_at, 1, 10) <= ?")
         params.append(assigned_to)
 
     return " AND ".join(conditions), params
@@ -521,7 +632,7 @@ def prepare_key_range(
             JOIN key_types kt ON kt.id = k.key_type_id
             WHERE k.key_type_id = ?
               AND k.number IN ({number_placeholders})
-            ORDER BY CAST(k.number AS INTEGER), k.number
+            ORDER BY LENGTH(k.number), k.number
             """,
             (key_type_id, *numbers),
         ).fetchall()
@@ -655,7 +766,7 @@ def save_prepared_key(
                         username,
                     ),
                 )
-            except sqlite3.IntegrityError as error:
+            except IntegrityError as error:
                 raise ValueError(
                     "Номер или HEX уже был сохранён другим оператором. Обновите партию и повторите проверку."
                 ) from error
@@ -775,7 +886,7 @@ def update_key(
                     key_id,
                 ),
             )
-        except sqlite3.IntegrityError as error:
+        except IntegrityError as error:
             raise ValueError("Ключ с таким номером уже есть в выбранном типе.") from error
 
         if cursor.rowcount == 0:
@@ -1052,7 +1163,7 @@ def get_all_keys_for_export() -> list[dict]:
             FROM keys k
             JOIN key_types kt ON kt.id = k.key_type_id
             WHERE TRIM(k.hex_value) <> ''
-            ORDER BY kt.name COLLATE NOCASE, CAST(k.number AS INTEGER), k.number
+            ORDER BY kt.name COLLATE NOCASE, LENGTH(k.number), k.number
             """
         ).fetchall()
         return [dict(row) for row in rows]
