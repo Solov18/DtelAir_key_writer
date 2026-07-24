@@ -1,221 +1,226 @@
 {% extends 'base.html' %}
 
-{% block page_name %}Проверка{% endblock %}
+{% block page_name %}Проверка сообщения{% endblock %}
 
 {% block content %}
-<div class="hero-title">
-    <h1>Проверка данных</h1>
-    <p class="subtitle">
-        Проверьте распознанные данные и выберите панели для записи
-    </p>
-</div>
+<div class="message-page message-review-page">
+    <header class="message-hero">
+        <div>
+            <a class="message-back-link" href="{{ back_url }}">← Вернуться к сообщению</a>
+            <span class="page-eyebrow">Проверка перед записью</span>
+            <h1>Проверьте результат</h1>
+            <p class="subtitle">Система ничего не отправляет автоматически. Уточните адрес, квартиру, ключи и панели.</p>
+        </div>
+        <a class="btn btn-ghost" href="/message">Новое сообщение</a>
+    </header>
 
-<div class="message-preview-grid">
+    <nav class="message-steps" aria-label="Этапы записи ключей">
+        <a href="{{ back_url }}"><i>1</i><b>Сообщение</b><small>Текст сохранён</small></a>
+        <span class="is-active"><i>2</i><b>Проверка</b><small>Уточните данные</small></span>
+        <span><i>3</i><b>Запись</b><small>После подтверждения</small></span>
+    </nav>
 
-    <div class="panel preview-summary">
-        <h2>Распознано</h2>
+    {% if warnings %}
+    <section class="message-warning-stack" aria-label="Что нужно проверить">
+        {% for warning in warnings %}
+        <div><span>!</span><p>{{ warning }}</p></div>
+        {% endfor %}
+    </section>
+    {% endif %}
 
-        <div class="key-info-list">
-            <div class="key-info-row">
-                <span>Адрес</span>
-                <b>{{ parsed.address or '—' }}</b>
+    <section class="panel message-correction-panel">
+        <div class="message-section-head">
+            <div>
+                <span class="page-eyebrow">Распознанные данные</span>
+                <h2>Можно исправить вручную</h2>
+                <p>После изменения нажмите «Обновить подбор» — панели и ключи будут проверены заново.</p>
             </div>
+            <span class="message-confidence is-{{ parsed.address_status }}">
+                {% if parsed.address_status == 'exact' %}Адрес найден точно
+                {% elif parsed.address_status in ('similar', 'confirmed') %}Адрес подтверждён
+                {% elif parsed.address_candidates %}Нужно выбрать адрес
+                {% else %}Адрес не найден{% endif %}
+            </span>
+        </div>
 
-            <div class="key-info-row">
-                <span>Квартира</span>
-                <b>{{ parsed.apartment or '—' }}</b>
-            </div>
+        <form method="post" action="/message/preview" class="message-correction-form" id="messageCorrectionForm">
+            <input type="hidden" name="text" value="{{ text }}">
+            <label class="is-address">
+                <span>Адрес из базы панелей</span>
+                <input
+                    type="text"
+                    name="address_override"
+                    id="messageAddressInput"
+                    value="{{ parsed.address }}"
+                    placeholder="Начните вводить улицу и дом"
+                    data-smart-search="panels"
+                    autocomplete="off"
+                >
+            </label>
+            <label><span>Квартира</span><input name="apartment_override" value="{{ parsed.apartment }}" placeholder="Например, 10"></label>
+            <label><span>Подъезд</span><input name="entrance_override" value="{{ parsed.entrance }}" placeholder="Необязательно"></label>
+            <label class="is-keys"><span>Номера ключей</span><input name="key_numbers_override" value="{{ parsed.key_numbers|join(', ') }}" placeholder="39107, 39300"></label>
+            <button type="submit" class="btn">Обновить подбор</button>
+        </form>
 
-            <div class="key-info-row">
-                <span>Телефоны</span>
-                <b>{{ parsed.phones|join(', ') if parsed.phones else '—' }}</b>
-            </div>
-
-            <div class="key-info-row">
-                <span>Ключи</span>
-                <b>{{ parsed.key_numbers|join(', ') if parsed.key_numbers else '—' }}</b>
+        {% if parsed.address_candidates %}
+        <div class="message-address-candidates">
+            <header><b>Похожие адреса из базы</b><span>Нажмите вариант, чтобы проверить его панели</span></header>
+            <div>
+                {% for candidate in parsed.address_candidates %}
+                <button
+                    type="button"
+                    class="{% if parsed.address == candidate.address %}is-selected{% endif %}"
+                    data-message-address="{{ candidate.address }}"
+                >
+                    <span><b>{{ candidate.address }}</b><small>{{ candidate.match_label }}{% if candidate.entrances %} · {{ candidate.entrances }}{% endif %}</small></span>
+                    <em>{{ candidate.panel_count }} пан.</em>
+                </button>
+                {% endfor %}
             </div>
         </div>
-    </div>
+        {% endif %}
 
-    <div class="panel panels-select">
-        <div class="panels-head">
-            <div>
-                <h2>Панели</h2>
-                <p class="subtitle">Выберите панели для записи ключей</p>
+        <details class="message-source-details">
+            <summary>Показать исходное сообщение</summary>
+            <pre>{{ text }}</pre>
+        </details>
+    </section>
+
+    <div class="message-review-grid">
+        <section class="panel panels-select message-panels-card">
+            <div class="message-section-head">
+                <div>
+                    <span class="page-eyebrow">Адрес и панели</span>
+                    <h2>{{ parsed.address or 'Адрес не выбран' }}</h2>
+                    <p>{% if panels %}Отметьте только те панели, куда нужно записать ключи.{% else %}Выберите адрес из подсказок или введите его вручную.{% endif %}</p>
+                </div>
+                {% if panels %}
+                <div class="panel-actions">
+                    <button type="button" class="btn-small" id="select-all-panels">Выбрать все</button>
+                    <button type="button" class="btn-small btn-ghost" id="clear-all-panels">Снять все</button>
+                </div>
+                {% endif %}
             </div>
 
             {% if panels %}
-            <div class="panel-actions">
-                <button type="button" class="btn-small" id="select-all-panels">
-                    Выбрать все
-                </button>
-                <button type="button" class="btn-small btn-ghost" id="clear-all-panels">
-                    Снять все
-                </button>
+            <div class="panel-list preview-panel-list custom-scroll">
+                {% for panel in panels %}
+                <label class="panel-option">
+                    <input type="checkbox" name="panel_ids_preview" value="{{ panel.id }}" checked>
+                    <span class="panel-option-body">
+                        <span class="panel-option-title">{{ panel.entrance or panel.name or 'Вход не указан' }}</span>
+                        <span class="panel-option-meta">{{ panel.address }}</span>
+                        <span class="panel-option-mac">{{ panel.mac }}</span>
+                    </span>
+                </label>
+                {% endfor %}
+            </div>
+            <footer class="message-selection-footer"><span>Выбрано панелей: <b id="selectedPanelCount">{{ panels|length }}</b></span></footer>
+            {% else %}
+            <div class="message-empty-state">
+                <svg viewBox="0 0 24 24"><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg>
+                <b>Панели не выбраны</b>
+                <span>Уточните адрес выше. Запись без явного выбора панелей невозможна.</span>
             </div>
             {% endif %}
-        </div>
+        </section>
 
-        {% if panels %}
-        <div class="panel-list preview-panel-list">
-            {% for p in panels %}
-            <label class="panel-option">
-                <input
-                    type="checkbox"
-                    name="panel_ids_preview"
-                    value="{{ p.id }}"
-                    checked
-                >
+        <section class="panel message-keys-card">
+            <div class="message-section-head">
+                <div><span class="page-eyebrow">Ключи</span><h2>Проверка по базе</h2><p>Записываются только существующие ключи с HEX-номером.</p></div>
+                <span class="message-key-counter">{{ keys|length }}</span>
+            </div>
 
-                <span class="panel-option-body">
-                    <span class="panel-option-title">
-                        {{ p.entrance or '—' }}
-                    </span>
+            {% if keys %}
+            <div class="table-scroll small-scroll message-key-table">
+                <table>
+                    <thead><tr><th>Номер</th><th>Тип</th><th>HEX</th><th>Состояние</th></tr></thead>
+                    <tbody>
+                    {% for key in keys %}
+                    <tr>
+                        <td><b>№{{ key.number }}</b></td>
+                        <td>
+                            {% if key.ambiguous %}
+                            <select class="message-key-type-select" data-key-number="{{ key.number }}">
+                                <option value="0">Выберите тип</option>
+                                {% for match in key.matches %}<option value="{{ match.key_type_id }}">{{ match.type_name }}</option>{% endfor %}
+                            </select>
+                            {% elif key.item %}{{ key.item.type_name or key.item.key_type or '—' }}
+                            {% else %}—{% endif %}
+                        </td>
+                        <td>{{ key.item.hex_value if key.item else '—' }}</td>
+                        <td>
+                            {% if key.ambiguous %}<span class="badge warning">Нужен тип</span>
+                            {% elif key.item %}<span class="badge success">Готов</span>
+                            {% else %}<span class="badge error">Не найден</span>{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="message-empty-state">
+                <svg viewBox="0 0 24 24"><circle cx="7.5" cy="14.5" r="4.5"/><path d="m11 11 9-9M16 6l3 3M14 8l2 2"/></svg>
+                <b>Ключи не распознаны</b>
+                <span>Добавьте номера ключей в поле выше и обновите проверку.</span>
+            </div>
+            {% endif %}
 
-                    <span class="panel-option-meta">
-                        {{ p.address }}
-                    </span>
-
-                    <span class="panel-option-mac">
-                        {{ p.mac }}
-                    </span>
-                </span>
-            </label>
-            {% endfor %}
-        </div>
-        {% else %}
-            <p class="warn">Панели по адресу не найдены.</p>
-        {% endif %}
+            <dl class="message-detected-meta">
+                <div><dt>Квартира</dt><dd>{{ parsed.apartment or 'Не указана' }}</dd></div>
+                <div><dt>Подъезд</dt><dd>{{ parsed.entrance or 'Не указан' }}</dd></div>
+                <div><dt>Телефон</dt><dd>{{ parsed.phones|join(', ') if parsed.phones else 'Не найден' }}</dd></div>
+                <div><dt>Тип из текста</dt><dd>{{ parsed.key_type or 'Не определён' }}</dd></div>
+            </dl>
+        </section>
     </div>
 
-</div>
-
-<div class="panel preview-keys-panel">
-    <h2>Ключи</h2>
-
-    <div class="table-scroll small-scroll">
-        <table>
-            <thead>
-            <tr>
-                <th>Номер</th>
-                <th>Тип</th>
-                <th>HEX</th>
-                <th>Статус</th>
-            </tr>
-            </thead>
-
-            <tbody>
-            {% for k in keys %}
-            <tr>
-                <td>{{ k.number }}</td>
-                <td>
-                    {% if k.ambiguous %}
-                    <select class="message-key-type-select" data-key-number="{{ k.number }}">
-                        <option value="0">Выберите тип</option>
-                        {% for match in k.matches %}
-                        <option value="{{ match.key_type_id }}">{{ match.type_name }}</option>
-                        {% endfor %}
-                    </select>
-                    {% elif k.item %}
-                        {{ k.item.type_name or k.item.key_type or '—' }}
-                    {% else %}
-                        —
-                    {% endif %}
-                </td>
-                <td>{{ k.item.hex_value if k.item else '—' }}</td>
-                <td>
-                    {% if k.ambiguous %}
-                        <span class="badge warning">Нужен тип</span>
-                    {% elif k.item %}
-                        <span class="badge success">Найден</span>
-                    {% else %}
-                        <span class="badge error">Не найден</span>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
-
-<div class="panel preview-actions-panel">
-    <form method="post" action="/message/write" id="messageWriteForm">
-        <input type="hidden" name="address" value="{{ parsed.address }}">
-        <input type="hidden" name="apartment" value="{{ parsed.apartment }}">
-        {% for k in keys %}
-        <input type="hidden" name="key_numbers" value="{{ k.number }}">
-        <input
-            type="hidden"
-            name="key_type_ids"
-            value="{{ k.item.key_type_id if k.item and k.item.key_type_id else 0 }}"
-            data-key-type-for="{{ k.number }}"
+    <section class="panel message-final-panel">
+        <div>
+            <span class="page-eyebrow">Последняя проверка</span>
+            <h2>Подтвердите запись</h2>
+            <p>Операция начнётся только после нажатия кнопки. Панели без отметки не используются.</p>
+            <span class="message-ready-state" id="messageWriteState">
+                {% if can_write and not has_unresolved_types %}
+                Данные готовы к безопасной записи.
+                {% else %}
+                Исправьте отмеченные выше данные и обновите подбор.
+                {% endif %}
+            </span>
+        </div>
+        <form
+            method="post"
+            action="/message/write"
+            id="messageWriteForm"
+            data-can-write="{{ 'true' if can_write else 'false' }}"
+            data-apartment="{{ parsed.apartment }}"
+            data-key-count="{{ keys|length }}"
         >
-        {% endfor %}
-
-        <div id="selectedPanelsContainer"></div>
-
-        <button type="submit">
-            Прописать на выбранные панели
-        </button>
-
-        <a class="btn" href="/message">
-            Назад
-        </a>
-    </form>
+            <input type="hidden" name="source_text" value="{{ text }}">
+            <input type="hidden" name="address" value="{{ parsed.address }}">
+            <input type="hidden" name="apartment" value="{{ parsed.apartment }}">
+            {% for key in keys %}
+            <input type="hidden" name="key_numbers" value="{{ key.number }}">
+            <input type="hidden" name="key_type_ids" value="{{ key.item.key_type_id if key.item and key.item.key_type_id else 0 }}" data-key-type-for="{{ key.number }}">
+            {% endfor %}
+            <div id="selectedPanelsContainer"></div>
+            <button
+                type="submit"
+                class="btn"
+                id="messageWriteButton"
+                data-ready-label="Записать на выбранные панели"
+                {% if not can_write or has_unresolved_types %}disabled{% endif %}
+            >
+                Записать на выбранные панели
+            </button>
+            <a class="btn btn-ghost" href="{{ back_url }}">Исправить сообщение</a>
+        </form>
+    </section>
 </div>
+{% endblock %}
 
-<script>
-    const selectAllBtn = document.getElementById("select-all-panels");
-    const clearAllBtn = document.getElementById("clear-all-panels");
-    const form = document.getElementById("messageWriteForm");
-    const selectedPanelsContainer = document.getElementById("selectedPanelsContainer");
-
-    function getPanelCheckboxes() {
-        return Array.from(document.querySelectorAll('input[name="panel_ids_preview"]'));
-    }
-
-    function setPanelCheckboxes(value) {
-        getPanelCheckboxes().forEach((checkbox) => {
-            checkbox.checked = value;
-        });
-    }
-
-    if (selectAllBtn) {
-        selectAllBtn.addEventListener("click", () => setPanelCheckboxes(true));
-    }
-
-    if (clearAllBtn) {
-        clearAllBtn.addEventListener("click", () => setPanelCheckboxes(false));
-    }
-
-    if (form) {
-        form.addEventListener("submit", function (event) {
-            selectedPanelsContainer.innerHTML = "";
-
-            const typeSelectors = Array.from(document.querySelectorAll(".message-key-type-select"));
-            if (typeSelectors.some((select) => select.value === "0")) {
-                event.preventDefault();
-                alert("Выберите тип для каждого неоднозначного номера ключа.");
-                return;
-            }
-
-            typeSelectors.forEach((select) => {
-                const hidden = form.querySelector(`[data-key-type-for="${select.dataset.keyNumber}"]`);
-                if (hidden) hidden.value = select.value;
-            });
-
-            getPanelCheckboxes()
-                .filter((checkbox) => checkbox.checked)
-                .forEach((checkbox) => {
-                    const input = document.createElement("input");
-                    input.type = "hidden";
-                    input.name = "panel_ids";
-                    input.value = checkbox.value;
-                    selectedPanelsContainer.appendChild(input);
-                });
-        });
-    }
-</script>
+{% block scripts %}
+<script src="/static/js/message.js?v=2"></script>
 {% endblock %}

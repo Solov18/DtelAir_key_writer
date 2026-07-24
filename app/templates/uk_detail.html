@@ -1,445 +1,342 @@
 {% extends 'base.html' %}
 
-{% block page_name %}Управление УК{% endblock %}
+{% block page_name %}Карточка УК{% endblock %}
 
 {% block content %}
-
-<div class="hero-title uk-detail-hero">
-    <div>
-        <a class="btn btn-small btn-ghost" href="/uk">
-            ← Назад к УК
-        </a>
-
-        <h1>{{ group.name }}</h1>
-
-        <p class="subtitle">
-            {{ group.note or 'Управление панелями и ключами этой УК' }}
-        </p>
-
-        <div class="uk-detail-crm">
-            <div>
-                <span>Логин CRM</span>
-                <b>{{ group.crm_login or '—' }}</b>
-            </div>
-
-            <div>
-                <span>Пароль CRM</span>
-                <b
-                    id="detailCrmPassword"
-                    data-password="{{ group.crm_password or '' }}"
-                >
-                    {% if group.crm_password %}
-                        ••••••••
-                    {% else %}
-                        —
-                    {% endif %}
-                </b>
-
-                {% if group.crm_password %}
-                <button
-                    type="button"
-                    class="uk-detail-password-toggle"
-                    id="detailPasswordToggle"
-                >
-                    Показать
-                </button>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-
-    <div class="uk-stats">
+<div class="uk-detail-v2">
+    <header class="uk-detail-v2-hero">
         <div>
-            <b>{{ group_panels|length }}</b>
-            <span>Панелей</span>
-        </div>
-
-        <div>
-            <b>{{ group_keys|length }}</b>
-            <span>Ключей</span>
-        </div>
-    </div>
-</div>
-
-<div class="uk-control-grid">
-
-    <div class="panel uk-manage-panel">
-        <div class="panel-head">
-            <div>
-                <h2>Панели УК</h2>
-                <p class="subtitle">
-                    Адреса и входы, закреплённые за группой
-                </p>
+            <a class="uk-detail-back" href="/uk">← Управляющие компании</a>
+            <span class="page-eyebrow">Партнёрская карточка · ID {{ group.id }}</span>
+            <div class="uk-detail-title-line">
+                <h1>{{ group.name }}</h1>
+                <span class="uk-cooperation-status is-{{ group.cooperation_status or 'potential' }}"><i></i>
+                    {% if group.cooperation_status == 'partner' %}Сотрудничаем
+                    {% elif group.cooperation_status == 'negotiation' %}Переговоры
+                    {% elif group.cooperation_status == 'contacted' %}Связались
+                    {% elif group.cooperation_status == 'paused' %}Отложено
+                    {% else %}Новый контакт{% endif %}
+                </span>
             </div>
-
-            <button
-                type="button"
-                class="btn btn-small"
-                id="openPanelsModal"
-            >
-                Добавить панели
-            </button>
+            <p class="subtitle">{{ group.legal_name or group.note or 'Контакты, история сотрудничества, панели, ключи и сервисы DTEL для собственников.' }}</p>
         </div>
+        <div class="uk-detail-v2-actions">
+            <button type="button" class="btn btn-ghost" data-open-uk-detail-modal="ukProfileModal">Редактировать</button>
+            <a class="btn" href="#notifications">Уведомления</a>
+        </div>
+    </header>
 
-        {% if group_panels %}
-        <div class="uk-items-list">
-            {% for p in group_panels %}
-            <div class="uk-item-row">
+    <section class="uk-detail-v2-summary">
+        <div class="panel uk-detail-profile-card">
+            <header>
+                <span class="uk-detail-company-avatar">{{ group.name[:1]|upper }}</span>
                 <div>
-                    <b>{{ p.entrance or '—' }}</b>
-                    <span>{{ p.address }}</span>
-                    <small>{{ p.mac }}</small>
+                    <span>Организация</span>
+                    <h2>{{ group.name }}</h2>
+                    <small>{{ group.legal_name or 'Юридическое название не заполнено' }}</small>
                 </div>
+            </header>
+            <dl>
+                <div><dt>Контактное лицо</dt><dd>{{ group.contact_name or 'Не указано' }}</dd></div>
+                <div><dt>Телефон</dt><dd>{{ group.phone or 'Не указан' }}</dd></div>
+                <div><dt>Email</dt><dd>{{ group.email or 'Не указан' }}</dd></div>
+                <div><dt>Юридический адрес</dt><dd>{{ group.legal_address or 'Не указан' }}</dd></div>
+                <div><dt>Номер договора</dt><dd>{{ group.contract_number or 'Не указан' }}</dd></div>
+                <div><dt>Добавил</dt><dd>{{ group.created_by or 'Система' }}</dd></div>
+            </dl>
+            {% if group.note %}
+            <div class="uk-detail-profile-note"><span>Комментарий</span><p>{{ group.note }}</p></div>
+            {% endif %}
+        </div>
 
-                <form
-                    method="post"
-                    action="/uk/{{ group.id }}/panels/remove"
-                    onsubmit="return confirm('Убрать эту панель из УК?')"
-                >
-                    <input
-                        type="hidden"
-                        name="panel_id"
-                        value="{{ p.id }}"
-                    >
+        <div class="uk-detail-v2-side">
+            <div class="uk-detail-counter-grid">
+                <a href="#panels"><b>{{ group_panels|length }}</b><span>Панелей</span></a>
+                <a href="#keys"><b>{{ group_keys|length }}</b><span>Ключей</span></a>
+                <a href="#notifications"><b>{{ notification_drafts|length }}</b><span>Черновиков</span></a>
+            </div>
+            <div class="panel uk-cooperation-panel">
+                <header>
+                    <div>
+                        <span class="page-eyebrow">Сотрудничество</span>
+                        <h2>Следующий шаг</h2>
+                    </div>
+                    <span class="uk-cooperation-status is-{{ group.cooperation_status or 'potential' }}"><i></i>
+                        {% if group.cooperation_status == 'partner' %}Сотрудничаем
+                        {% elif group.cooperation_status == 'negotiation' %}Переговоры
+                        {% elif group.cooperation_status == 'contacted' %}Связались
+                        {% elif group.cooperation_status == 'paused' %}Отложено
+                        {% else %}Новый контакт{% endif %}
+                    </span>
+                </header>
+                <dl>
+                    <div><dt>Ответственный</dt><dd>{{ group.account_manager or 'Не назначен' }}</dd></div>
+                    <div><dt>Следующий контакт</dt><dd>{{ (group.next_contact_at or 'Не назначен')[:16] }}</dd></div>
+                </dl>
+                <div class="uk-cooperation-plan">
+                    <span>План сотрудничества</span>
+                    <p>{{ group.cooperation_note or 'Зафиксируйте договорённости, потребности УК и следующий шаг.' }}</p>
+                </div>
+                <button type="button" class="btn btn-ghost" data-open-uk-detail-modal="ukProfileModal">Обновить этап</button>
+            </div>
+        </div>
+    </section>
 
-                    <button
-                        type="submit"
-                        class="danger-btn btn-small"
-                    >
-                        Удалить
-                    </button>
-                </form>
+    <section class="panel uk-integration-section uk-notification-section" id="notifications">
+        <div class="uk-section-head">
+            <div>
+                <span class="page-eyebrow">Собственный сервис DTEL</span>
+                <h2>Уведомления собственников</h2>
+                <p class="subtitle">Готовьте объявления, сообщения об авариях и работах. Они сохраняются как черновики и не отправляются без базы получателей.</p>
+            </div>
+            <button type="button" class="btn" data-open-uk-detail-modal="ukNotificationModal">+ Создать черновик</button>
+        </div>
+
+        <div class="uk-notification-safety">
+            <span class="uk-notification-safety-icon">
+                <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>
+            </span>
+            <div>
+                <b>Центр уведомлений DTEL готовится к запуску</b>
+                <span>Для настоящей отправки нужна подтверждённая база собственников с адресами и каналами связи. Пока здесь безопасно готовятся тексты и аудитории.</span>
+            </div>
+            <span class="uk-notification-safety-state">Отправка выключена</span>
+        </div>
+
+        <div class="uk-integration-list uk-notification-list">
+            {% for draft in notification_drafts %}
+            <article class="uk-integration-card uk-notification-card">
+                <header>
+                    <span class="uk-integration-logo uk-notification-logo">
+                        <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>
+                    </span>
+                    <div>
+                        <h3>{{ draft.title }}</h3>
+                        <small>
+                            {% if draft.category == 'emergency' %}Аварийное сообщение
+                            {% elif draft.category == 'works' %}Плановые работы
+                            {% elif draft.category == 'payment' %}Оплата и начисления
+                            {% elif draft.category == 'survey' %}Опрос
+                            {% else %}Объявление{% endif %}
+                        </small>
+                    </div>
+                    <span class="uk-notification-draft-state"><i></i>Черновик</span>
+                </header>
+                <p class="uk-notification-body">{{ draft.body }}</p>
+                <dl>
+                    <div><dt>Канал</dt><dd>
+                        {% if draft.channel == 'push' %}Push-уведомление
+                        {% elif draft.channel == 'sms' %}SMS
+                        {% elif draft.channel == 'email' %}Email
+                        {% elif draft.channel == 'messenger' %}Мессенджер
+                        {% else %}Приложение DTEL{% endif %}
+                    </dd></div>
+                    <div><dt>Аудитория</dt><dd>
+                        {% if draft.audience == 'address' %}По адресу
+                        {% elif draft.audience == 'entrance' %}По подъезду
+                        {% elif draft.audience == 'custom' %}Выборочная
+                        {% else %}Все собственники УК{% endif %}
+                    </dd></div>
+                </dl>
+                {% if draft.audience_details %}<p class="uk-notification-audience">{{ draft.audience_details }}</p>{% endif %}
+                <footer>
+                    <span>{{ (draft.created_at or '—')[:16] }} · {{ draft.created_by or 'Система' }} · отправка не выполнялась</span>
+                    <form method="post" action="/uk/{{ group.id }}/notifications/delete" data-confirm="Удалить этот черновик уведомления?">
+                        <input type="hidden" name="draft_id" value="{{ draft.id }}">
+                        <button type="submit">Удалить</button>
+                    </form>
+                </footer>
+            </article>
+            {% else %}
+            <div class="uk-integration-empty uk-notification-empty">
+                <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>
+                <h3>Черновиков пока нет</h3>
+                <p>Создайте первое объявление для собственников. Оно останется в карточке УК и не будет отправлено автоматически.</p>
+                <button type="button" class="btn btn-ghost" data-open-uk-detail-modal="ukNotificationModal">Создать объявление</button>
             </div>
             {% endfor %}
         </div>
-        {% else %}
-        <p class="warn">Панели пока не добавлены.</p>
-        {% endif %}
-    </div>
+    </section>
 
-    <div class="panel uk-manage-panel">
-        <div class="panel-head">
-            <div>
-                <h2>Ключи УК</h2>
-                <p class="subtitle">
-                    Ключи, закреплённые за этой группой
-                </p>
+    <div class="uk-resources-grid">
+        <section class="panel uk-resource-section" id="panels">
+            <div class="uk-section-head">
+                <div><span class="page-eyebrow">Адреса доступа</span><h2>Панели УК</h2><p class="subtitle">Панели, закреплённые за компанией.</p></div>
+                <button type="button" class="btn btn-small" data-open-uk-detail-modal="ukPanelsModal">Добавить панели</button>
             </div>
-
-            <button
-                type="button"
-                class="btn btn-small"
-                id="openKeysModal"
-            >
-                Добавить ключи
-            </button>
-        </div>
-
-        {% if message and message.not_found %}
-        <div class="compact-alert">
-            <h2 class="warn">Не найдены ключи</h2>
-            <p>{{ message.not_found|join(', ') }}</p>
-        </div>
-        {% endif %}
-
-        {% if group_keys %}
-        <div class="table-scroll small-scroll">
-            <table>
-                <thead>
-                <tr>
-                    <th>Номер</th>
-                    <th>HEX</th>
-                    <th>Тип</th>
-                    <th></th>
-                </tr>
-                </thead>
-
-                <tbody>
-                {% for k in group_keys %}
-                <tr>
-                    <td><b>{{ k.number }}</b></td>
-                    <td>{{ k.hex_value }}</td>
-                    <td>{{ k.key_type or '—' }}</td>
-
-                    <td>
-                        <form
-                            method="post"
-                            action="/uk/{{ group.id }}/keys/remove"
-                            onsubmit="return confirm('Убрать ключ {{ k.number }} из УК?')"
-                        >
-                            <input
-                                type="hidden"
-                                name="key_id"
-                                value="{{ k.id }}"
-                            >
-
-                            <button
-                                type="submit"
-                                class="danger-btn btn-small"
-                            >
-                                Удалить
-                            </button>
-                        </form>
-                    </td>
-                </tr>
+            <div class="uk-resource-scroll custom-scroll">
+                {% for panel in group_panels %}
+                <article class="uk-resource-row">
+                    <span class="uk-resource-icon"><svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M9 6h6M9 10h6M10 18h4"/></svg></span>
+                    <span><b>{{ panel.address }}</b><small>{{ panel.entrance or panel.name }} · {{ panel.mac }}</small></span>
+                    <form method="post" action="/uk/{{ group.id }}/panels/remove" data-confirm="Убрать эту панель из УК?">
+                        <input type="hidden" name="panel_id" value="{{ panel.id }}">
+                        <button type="submit" title="Убрать панель" aria-label="Убрать панель">×</button>
+                    </form>
+                </article>
+                {% else %}
+                <div class="uk-resource-empty">Панели пока не добавлены.</div>
                 {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <p class="warn">Ключи пока не добавлены.</p>
-        {% endif %}
+            </div>
+        </section>
+
+        <section class="panel uk-resource-section" id="keys">
+            <div class="uk-section-head">
+                <div><span class="page-eyebrow">Служебный доступ</span><h2>Ключи УК</h2><p class="subtitle">Все активные ключи, закреплённые за компанией.</p></div>
+                <button type="button" class="btn btn-small" data-open-uk-detail-modal="ukKeysModal">Добавить ключи</button>
+            </div>
+            {% if message and (message.not_found or message.ambiguous) %}
+            <div class="uk-detail-alert">
+                {% if message.not_found %}<span>Не найдены: {{ message.not_found|join(', ') }}</span>{% endif %}
+                {% if message.ambiguous %}<span>Нужно уточнить тип: {{ message.ambiguous|join(', ') }}</span>{% endif %}
+            </div>
+            {% endif %}
+            <div class="uk-resource-scroll custom-scroll">
+                {% for key in group_keys %}
+                <article class="uk-resource-row">
+                    <span class="uk-resource-key-dot" style="--key-color: {{ key.type_color or '#29a9ff' }}"></span>
+                    <span><b>{{ key.type_name or 'Без типа' }} · №{{ key.number }}</b><small>HEX: {{ key.hex_value }}</small></span>
+                    <form method="post" action="/uk/{{ group.id }}/keys/remove" data-confirm="Убрать ключ №{{ key.number }} из УК?">
+                        <input type="hidden" name="key_id" value="{{ key.id }}">
+                        <button type="submit" title="Убрать ключ" aria-label="Убрать ключ">×</button>
+                    </form>
+                </article>
+                {% else %}
+                <div class="uk-resource-empty">Служебные ключи пока не назначены.</div>
+                {% endfor %}
+            </div>
+        </section>
     </div>
 
+    <section class="panel uk-write-v2">
+        <div class="uk-section-head">
+            <div><span class="page-eyebrow">Операция на панелях</span><h2>Прописать ключи УК</h2><p class="subtitle">Ключи будут отправлены на все панели, закреплённые за этой компанией.</p></div>
+        </div>
+        <form method="post" action="/uk/{{ group.id }}/write">
+            <label class="is-wide">Номера ключей<input name="key_values" placeholder="39068, 39139" required></label>
+            <label>Тип ключа
+                <select name="key_type_id">
+                    <option value="0">Определить автоматически</option>
+                    {% for key_type in key_types %}<option value="{{ key_type.id }}">{{ key_type.name }}</option>{% endfor %}
+                </select>
+            </label>
+            <label>Квартира / flatNum<input name="flat_num" value="0"></label>
+            <input type="hidden" name="inner" value="0">
+            <button type="submit" class="btn">Прописать на {{ group_panels|length }} панелях</button>
+        </form>
+    </section>
 </div>
 
-<div class="panel uk-write-panel">
-    <div class="panel-head">
-        <div>
-            <h2>Прописать ключи УК</h2>
-            <p class="subtitle">
-                Запись ключей на все панели этой управляющей компании
-            </p>
-        </div>
+<div class="uk-modal uk-detail-modal" id="ukProfileModal" aria-hidden="true">
+    <div class="uk-modal-card panel" role="dialog" aria-modal="true" aria-labelledby="ukProfileTitle">
+        <header><div><span class="page-eyebrow">Карточка №{{ group.id }}</span><h2 id="ukProfileTitle">Редактировать компанию</h2></div><button type="button" data-close-uk-detail-modal>×</button></header>
+        <form method="post" action="/uk/{{ group.id }}/update" class="uk-profile-form">
+            <input type="hidden" name="return_to" value="detail">
+            <label>Короткое название<input name="name" value="{{ group.name }}" required></label>
+            <label>Юридическое название<input name="legal_name" value="{{ group.legal_name or '' }}"></label>
+            <label>Контактное лицо<input name="contact_name" value="{{ group.contact_name or '' }}"></label>
+            <label>Телефон<input name="phone" value="{{ group.phone or '' }}"></label>
+            <label>Email<input name="email" type="email" value="{{ group.email or '' }}"></label>
+            <label>Номер договора<input name="contract_number" value="{{ group.contract_number or '' }}"></label>
+            <label>Статус сотрудничества
+                <select name="cooperation_status">
+                    <option value="potential" {% if group.cooperation_status == 'potential' %}selected{% endif %}>Новый контакт</option>
+                    <option value="contacted" {% if group.cooperation_status == 'contacted' %}selected{% endif %}>Связались</option>
+                    <option value="negotiation" {% if group.cooperation_status == 'negotiation' %}selected{% endif %}>Переговоры</option>
+                    <option value="partner" {% if group.cooperation_status == 'partner' %}selected{% endif %}>Сотрудничаем</option>
+                    <option value="paused" {% if group.cooperation_status == 'paused' %}selected{% endif %}>Отложено</option>
+                </select>
+            </label>
+            <label>Ответственный менеджер<input name="account_manager" value="{{ group.account_manager or '' }}"></label>
+            <label>Следующий контакт<input name="next_contact_at" type="datetime-local" value="{{ (group.next_contact_at or '')[:16] }}"></label>
+            <label class="is-wide">Юридический адрес<input name="legal_address" value="{{ group.legal_address or '' }}"></label>
+            <label class="is-wide">План сотрудничества<textarea name="cooperation_note" rows="3">{{ group.cooperation_note or '' }}</textarea></label>
+            <label class="is-wide">Комментарий<textarea name="note" rows="2">{{ group.note or '' }}</textarea></label>
+            <div class="uk-modal-actions is-wide"><button type="button" class="btn btn-ghost" data-close-uk-detail-modal>Отмена</button><button type="submit" class="btn">Сохранить изменения</button></div>
+        </form>
     </div>
-
-    <form
-        method="post"
-        action="/uk/{{ group.id }}/write"
-        class="uk-write-form"
-    >
-        <div>
-            <label>Номера ключей</label>
-            <input
-                name="key_values"
-                placeholder="39068, 39139"
-                required
-            >
-        </div>
-
-        <div>
-            <label>Тип ключа</label>
-            <select name="key_type_id">
-                <option value="0">Определить автоматически</option>
-                {% for key_type in key_types %}
-                <option value="{{ key_type.id }}">{{ key_type.name }}</option>
-                {% endfor %}
-            </select>
-        </div>
-
-        <div>
-            <label>Квартира / flatNum</label>
-            <input
-                name="flat_num"
-                value="0"
-            >
-        </div>
-
-        <input
-            type="hidden"
-            name="inner"
-            value="0"
-        >
-
-        <button type="submit" class="btn">
-            Прописать ключи
-        </button>
-    </form>
 </div>
 
-<div class="modal-backdrop" id="panelsModal">
-    <div class="modal-window panel">
-        <div class="modal-head">
-            <div>
-                <h2>Добавить панели</h2>
-                <p class="subtitle">
-                    Выберите адреса и входы для этой УК
-                </p>
-            </div>
+<div class="uk-modal uk-detail-modal" id="ukNotificationModal" aria-hidden="true">
+    <div class="uk-modal-card panel" role="dialog" aria-modal="true" aria-labelledby="ukNotificationTitle">
+        <header><div><span class="page-eyebrow">Сервис DTEL</span><h2 id="ukNotificationTitle">Черновик уведомления</h2></div><button type="button" data-close-uk-detail-modal>×</button></header>
+        <form method="post" action="/uk/{{ group.id }}/notifications/draft" class="uk-profile-form">
+            <label class="is-wide">Заголовок<input name="title" required maxlength="140" autocomplete="off" placeholder="Например: Отключение воды 25 июля"></label>
+            <label>Тип сообщения
+                <select name="category">
+                    <option value="announcement">Объявление</option>
+                    <option value="emergency">Аварийное сообщение</option>
+                    <option value="works">Плановые работы</option>
+                    <option value="payment">Оплата и начисления</option>
+                    <option value="survey">Опрос</option>
+                </select>
+            </label>
+            <label>Планируемый канал
+                <select name="channel">
+                    <option value="dtel">Приложение DTEL</option>
+                    <option value="push">Push-уведомление</option>
+                    <option value="sms">SMS</option>
+                    <option value="email">Email</option>
+                    <option value="messenger">Мессенджер</option>
+                </select>
+            </label>
+            <label>Аудитория
+                <select name="audience">
+                    <option value="all">Все собственники УК</option>
+                    <option value="address">По адресу</option>
+                    <option value="entrance">По подъезду</option>
+                    <option value="custom">Выборочная группа</option>
+                </select>
+            </label>
+            <label>Уточнение аудитории<input name="audience_details" autocomplete="off" placeholder="Адрес, подъезд или описание группы"></label>
+            <label class="is-wide">Текст уведомления<textarea name="body" rows="6" required maxlength="3000" placeholder="Напишите понятный текст для собственников: что произошло, когда и куда обращаться."></textarea></label>
+            <div class="uk-modal-tip is-wide"><b>Будет создан только черновик.</b><span>Ни SMS, ни push, ни email сейчас не отправляются. Настоящая отправка станет доступна после добавления подтверждённых контактов собственников.</span></div>
+            <div class="uk-modal-actions is-wide"><button type="button" class="btn btn-ghost" data-close-uk-detail-modal>Отмена</button><button type="submit" class="btn">Сохранить черновик</button></div>
+        </form>
+    </div>
+</div>
 
-            <button
-                type="button"
-                class="btn-small btn-ghost modal-close"
-                data-close="panelsModal"
-            >
-                Закрыть
-            </button>
-        </div>
-
-        <div class="panel-search uk-search">
-            <input
-                type="text"
-                id="availablePanelSearch"
-                placeholder="Поиск по адресу, входу или MAC..."
-                autocomplete="off"
-            >
-        </div>
-
-        <form
-            method="post"
-            action="/uk/{{ group.id }}/panels/add"
-        >
-            <div
-                class="panel-list uk-panel-list"
-                id="availablePanelList"
-            >
-                {% for p in available_panels %}
-                <label class="panel-option">
-                    <input
-                        type="checkbox"
-                        name="panel_ids"
-                        value="{{ p.id }}"
-                    >
-
-                    <span class="panel-option-body">
-                        <span class="panel-option-title">
-                            {{ p.entrance or '—' }}
-                        </span>
-
-                        <span class="panel-option-meta">
-                            {{ p.address }}
-                        </span>
-
-                        <span class="panel-option-mac">
-                            {{ p.mac }}
-                        </span>
-                    </span>
+<div class="uk-modal uk-detail-modal" id="ukPanelsModal" aria-hidden="true">
+    <div class="uk-modal-card panel" role="dialog" aria-modal="true" aria-labelledby="ukPanelsTitle">
+        <header><div><span class="page-eyebrow">Панели компании</span><h2 id="ukPanelsTitle">Добавить панели</h2></div><button type="button" data-close-uk-detail-modal>×</button></header>
+        <form method="post" action="/uk/{{ group.id }}/panels/add" class="uk-selector-form">
+            <label class="uk-search-field">
+                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4.5 4.5"/></svg>
+                <input type="search" id="availablePanelSearch" placeholder="Адрес, вход или MAC..." autocomplete="off" data-smart-search="panels">
+            </label>
+            <div class="uk-selector-list custom-scroll" id="availablePanelList">
+                {% for panel in available_panels %}
+                <label class="uk-selector-option">
+                    <input type="checkbox" name="panel_ids" value="{{ panel.id }}">
+                    <span><b>{{ panel.address }}</b><small>{{ panel.entrance or panel.name }} · {{ panel.mac }}</small></span>
                 </label>
                 {% else %}
-                <p class="warn">
-                    Все доступные панели уже добавлены в эту УК.
-                </p>
+                <div class="uk-resource-empty">Все доступные панели уже добавлены.</div>
                 {% endfor %}
             </div>
-
-            {% if available_panels %}
-            <button type="submit" class="btn wide-action">
-                Добавить выбранные
-            </button>
-            {% endif %}
+            {% if available_panels %}<div class="uk-modal-actions"><button type="button" class="btn btn-ghost" data-close-uk-detail-modal>Отмена</button><button type="submit" class="btn">Добавить выбранные</button></div>{% endif %}
         </form>
     </div>
 </div>
 
-<div class="modal-backdrop" id="keysModal">
-    <div class="modal-window panel">
-        <div class="modal-head">
-            <div>
-                <h2>Добавить ключи</h2>
-                <p class="subtitle">
-                    Введите номера ключей через пробел или запятую
-                </p>
-            </div>
-
-            <button
-                type="button"
-                class="btn-small btn-ghost modal-close"
-                data-close="keysModal"
-            >
-                Закрыть
-            </button>
-        </div>
-
-        <form
-            method="post"
-            action="/uk/{{ group.id }}/keys/add"
-            class="uk-modal-form"
-        >
-            <label>Тип ключа</label>
-            <select name="key_type_id">
-                <option value="0">Определить автоматически</option>
-                {% for key_type in key_types %}
-                <option value="{{ key_type.id }}">{{ key_type.name }}</option>
-                {% endfor %}
-            </select>
-
-            <label>Номера ключей</label>
-
-            <input
-                name="key_values"
-                placeholder="39068, 39139, 001101"
-                required
-            >
-
-            <button type="submit" class="btn wide-action">
-                Добавить ключи
-            </button>
+<div class="uk-modal uk-detail-modal" id="ukKeysModal" aria-hidden="true">
+    <div class="uk-modal-card panel" role="dialog" aria-modal="true" aria-labelledby="ukKeysTitle">
+        <header><div><span class="page-eyebrow">Служебные ключи</span><h2 id="ukKeysTitle">Добавить ключи</h2></div><button type="button" data-close-uk-detail-modal>×</button></header>
+        <form method="post" action="/uk/{{ group.id }}/keys/add" class="uk-profile-form">
+            <label class="is-wide">Тип ключа
+                <select name="key_type_id">
+                    <option value="0">Определить автоматически</option>
+                    {% for key_type in key_types %}<option value="{{ key_type.id }}">{{ key_type.name }}</option>{% endfor %}
+                </select>
+            </label>
+            <label class="is-wide">Номера ключей<input name="key_values" placeholder="39068, 39139, 001101" required></label>
+            <div class="uk-modal-tip is-wide"><b>Добавляются только считанные ключи.</b><span>Ключ должен существовать в базе и иметь HEX-номер.</span></div>
+            <div class="uk-modal-actions is-wide"><button type="button" class="btn btn-ghost" data-close-uk-detail-modal>Отмена</button><button type="submit" class="btn">Добавить ключи</button></div>
         </form>
     </div>
 </div>
+{% endblock %}
 
-<script>
-const panelsModal = document.getElementById("panelsModal");
-const keysModal = document.getElementById("keysModal");
-const openPanelsModal = document.getElementById("openPanelsModal");
-const openKeysModal = document.getElementById("openKeysModal");
-
-if (openPanelsModal && panelsModal) {
-    openPanelsModal.addEventListener("click", () => {
-        panelsModal.classList.add("active");
-    });
-}
-
-if (openKeysModal && keysModal) {
-    openKeysModal.addEventListener("click", () => {
-        keysModal.classList.add("active");
-    });
-}
-
-document.querySelectorAll(".modal-close").forEach((button) => {
-    button.addEventListener("click", () => {
-        const modal = document.getElementById(button.dataset.close);
-
-        if (modal) {
-            modal.classList.remove("active");
-        }
-    });
-});
-
-document.querySelectorAll(".modal-backdrop").forEach((modal) => {
-    modal.addEventListener("click", (event) => {
-        if (event.target === modal) {
-            modal.classList.remove("active");
-        }
-    });
-});
-
-const availablePanelSearch = document.getElementById("availablePanelSearch");
-const availablePanelList = document.getElementById("availablePanelList");
-
-if (availablePanelSearch && availablePanelList) {
-    availablePanelSearch.addEventListener("input", function () {
-        const query = this.value.toLowerCase().trim();
-
-        availablePanelList.querySelectorAll(".panel-option").forEach((row) => {
-            const isVisible = row.innerText
-                .toLowerCase()
-                .includes(query);
-
-            row.style.display = isVisible ? "" : "none";
-        });
-    });
-}
-
-const detailPasswordToggle = document.getElementById("detailPasswordToggle");
-const detailCrmPassword = document.getElementById("detailCrmPassword");
-
-if (detailPasswordToggle && detailCrmPassword) {
-    detailPasswordToggle.addEventListener("click", () => {
-        const password = detailCrmPassword.dataset.password;
-        const isVisible = detailPasswordToggle.dataset.visible === "true";
-
-        detailCrmPassword.textContent = isVisible
-            ? "••••••••"
-            : password;
-
-        detailPasswordToggle.textContent = isVisible
-            ? "Показать"
-            : "Скрыть";
-
-        detailPasswordToggle.dataset.visible = String(!isVisible);
-    });
-}
-</script>
-
+{% block scripts %}
+<script src="/static/js/uk-detail.js?v=2"></script>
 {% endblock %}

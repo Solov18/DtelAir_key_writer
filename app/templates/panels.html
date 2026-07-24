@@ -81,7 +81,7 @@
         <form class="panels-filters" method="get" action="/panels">
             <label class="panels-search-field">
                 <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg>
-                <input name="q" value="{{ filters.q }}" placeholder="Поиск по адресу, названию, MAC, IP или ID..." aria-label="Поиск панелей">
+                <input name="q" value="{{ filters.q }}" placeholder="Поиск по адресу, названию, MAC, IP или ID..." aria-label="Поиск панелей" data-smart-search="panels" autocomplete="off">
             </label>
             <label><span>Статус сети</span><select name="status">
                 <option value="">Все состояния</option>

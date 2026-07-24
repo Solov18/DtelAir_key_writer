@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.db import init_db
+from app.settings import settings
 from app.routers import (
     auth,
     home,
@@ -17,6 +18,7 @@ from app.routers import (
     keys,
     log,
     users,
+    settings as settings_router,
 )
 
 app = FastAPI(title="Dtel Access Manager")
@@ -25,7 +27,9 @@ app.add_middleware(AuthMiddleware)
 
 app.add_middleware(
     SessionMiddleware,
-    secret_key="change-this-secret-key-later",
+    secret_key=settings.session_secret,
+    same_site="lax",
+    https_only=settings.session_https_only,
 )
 
 
@@ -53,6 +57,7 @@ app.include_router(uk.router)
 app.include_router(keys.router)
 app.include_router(log.router)
 app.include_router(users.router)
+app.include_router(settings_router.router)
 
 for route in app.routes:
     print("ROUTE:", route.path)

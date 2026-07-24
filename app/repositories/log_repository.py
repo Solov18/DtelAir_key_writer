@@ -111,7 +111,15 @@ def normalize_operation_row(row: dict) -> dict:
         "action_key": action,
         "action_name": action_name,
         "user_name": user_name,
-        "user_role_name": "Администратор" if user_role == "admin" else "Оператор" if user_role == "operator" else "—",
+        "user_role_name": (
+            "Администратор"
+            if user_role == "admin"
+            else "Оператор"
+            if user_role == "operator"
+            else "Наблюдатель"
+            if user_role == "viewer"
+            else "—"
+        ),
         "object_type_view": object_type,
         "object_name_view": object_name,
         "details_view": details,

@@ -2,14 +2,14 @@ import re
 from typing import Iterable
 
 from app.db import db
+from app.services.parser import (
+    find_address_candidates,
+    normalize_house_variants,
+)
 
 
 def normalize(value: str) -> str:
-    value = (value or "").lower().replace("ё", "е")
-    value = re.sub(r"\b(улица|ул\.|ул|дом|д\.)\b", "", value)
-    value = re.sub(r"\s+", " ", value).strip()
-
-    return value
+    return normalize_house_variants(value)
 
 
 def find_panels_by_address(address: str):
@@ -28,16 +28,33 @@ def find_panels_by_address(address: str):
     if not query:
         return []
 
-    result = []
+    panels = [dict(row) for row in rows]
+    exact = [
+        panel
+        for panel in panels
+        if normalize(panel["address"]) == query
+    ]
+    if exact:
+        return exact
 
+    candidates = find_address_candidates(address, limit=3)
+    if not candidates:
+        return []
+
+    best = candidates[0]
+    second_score = candidates[1]["confidence"] if len(candidates) > 1 else 0.0
+    if (
+        best["confidence"] < 0.76
+        or best["confidence"] - second_score < 0.045
+    ):
+        return []
+
+    target = normalize(best["address"])
     for row in rows:
         panel = dict(row)
-        panel_address = normalize(panel["address"])
-
-        if query in panel_address or panel_address in query:
-            result.append(panel)
-
-    return result
+        if normalize(panel["address"]) == target:
+            exact.append(panel)
+    return exact
 
 
 def get_panels(

@@ -3,6 +3,7 @@ import re
 import sqlite3
 
 from app.db import db
+from app.search_utils import normalize_search_text
 
 
 KEY_STATUSES = {
@@ -250,37 +251,30 @@ def _keys_filter_sql(
     conditions = ["TRIM(k.hex_value) <> ''"]
     params: list = []
 
-    if query.strip():
-        clean_query = query.strip()
-        pattern = f"%{clean_query}%"
-        apartment_query = re.sub(
-            r"^\s*(?:кв(?:артира)?\.?\s*)",
-            "",
-            clean_query,
-            flags=re.IGNORECASE,
-        ).strip()
-        apartment_pattern = f"%{apartment_query or clean_query}%"
+    normalized_query = normalize_search_text(query)
+    if normalized_query:
+        pattern = f"%{normalized_query}%"
         conditions.append(
             """
             (
-                k.number LIKE ?
-                OR UPPER(k.hex_value) LIKE UPPER(?)
-                OR kt.name LIKE ?
-                OR k.note LIKE ?
-                OR ka.address LIKE ?
-                OR ka.apartment LIKE ?
-                OR e.full_name LIKE ?
-                OR ug.name LIKE ?
+                SMART_NORM(k.number) LIKE ?
+                OR SMART_NORM(k.hex_value) LIKE ?
+                OR SMART_NORM(kt.name) LIKE ?
+                OR SMART_NORM(k.note) LIKE ?
+                OR SMART_NORM(ka.address) LIKE ?
+                OR SMART_NORM(ka.apartment) LIKE ?
+                OR SMART_NORM(e.full_name) LIKE ?
+                OR SMART_NORM(ug.name) LIKE ?
                 OR EXISTS (
                     SELECT 1
                     FROM operation_log ol
                     WHERE ol.key_id = k.id
                       AND (
-                          ol.address LIKE ?
-                          OR ol.apartment LIKE ?
-                          OR ol.panel_name LIKE ?
-                          OR ol.details LIKE ?
-                          OR ol.comment LIKE ?
+                          SMART_NORM(ol.address) LIKE ?
+                          OR SMART_NORM(ol.apartment) LIKE ?
+                          OR SMART_NORM(ol.panel_name) LIKE ?
+                          OR SMART_NORM(ol.details) LIKE ?
+                          OR SMART_NORM(ol.comment) LIKE ?
                       )
                 )
                 OR EXISTS (
@@ -290,14 +284,14 @@ def _keys_filter_sql(
                     LEFT JOIN uk_groups ugh ON ugh.id = kah.uk_group_id
                     WHERE kah.key_id = k.id
                       AND (
-                          kah.address LIKE ?
-                          OR kah.apartment LIKE ?
-                          OR kah.note LIKE ?
-                          OR eh.full_name LIKE ?
-                          OR ugh.name LIKE ?
+                          SMART_NORM(kah.address) LIKE ?
+                          OR SMART_NORM(kah.apartment) LIKE ?
+                          OR SMART_NORM(kah.note) LIKE ?
+                          OR SMART_NORM(eh.full_name) LIKE ?
+                          OR SMART_NORM(ugh.name) LIKE ?
                       )
                 )
-                OR CASE k.status
+                OR SMART_NORM(CASE k.status
                     WHEN 'free' THEN 'Свободен'
                     WHEN 'issued_resident' THEN 'Выдан жильцу'
                     WHEN 'issued_employee' THEN 'Выдан сотруднику'
@@ -306,33 +300,11 @@ def _keys_filter_sql(
                     WHEN 'lost' THEN 'Утерян'
                     WHEN 'defective' THEN 'Брак'
                     WHEN 'archived' THEN 'Архив'
-                END LIKE ?
+                END) LIKE ?
             )
             """
         )
-        params.extend(
-            [
-                pattern,
-                pattern,
-                pattern,
-                pattern,
-                pattern,
-                apartment_pattern,
-                pattern,
-                pattern,
-                pattern,
-                apartment_pattern,
-                pattern,
-                pattern,
-                pattern,
-                pattern,
-                apartment_pattern,
-                pattern,
-                pattern,
-                pattern,
-                pattern,
-            ]
-        )
+        params.extend([pattern] * 19)
 
     if key_type_id:
         conditions.append("k.key_type_id = ?")

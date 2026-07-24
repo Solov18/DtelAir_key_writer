@@ -1,481 +1,255 @@
 {% extends 'base.html' %}
 
-{% block page_name %}Сотрудник{% endblock %}
+{% block page_name %}Карточка сотрудника{% endblock %}
 
 {% block content %}
-<div class="hero-title employee-detail-hero">
-    <div>
-        <a
-            class="btn btn-small btn-ghost"
-            href="{% if is_dismissed %}/employees?view=dismissed{% else %}/employees{% endif %}"
-        >
-            ← Назад к сотрудникам
-        </a>
-
-        <div class="employee-detail-title-row">
-            <div>
-                <h1>{{ employee.full_name }}</h1>
-                <p class="subtitle">{{ employee.note or 'Карточка сотрудника' }}</p>
+<div class="employee-profile-page">
+    <header class="employee-profile-hero">
+        <div>
+            <a class="employee-profile-back" href="{{ '/employees/dismissed' if is_dismissed else '/employees' }}">← Сотрудники</a>
+            <div class="employee-profile-title">
+                <span class="employee-profile-title-avatar">{{ employee.full_name[:1]|upper }}</span>
+                <div>
+                    <div class="employee-profile-heading">
+                        <h1>{{ employee.full_name }}</h1>
+                        <span class="employee-status {% if is_dismissed %}is-dismissed{% else %}is-active{% endif %}">
+                            <i></i>{{ 'Уволен' if is_dismissed else 'Активен' }}
+                        </span>
+                    </div>
+                    <p class="subtitle">
+                        {{ employee.position or 'Должность не указана' }}
+                        {% if employee.department %} · {{ employee.department }}{% endif %}
+                    </p>
+                </div>
             </div>
+        </div>
+
+        <div class="employee-profile-hero-actions">
+            {% if not is_dismissed %}
+            <a class="btn" href="#issue-key">Добавить ключ</a>
+            {% endif %}
+            <a class="btn btn-ghost" href="/employees">К реестру</a>
+        </div>
+    </header>
+
+    {% if message %}
+    <div class="compact-alert {% if message.type == 'error' %}employee-alert-error{% else %}employee-alert-success{% endif %}">
+        <h3>{{ 'Ошибка' if message.type == 'error' else 'Готово' }}</h3>
+        <p>{{ message.text }}</p>
+    </div>
+    {% endif %}
+
+    {% if is_dismissed %}
+    <section class="panel employee-profile-archive">
+        <div>
+            <h2>Архивная карточка</h2>
+            <p class="subtitle">Сотрудник уволен {{ employee.dismissed_at or '' }}. Ключи освобождены, история сохранена.</p>
+        </div>
+        <form method="post" action="/employees/{{ employee.id }}/restore" onsubmit="return confirm('Восстановить сотрудника?');">
+            <button class="btn" type="submit">Восстановить</button>
+        </form>
+    </section>
+    {% endif %}
+
+    <div class="employee-profile-grid">
+        <section class="panel employee-profile-data">
+            <header class="employee-profile-section-head">
+                <div>
+                    <span class="page-eyebrow">Учётная запись</span>
+                    <h2>Данные сотрудника</h2>
+                </div>
+                <small>ID: {{ employee.id }}</small>
+            </header>
 
             {% if is_dismissed %}
-            <span class="employee-dismissed-badge">Уволен</span>
+            <dl class="employee-profile-readonly">
+                <div><dt>ФИО</dt><dd>{{ employee.full_name }}</dd></div>
+                <div><dt>Должность</dt><dd>{{ employee.position or '—' }}</dd></div>
+                <div><dt>Подразделение</dt><dd>{{ employee.department or '—' }}</dd></div>
+                <div><dt>Телефон</dt><dd>{{ employee.phone or '—' }}</dd></div>
+                <div><dt>Email</dt><dd>{{ employee.email or '—' }}</dd></div>
+                <div><dt>Комментарий</dt><dd>{{ employee.note or '—' }}</dd></div>
+            </dl>
+            {% else %}
+            <form method="post" action="/employees/{{ employee.id }}/edit" class="employee-profile-form">
+                <input type="hidden" name="return_to" value="detail">
+                <label class="is-wide">ФИО<input name="full_name" value="{{ employee.full_name }}" required autocomplete="off"></label>
+                <label>Должность<input name="position" value="{{ employee.position or '' }}" autocomplete="off"></label>
+                <label>Подразделение<input name="department" value="{{ employee.department or '' }}" autocomplete="off"></label>
+                <label>Телефон<input name="phone" value="{{ employee.phone or '' }}" autocomplete="off"></label>
+                <label>Email<input name="email" type="email" value="{{ employee.email or '' }}" autocomplete="off"></label>
+                <label class="is-wide">Комментарий<textarea name="note" rows="4">{{ employee.note or '' }}</textarea></label>
+                <div class="employee-modal-actions is-wide">
+                    <button class="btn" type="submit">Сохранить изменения</button>
+                </div>
+            </form>
             {% endif %}
-        </div>
+        </section>
+
+        <section class="panel employee-profile-active-keys">
+            <header class="employee-profile-section-head">
+                <div>
+                    <span class="page-eyebrow">Физический доступ</span>
+                    <h2>Действующие ключи</h2>
+                </div>
+                <strong>{{ active_keys|length }}</strong>
+            </header>
+
+            <p class="employee-profile-section-note">
+                У сотрудника может быть несколько активных ключей. Каждый закрывается отдельно.
+            </p>
+
+            <div class="employee-profile-key-list custom-scroll">
+                {% for key in active_keys %}
+                <article class="employee-profile-key-card">
+                    <div class="employee-profile-key-main">
+                        <i style="--key-color: {{ key.key_type_color }}"></i>
+                        <div>
+                            <span>{{ key.key_type or 'Без типа' }}</span>
+                            <b>Ключ №{{ key.number }}</b>
+                            <small>HEX: {{ key.hex_value }}</small>
+                        </div>
+                        <em>Активен</em>
+                    </div>
+
+                    {% if key.comment %}
+                    <p>{{ key.comment }}</p>
+                    {% endif %}
+
+                    {% if not is_dismissed %}
+                    <details>
+                        <summary>Управление ключом</summary>
+                        <div class="employee-profile-key-controls">
+                            <form method="post" action="/employees/{{ employee.id }}/keys/comment">
+                                <input type="hidden" name="assignment_id" value="{{ key.assignment_id }}">
+                                <label>Комментарий<textarea name="comment" rows="2">{{ key.comment or '' }}</textarea></label>
+                                <button class="btn btn-ghost" type="submit">Сохранить комментарий</button>
+                            </form>
+                            <form method="post" action="/employees/{{ employee.id }}/keys/close" data-confirm="Закрыть именно этот ключ сотрудника?">
+                                <input type="hidden" name="assignment_id" value="{{ key.assignment_id }}">
+                                <label>Результат
+                                    <select name="status" required>
+                                        <option value="inactive">Возвращён / деактивирован</option>
+                                        <option value="lost">Утерян</option>
+                                        <option value="damaged">Повреждён</option>
+                                    </select>
+                                </label>
+                                <label>Причина<input name="close_reason" required placeholder="Укажите причину"></label>
+                                <input type="hidden" name="comment" value="{{ key.comment or '' }}">
+                                <button class="btn employee-danger-action" type="submit">Закрыть ключ</button>
+                            </form>
+                        </div>
+                    </details>
+                    {% endif %}
+                </article>
+                {% else %}
+                <div class="employee-inspector-no-keys">
+                    <svg viewBox="0 0 24 24"><circle cx="7.5" cy="14.5" r="4.5"/><path d="m11 11 9-9M16 6l3 3M14 8l2 2"/></svg>
+                    <b>Действующих ключей нет</b>
+                    <span>{{ 'Все ключи закрыты при увольнении.' if is_dismissed else 'Добавьте первый служебный ключ ниже.' }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
     </div>
-</div>
 
-{% if message %}
-<div class="compact-alert {% if message.type == 'error' %}employee-alert-error{% else %}employee-alert-success{% endif %}">
-    <h3>{% if message.type == 'error' %}Ошибка{% else %}Готово{% endif %}</h3>
-    <p>{{ message.text }}</p>
-</div>
-{% endif %}
+    {% if not is_dismissed %}
+    <section class="panel employee-profile-issue" id="issue-key">
+        <header class="employee-profile-section-head">
+            <div>
+                <span class="page-eyebrow">Новый доступ</span>
+                <h2>{{ 'Добавить ещё один ключ' if active_keys else 'Выдать ключ сотруднику' }}</h2>
+            </div>
+        </header>
 
-{% if is_dismissed %}
-<div class="panel employee-archive-banner">
-    <div>
-        <h2>Архивная карточка сотрудника</h2>
-        <p class="subtitle">
-            Сотрудник уволен
-            {% if employee.dismissed_at %}
-                {{ employee.dismissed_at }}
-            {% endif %}.
-            История ключей сохранена.
+        <p class="employee-profile-section-note">
+            Уже назначенные ключи останутся активными. Новый ключ должен быть сохранён в базе с HEX и не назначен другому владельцу.
         </p>
-    </div>
 
-    <form
-        method="post"
-        action="/employees/{{ employee.id }}/restore"
-        onsubmit="return confirm('Восстановить сотрудника? Старые ключи останутся в истории.');"
-    >
-        <button type="submit" class="btn">
-            Восстановить сотрудника
-        </button>
-    </form>
-</div>
-{% endif %}
-
-<div class="employee-detail-grid">
-    <div class="panel employee-info-panel">
-        <div class="panel-head">
-            <div>
-                <h2>Данные сотрудника</h2>
-                <p class="subtitle">ФИО и общий комментарий</p>
-            </div>
-        </div>
-
-        {% if is_dismissed %}
-        <div class="employee-readonly-data">
-            <div>
-                <span>ФИО</span>
-                <b>{{ employee.full_name }}</b>
-            </div>
-            <div>
-                <span>Комментарий</span>
-                <b>{{ employee.note or '—' }}</b>
-            </div>
-            <div>
-                <span>Дата увольнения</span>
-                <b>{{ employee.dismissed_at or '—' }}</b>
-            </div>
-        </div>
-        {% else %}
-        <form
-            method="post"
-            action="/employees/{{ employee.id }}/edit"
-            class="employee-detail-form"
-        >
-            <label>ФИО сотрудника</label>
-            <input
-                name="full_name"
-                value="{{ employee.full_name }}"
-                autocomplete="off"
-                required
-            >
-
-            <label>Комментарий</label>
-            <textarea
-                name="note"
-                rows="4"
-                placeholder="Должность, отдел или примечание"
-            >{{ employee.note or '' }}</textarea>
-
-            <button type="submit" class="btn wide-action">
-                Сохранить изменения
-            </button>
-        </form>
-        {% endif %}
-    </div>
-
-    <div class="panel employee-active-key-panel">
-        <div class="panel-head">
-            <div>
-                <h2>
-                    {% if is_dismissed %}
-                        Последний статус ключа
-                    {% else %}
-                        Действующий ключ
-                    {% endif %}
-                </h2>
-                <p class="subtitle">
-                    {% if is_dismissed %}
-                        У уволенного сотрудника нет действующего ключа
-                    {% else %}
-                        У сотрудника может быть только один действующий ключ
-                    {% endif %}
-                </p>
-            </div>
-        </div>
-
-        {% if active_key and not is_dismissed %}
-        <div class="employee-active-key-card">
-            <div class="employee-active-key-number">
-                <span>Номер ключа</span>
-                <strong>{{ active_key.number }}</strong>
-            </div>
-
-            <div class="employee-active-key-data">
-                <div>
-                    <span>HEX</span>
-                    <b>{{ active_key.hex_value }}</b>
-                </div>
-                <div>
-                    <span>Тип</span>
-                    <b>{{ active_key.key_type or '—' }}</b>
-                </div>
-                <div>
-                    <span>Выдан</span>
-                    <b>{{ active_key.issued_at or '—' }}</b>
-                </div>
-            </div>
-
-            <div class="employee-key-status active">Действующий</div>
-        </div>
-
-        <form
-            method="post"
-            action="/employees/{{ employee.id }}/keys/comment"
-            class="employee-detail-form employee-key-comment-form"
-        >
-            <input
-                type="hidden"
-                name="assignment_id"
-                value="{{ active_key.assignment_id }}"
-            >
-
-            <label>Комментарий к действующему ключу</label>
-            <textarea
-                name="comment"
-                rows="3"
-                placeholder="Например: основной служебный ключ"
-            >{{ active_key.comment or '' }}</textarea>
-
-            <button type="submit" class="btn btn-ghost wide-action">
-                Сохранить комментарий
-            </button>
-        </form>
-        {% else %}
-        <div class="employee-no-key">
-            <div class="employee-no-key-icon">
-                <svg viewBox="0 0 24 24">
-                    <circle cx="7.5" cy="14.5" r="4.5"/>
-                    <path d="m11 11 9-9M16 6l3 3M14 8l2 2"/>
-                </svg>
-            </div>
-
-            <h3>
-                {% if is_dismissed %}
-                    Ключ деактивирован при увольнении
-                {% else %}
-                    Действующий ключ не выдан
-                {% endif %}
-            </h3>
-
-            <p>
-                {% if is_dismissed %}
-                    Последний ключ и причины закрытия находятся в истории ниже.
-                {% else %}
-                    Выдайте сотруднику новый ключ с помощью формы ниже.
-                {% endif %}
-            </p>
-        </div>
-        {% endif %}
-    </div>
-</div>
-
-{% if not is_dismissed %}
-<div class="panel employee-replace-panel">
-    <div class="panel-head">
-        <div>
-            <h2>
-                {% if active_key %}
-                    Заменить действующий ключ
-                {% else %}
-                    Выдать ключ сотруднику
-                {% endif %}
-            </h2>
-            <p class="subtitle">
-                {% if active_key %}
-                    Старый ключ останется в истории сотрудника
-                {% else %}
-                    Новый ключ станет действующим
-                {% endif %}
-            </p>
-        </div>
-    </div>
-
-    <form
-        method="post"
-        action="/employees/{{ employee.id }}/keys/issue"
-        class="employee-replace-form"
-    >
-        <div class="employee-form-grid">
-            <div>
-                <label>Номер нового ключа</label>
+        <form method="post" action="/employees/{{ employee.id }}/keys/issue" class="employee-profile-issue-form">
+            <label>Номер или HEX ключа
                 <input
                     name="key_value"
-                    placeholder="Например: 39068"
-                    autocomplete="off"
                     required
+                    autocomplete="off"
+                    placeholder="Например: 1523 или 363FFAD7"
+                    data-smart-search="keys"
                 >
-            </div>
-
-            <div>
-                <label>Тип ключа</label>
+            </label>
+            <label>Тип ключа
                 <select name="key_type_id">
                     <option value="0">Определить автоматически</option>
                     {% for key_type in key_types %}
                     <option value="{{ key_type.id }}">{{ key_type.name }}</option>
                     {% endfor %}
                 </select>
-            </div>
+            </label>
+            <label>Комментарий
+                <input name="new_key_comment" autocomplete="off" placeholder="Например: ключ от серверной">
+            </label>
+            <input type="hidden" name="old_key_status" value="replaced">
+            <input type="hidden" name="old_key_reason" value="Не применяется">
+            <button class="btn" type="submit">Добавить ключ</button>
+        </form>
+    </section>
+    {% endif %}
 
+    <section class="panel employee-profile-history">
+        <header class="employee-profile-section-head">
             <div>
-                <label>Комментарий к новому ключу</label>
-                <input
-                    name="new_key_comment"
-                    placeholder="Основной служебный ключ"
-                    autocomplete="off"
-                >
+                <span class="page-eyebrow">Аудит</span>
+                <h2>История ключей</h2>
             </div>
-        </div>
+            <strong>{{ key_history|length }}</strong>
+        </header>
 
-        {% if active_key %}
-        <div class="employee-old-key-box">
-            <div class="employee-old-key-head">
-                <div>
-                    <span>Текущий ключ</span>
-                    <strong>{{ active_key.number }}</strong>
-                </div>
-                <p>Укажите, почему этот ключ больше не используется.</p>
-            </div>
-
-            <div class="employee-form-grid">
-                <div>
-                    <label>Статус старого ключа</label>
-                    <select name="old_key_status" required>
-                        <option value="replaced">Заменён</option>
-                        <option value="lost">Утерян</option>
-                        <option value="damaged">Повреждён</option>
-                        <option value="inactive">Деактивирован</option>
-                    </select>
-                </div>
-
-                <div>
-                    <label>Причина замены</label>
-                    <input
-                        name="old_key_reason"
-                        value="Выдан новый ключ"
-                        placeholder="Укажите причину"
-                        required
-                    >
-                </div>
-            </div>
-
-            <label>Комментарий к старому ключу</label>
-            <textarea
-                name="old_key_comment"
-                rows="3"
-                placeholder="Например: сотрудник сообщил об утере"
-            ></textarea>
+        {% if key_history %}
+        <div class="employee-profile-history-scroll custom-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Ключ</th>
+                        <th>HEX</th>
+                        <th>Статус</th>
+                        <th>Выдан</th>
+                        <th>Закрыт</th>
+                        <th>Причина</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for key in key_history %}
+                    <tr>
+                        <td><b>№{{ key.number }}</b><small>{{ key.key_type or 'Без типа' }}</small></td>
+                        <td>{{ key.hex_value }}</td>
+                        <td><span class="employee-key-status {{ key.status }}">{{ status_labels.get(key.status, key.status) }}</span></td>
+                        <td>{{ key.issued_at or '—' }}</td>
+                        <td>{{ key.closed_at or '—' }}</td>
+                        <td>{{ key.close_reason or '—' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
         {% else %}
-        <input type="hidden" name="old_key_status" value="replaced">
-        <input type="hidden" name="old_key_reason" value="Первая выдача ключа">
+        <div class="employee-profile-history-empty">Закрытых ключей пока нет.</div>
         {% endif %}
+    </section>
 
-        <button type="submit" class="btn wide-action">
-            {% if active_key %}Заменить ключ{% else %}Выдать ключ{% endif %}
-        </button>
-    </form>
-</div>
-{% endif %}
-
-<div class="panel employee-history-panel">
-    <div class="panel-head">
+    {% if not is_dismissed %}
+    <section class="panel employee-profile-dismiss">
         <div>
-            <h2>История ключей</h2>
-            <p class="subtitle">
-                Старые ключи не удаляются. Здесь сохраняются причины замены и комментарии.
-            </p>
+            <h2>Увольнение сотрудника</h2>
+            <p class="subtitle">Сотрудник перейдёт в архив. Все его активные ключи будут освобождены, история сохранится.</p>
         </div>
-
-        <div class="employee-history-counter">{{ key_history|length }}</div>
-    </div>
-
-    {% if key_history %}
-    <div class="employee-key-history-list">
-        {% for key in key_history %}
-        <details class="employee-history-card">
-            <summary>
-                <div class="employee-history-key">
-                    <span>Ключ</span>
-                    <strong>{{ key.number }}</strong>
-                    <small>{{ key.hex_value }}</small>
-                </div>
-
-                <div class="employee-key-status {{ key.status }}">
-                    {{ status_labels.get(key.status, key.status) }}
-                </div>
-
-                <div class="employee-history-reason">
-                    <span>Причина</span>
-                    <b>{{ key.close_reason or 'Причина не указана' }}</b>
-                </div>
-
-                <div class="employee-history-date">
-                    <span>Закрыт</span>
-                    <b>{{ key.closed_at or '—' }}</b>
-                </div>
-            </summary>
-
-            <div class="employee-history-body">
-                <div class="employee-history-info">
-                    <div>
-                        <span>Дата выдачи</span>
-                        <b>{{ key.issued_at or '—' }}</b>
-                    </div>
-                    <div>
-                        <span>Тип ключа</span>
-                        <b>{{ key.key_type or '—' }}</b>
-                    </div>
-                    <div>
-                        <span>HEX</span>
-                        <b>{{ key.hex_value }}</b>
-                    </div>
-                </div>
-
-                {% if is_dismissed %}
-                <div class="employee-history-readonly">
-                    <div>
-                        <span>Статус</span>
-                        <b>{{ status_labels.get(key.status, key.status) }}</b>
-                    </div>
-                    <div>
-                        <span>Причина</span>
-                        <b>{{ key.close_reason or '—' }}</b>
-                    </div>
-                    <div>
-                        <span>Комментарий</span>
-                        <b>{{ key.comment or '—' }}</b>
-                    </div>
-                </div>
-                {% else %}
-                <form
-                    method="post"
-                    action="/employees/{{ employee.id }}/keys/history/edit"
-                    class="employee-detail-form"
-                >
-                    <input
-                        type="hidden"
-                        name="assignment_id"
-                        value="{{ key.assignment_id }}"
-                    >
-
-                    <div class="employee-form-grid">
-                        <div>
-                            <label>Статус</label>
-                            <select name="status" required>
-                                <option value="replaced" {% if key.status == 'replaced' %}selected{% endif %}>
-                                    Заменён
-                                </option>
-                                <option value="lost" {% if key.status == 'lost' %}selected{% endif %}>
-                                    Утерян
-                                </option>
-                                <option value="damaged" {% if key.status == 'damaged' %}selected{% endif %}>
-                                    Повреждён
-                                </option>
-                                <option value="dismissed" {% if key.status == 'dismissed' %}selected{% endif %}>
-                                    Сотрудник уволен
-                                </option>
-                                <option value="inactive" {% if key.status == 'inactive' %}selected{% endif %}>
-                                    Деактивирован
-                                </option>
-                            </select>
-                        </div>
-
-                        <div>
-                            <label>Причина</label>
-                            <input
-                                name="close_reason"
-                                value="{{ key.close_reason or '' }}"
-                                required
-                            >
-                        </div>
-                    </div>
-
-                    <label>Комментарий</label>
-                    <textarea
-                        name="comment"
-                        rows="3"
-                        placeholder="Комментарий к старому ключу"
-                    >{{ key.comment or '' }}</textarea>
-
-                    <button type="submit" class="btn btn-ghost">
-                        Сохранить изменения
-                    </button>
-                </form>
-                {% endif %}
-            </div>
-        </details>
-        {% endfor %}
-    </div>
-    {% else %}
-    <div class="employee-empty-history">
-        <h3>История пока пустая</h3>
-        <p>После замены или закрытия ключа предыдущий ключ появится здесь.</p>
-    </div>
+        <form method="post" action="/employees/{{ employee.id }}/dismiss" data-confirm="Уволить сотрудника и освободить все активные ключи?">
+            <input name="comment" placeholder="Причина или комментарий" autocomplete="off">
+            <button class="btn employee-danger-action" type="submit">Уволить сотрудника</button>
+        </form>
+    </section>
     {% endif %}
 </div>
+{% endblock %}
 
-{% if not is_dismissed %}
-<div class="panel employee-dismiss-panel">
-    <div>
-        <h2>Увольнение сотрудника</h2>
-        <p class="subtitle">
-            Сотрудник будет перенесён в архив, но вся история ключей сохранится.
-        </p>
-    </div>
-
-    <form
-        method="post"
-        action="/employees/{{ employee.id }}/dismiss"
-        class="employee-dismiss-form"
-        onsubmit="return confirm('Перевести сотрудника в статус уволенного? История ключей будет сохранена.');"
-    >
-        <input
-            name="comment"
-            placeholder="Комментарий или причина увольнения"
-            autocomplete="off"
-        >
-
-        <button type="submit" class="danger-btn">
-            Уволить сотрудника
-        </button>
-    </form>
-</div>
-{% endif %}
-
+{% block scripts %}
+<script src="/static/js/employees.js?v=6"></script>
 {% endblock %}

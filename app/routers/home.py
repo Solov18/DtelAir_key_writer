@@ -6,6 +6,7 @@ from app.settings import settings
 from app.templates_config import templates
 from app.repositories.log_repository import get_recent_operations
 from app.services.crm import crm_auth_configured
+from app.repositories.panel_repository import get_panel_statistics
 
 router = APIRouter()
 
@@ -15,7 +16,7 @@ def index(request: Request):
     with db() as conn:
         stats = {
             "keys": conn.execute(
-                "SELECT COUNT(*) FROM keys"
+                "SELECT COUNT(*) FROM keys WHERE TRIM(hex_value) <> ''"
             ).fetchone()[0],
             "panels": conn.execute(
                 "SELECT COUNT(*) FROM panels WHERE enabled = 1"
@@ -39,5 +40,7 @@ def index(request: Request):
             "recent_operations": get_recent_operations(5),
             "dry_run": settings.dry_run,
             "crm_ready": crm_auth_configured(),
+            "panel_stats": get_panel_statistics(),
+            "training": bool(request.session.get("training_mode")),
         },
     )

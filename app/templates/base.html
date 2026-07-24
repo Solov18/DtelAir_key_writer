@@ -29,7 +29,7 @@
     <!-- Стили -->
     <link
         rel="stylesheet"
-        href="/static/css/style.css?v=5"
+        href="/static/css/style.css?v=9"
     >
     <link
         rel="stylesheet"
@@ -37,7 +37,7 @@
     >
 </head>
 
-<body>
+<body class="{% if training_mode(request) %}training-active{% endif %}">
 
 <div class="app-shell">
 
@@ -136,12 +136,22 @@
                 <span>Журнал операций</span>
             </a>
 
+            {% if current_user(request) and current_user(request)["role"] == "admin" %}
+            <a class="nav-item" href="/settings">
+                <svg viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1z"/>
+                </svg>
+                <span>Настройки</span>
+            </a>
+            {% endif %}
+
         </nav>
 
         <div class="sidebar-footer">
             <div>© DTEL CRM</div>
-            <div>Key Writer Simple</div>
-            <div>v2.0.0</div>
+            <div>made from air in 2026</div>
+            <div>v2.0.1</div>
         </div>
 
     </aside>
@@ -178,6 +188,31 @@
 
             <div class="topbar-right">
 
+                <form
+                    method="post"
+                    action="/settings/training-mode"
+                    class="training-toggle-form"
+                >
+                    <input
+                        type="hidden"
+                        name="enabled"
+                        value="{{ 0 if training_mode(request) else 1 }}"
+                    >
+                    <input
+                        type="hidden"
+                        name="return_to"
+                        value="{{ request.url.path }}"
+                    >
+                    <button
+                        type="submit"
+                        class="training-toggle {% if training_mode(request) %}is-active{% endif %}"
+                        title="В учебном режиме внешние запросы и изменения базы отключены"
+                    >
+                        <span></span>
+                        {{ "Учебный режим" if training_mode(request) else "Рабочий режим" }}
+                    </button>
+                </form>
+
                 <div class="top-info">
                     <svg viewBox="0 0 24 24">
                         <circle cx="12" cy="12" r="9"/>
@@ -191,7 +226,7 @@
 
                 <a
                     class="user-pill"
-                    href="/users"
+                    href="{{ '/users' if current_user(request) and current_user(request)['role'] == 'admin' else '/' }}"
                     title="Пользователи"
                 >
                     <svg viewBox="0 0 24 24">
@@ -212,11 +247,7 @@
                         <small>
                             {% if current_user(request) %}
 
-                                {% if current_user(request)["role"] == "admin" %}
-                                    Администратор
-                                {% else %}
-                                    Оператор
-                                {% endif %}
+                                {{ role_label(current_user(request)["role"]) }}
 
                             {% else %}
                                 Гость
@@ -246,6 +277,38 @@
         ================================================== -->
 
         <section class="content">
+            {% set notice = notice_code(request) %}
+            {% if notice %}
+            <div class="global-notice {% if notice in ['training_on', 'training_blocked'] %}is-training{% elif notice in ['read_only', 'admin_only', 'last_admin', 'self_disable', 'self_role', 'invalid_role', 'weak_password'] %}is-warning{% else %}is-success{% endif %}">
+                <b>
+                    {% if notice == "training_on" %}Учебный режим включён
+                    {% elif notice == "training_off" %}Рабочий режим включён
+                    {% elif notice == "training_blocked" %}Изменение заблокировано
+                    {% elif notice == "read_only" %}Недостаточно прав
+                    {% elif notice == "admin_only" %}Раздел доступен администратору
+                    {% elif notice == "last_admin" %}Нельзя отключить последнего администратора
+                    {% elif notice == "self_disable" %}Нельзя отключить собственную учётную запись
+                    {% elif notice == "self_role" %}Нельзя изменить собственную роль
+                    {% elif notice == "weak_password" %}Пароль слишком короткий
+                    {% elif notice == "role_updated" %}Роль пользователя обновлена
+                    {% elif notice == "status_updated" %}Доступ пользователя обновлён
+                    {% else %}Изменения сохранены{% endif %}
+                </b>
+                <span>
+                    {% if notice == "training_on" %}Запись в CRM и изменения базы теперь только имитируются.
+                    {% elif notice == "training_off" %}Операции снова могут изменять данные согласно вашей роли.
+                    {% elif notice == "training_blocked" %}Учебный режим не допускает эту операцию.
+                    {% elif notice == "read_only" %}Ваша роль разрешает просмотр, поиск и учебные проверки.
+                    {% elif notice == "weak_password" %}Используйте не менее 8 символов.
+                    {% else %}Проверьте состояние страницы и продолжайте работу.{% endif %}
+                </span>
+            </div>
+            {% endif %}
+            {% if training_mode(request) %}
+            <div class="training-ribbon">
+                Учебный режим: CRM и база защищены от изменений
+            </div>
+            {% endif %}
             {% block content %}
             {% endblock %}
         </section>
@@ -312,6 +375,7 @@
 </script>
 
 <script src="/static/js/theme.js?v=2"></script>
+<script src="/static/js/smart-search.js?v=2"></script>
 
 {% block scripts %}
 {% endblock %}

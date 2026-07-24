@@ -10,7 +10,7 @@
         <p class="subtitle">Запись ключей, поиск данных и контроль операций в единой панели.</p>
     </div>
 
-    <div class="dashboard-status-card {% if dry_run %}status-warning{% elif crm_ready %}status-ok{% else %}status-error{% endif %}">
+    <div class="dashboard-status-card {% if training %}status-warning{% elif dry_run %}status-warning{% elif crm_ready %}status-ok{% else %}status-error{% endif %}">
         <div class="crm-sync-visual" aria-hidden="true">
             <span></span>
             <svg viewBox="0 0 24 24">
@@ -23,7 +23,10 @@
 
         <div class="crm-sync-copy">
             <small>Состояние синхронизации</small>
-            {% if dry_run %}
+            {% if training %}
+            <b>Учебный режим</b>
+            <span>CRM и база защищены от изменений</span>
+            {% elif dry_run %}
             <b>Проверка без записи</b>
             <span>Отправка ключей в CRM отключена</span>
             {% elif crm_ready %}
@@ -41,6 +44,24 @@
     </div>
 </div>
 
+<div class="dashboard-context-bar">
+    <div>
+        <span class="context-dot {% if panel_stats.online %}is-ok{% endif %}"></span>
+        <p><small>Панели в сети</small><b>{{ panel_stats.online }} из {{ panel_stats.total }}</b></p>
+    </div>
+    <div>
+        <span class="context-dot {% if panel_stats.errors %}is-danger{% elif panel_stats.unchecked %}is-warning{% else %}is-ok{% endif %}"></span>
+        <p><small>Требуют внимания</small><b>{{ panel_stats.errors + panel_stats.unchecked }}</b></p>
+    </div>
+    <div>
+        <span class="context-dot is-role"></span>
+        <p><small>Ваш уровень доступа</small><b>{{ role_label(current_user(request).role) }}</b></p>
+    </div>
+    <a href="{{ '/settings' if current_user(request).role == 'admin' else '/search' }}">
+        {{ 'Настройки системы' if current_user(request).role == 'admin' else 'Перейти к поиску' }} →
+    </a>
+</div>
+
 <div class="dashboard-actions">
 
     <a class="dashboard-action-card" href="/message">
@@ -52,7 +73,7 @@
         </div>
         <div>
             <h2>Из сообщения</h2>
-            <p>Создать запись<br>из сообщения</p>
+            <p>Распознать заявку и<br>проверить найденные данные</p>
         </div>
         <span>›</span>
     </a>
@@ -66,7 +87,7 @@
         </div>
         <div>
             <h2>Обычная запись</h2>
-            <p>Ручное создание<br>новой записи</p>
+            <p>Пошаговая запись с<br>явным выбором панелей</p>
         </div>
         <span>›</span>
     </a>
@@ -80,7 +101,7 @@
         </div>
         <div>
             <h2>Универсальный поиск</h2>
-            <p>Быстрый поиск по всем<br>данным системы</p>
+            <p>Ключи, люди, адреса,<br>панели, УК и журнал</p>
         </div>
         <span>›</span>
     </a>
@@ -214,6 +235,7 @@
 
         <div class="dashboard-quick-grid">
 
+    {% if has_permission(current_user(request), 'manage_registry') %}
     <a href="/employees">
         <svg viewBox="0 0 24 24">
             <path d="M17 21a6 6 0 0 0-12 0"/>
@@ -270,6 +292,7 @@
             <small>Загрузка базы из файла</small>
         </div>
     </a>
+    {% endif %}
 
     <a href="/log">
         <svg viewBox="0 0 24 24">
@@ -281,6 +304,19 @@
             <small>История действий системы</small>
         </div>
     </a>
+
+    {% if current_user(request).role == 'admin' %}
+    <a href="/settings">
+        <svg viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19 12a7 7 0 1 1-7-7M12 2v3M12 19v3M2 12h3M19 12h3"/>
+        </svg>
+        <div>
+            <b>Настройки</b>
+            <small>Режим обучения и права</small>
+        </div>
+    </a>
+    {% endif %}
 
 </div>
     </div>

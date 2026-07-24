@@ -3,407 +3,382 @@
 {% block page_name %}Сотрудники{% endblock %}
 
 {% block content %}
-<div class="employees-hero">
-    <div>
-        <h1>Сотрудники</h1>
-        <p class="subtitle">Учёт сотрудников, действующих ключей и истории замен</p>
-    </div>
-
-    <div class="employees-stats">
-        <div class="employees-stat-card">
-            <div class="employees-stat-icon">
-                <svg viewBox="0 0 24 24">
-                    <path d="M17 21a6 6 0 0 0-12 0"/>
-                    <circle cx="11" cy="8" r="4"/>
-                    <path d="M20 8v6M17 11h6"/>
-                </svg>
-            </div>
-            <div>
-                <b>{{ employees_count or 0 }}</b>
-                <span>Активных сотрудников</span>
-            </div>
-        </div>
-
-        <div class="employees-stat-card">
-            <div class="employees-stat-icon">
-                <svg viewBox="0 0 24 24">
-                    <circle cx="7.5" cy="14.5" r="4.5"/>
-                    <path d="m11 11 9-9M16 6l3 3M14 8l2 2"/>
-                </svg>
-            </div>
-            <div>
-                <b>{{ employee_keys_count or 0 }}</b>
-                <span>Действующих ключей</span>
-            </div>
-        </div>
-
-        <div class="employees-stat-card">
-            <div class="employees-stat-icon">
-                <svg viewBox="0 0 24 24">
-                    <path d="M4 7h16M7 3h10l1 4H6l1-4Z"/>
-                    <path d="M6 7v13h12V7"/>
-                    <path d="M9 11h6"/>
-                </svg>
-            </div>
-            <div>
-                <b>{{ dismissed_count or 0 }}</b>
-                <span>Уволенных сотрудников</span>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="employee-view-tabs">
-    <a
-        href="/employees"
-        class="employee-view-tab {% if current_view == 'active' %}active{% endif %}"
-    >
-        Активные
-        <span>{{ employees_count or 0 }}</span>
-    </a>
-
-    <a
-        href="/employees/dismissed"
-        class="employee-view-tab {% if current_view == 'dismissed' %}active{% endif %}"
-    >
-        Уволенные
-        <span>{{ dismissed_count or 0 }}</span>
-    </a>
-</div>
-
-{% if current_view != 'dismissed' %}
-<div class="employees-top-grid">
-    <div class="panel employee-add-panel">
-        <h2>
-            <span class="title-svg-icon">
-                <svg viewBox="0 0 24 24">
-                    <path d="M17 21a6 6 0 0 0-12 0"/>
-                    <circle cx="11" cy="8" r="4"/>
-                    <path d="M20 8v6M17 11h6"/>
-                </svg>
-            </span>
-            Добавить сотрудника
-        </h2>
-
-        <form method="post" action="/employees/add">
-            <label>ФИО сотрудника</label>
-            <input
-                name="full_name"
-                placeholder="Иванов Иван Иванович"
-                autocomplete="off"
-                required
-            >
-
-            <label>Комментарий</label>
-            <input
-                name="note"
-                placeholder="Должность, отдел или примечание"
-                autocomplete="off"
-            >
-
-            <button type="submit" class="btn employees-wide-btn">
-                Добавить сотрудника
-            </button>
-        </form>
-    </div>
-
-    <div class="panel employee-write-panel">
-        <h2>
-            <span class="title-svg-icon">
-                <svg viewBox="0 0 24 24">
-                    <circle cx="7.5" cy="14.5" r="4.5"/>
-                    <path d="m11 11 9-9M16 6l3 3M14 8l2 2"/>
-                </svg>
-            </span>
-            Выдать и прописать ключ
-        </h2>
-
-        <form method="post" action="/employees/write" id="employeeWriteForm">
-            <label>Сотрудник</label>
-            <input
-                type="text"
-                id="employeeWriteSearch"
-                name="employee_name"
-                placeholder="Начните вводить ФИО..."
-                autocomplete="off"
-                required
-            >
-
-            <div class="employee-picker" id="employeePicker">
-                {% for e in employees %}
-                <button
-                    type="button"
-                    class="employee-picker-item"
-                    data-name="{{ e.full_name }}"
-                >
-                    {{ e.full_name }}
-                </button>
-                {% endfor %}
-            </div>
-
-            <label>Номер нового ключа</label>
-            <input
-                name="key_value"
-                placeholder="Например: 39068"
-                autocomplete="off"
-                required
-            >
-
-            <label>Тип ключа</label>
-            <select name="key_type_id">
-                <option value="0">Определить автоматически</option>
-                {% for key_type in key_types %}
-                <option value="{{ key_type.id }}">{{ key_type.name }}</option>
-                {% endfor %}
-            </select>
-
-            <p class="field-hint">
-                У сотрудника может быть только один действующий ключ.
-                Предыдущий ключ будет сохранён в истории.
-            </p>
-
-            <label>Комментарий к новому ключу</label>
-            <input
-                name="new_key_comment"
-                placeholder="Например: основной служебный ключ"
-                autocomplete="off"
-            >
-
-            <div class="employee-write-row">
-                <div>
-                    <label>Куда прописывать</label>
-                    <select name="scope" id="employeeScope">
-                        <option value="all">На все панели</option>
-                        <option value="selected">Выбрать панели вручную</option>
-                    </select>
-                </div>
-
-                <div>
-                    <label>Квартира / flatNum</label>
-                    <input name="flat_num" value="0">
-                </div>
-            </div>
-
-            <input type="hidden" name="inner" value="0">
-            <input type="hidden" name="old_key_status" value="replaced">
-            <input type="hidden" name="old_key_reason" value="Выдан новый ключ">
-
-            <div class="employee-write-actions">
-                <button type="button" class="btn btn-ghost" id="openEmployeePanelsModal">
-                    Выбрать панели
-                </button>
-                <button type="submit" class="btn">
-                    Выдать и прописать
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
-{% endif %}
-
-<div class="panel employees-list-panel">
-    <div class="panel-list-head">
+{% set list_path = '/employees/dismissed' if current_view == 'dismissed' else '/employees' %}
+<div class="employees-directory">
+    <header class="employees-directory-hero">
         <div>
-            <h2>
-                <span class="title-svg-icon">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M17 21a6 6 0 0 0-12 0"/>
-                        <circle cx="11" cy="8" r="4"/>
-                        <path d="M20 8v6M17 11h6"/>
-                    </svg>
-                </span>
-                {% if current_view == 'dismissed' %}
-                    Уволенные сотрудники
-                {% else %}
-                    Список сотрудников
-                {% endif %}
-            </h2>
-
-            <p class="subtitle">
-                Найдено:
-                <span id="employeesFound">{{ employees|length }}</span>
-            </p>
+            <span class="page-eyebrow">Команда и доступ</span>
+            <h1>Сотрудники</h1>
+            <p class="subtitle">Сотрудники, их служебные данные и все назначенные ключи.</p>
         </div>
 
-        <div class="panel-search employees-search-box">
-            <input
-                type="text"
-                id="employeesSearch"
-                placeholder="Поиск по ФИО, ключу или комментарию..."
-                autocomplete="off"
-            >
+        <div class="employees-directory-sync">
+            <span class="employees-directory-sync-dot"></span>
+            Реестр актуален
         </div>
-    </div>
+    </header>
 
-    <div class="employees-cards" id="employeesCards">
-        {% for e in employees %}
-        <div
-            class="employee-card {% if current_view == 'dismissed' %}employee-card-dismissed{% endif %}"
-            data-search="
-                {{ e.full_name }}
-                {{ e.note or '' }}
-                {{ e.active_key_number or '' }}
-                {{ e.last_key_number or '' }}
-                {{ e.active_key_comment or '' }}
-            "
-        >
-            <div class="employee-avatar">
-                <svg viewBox="0 0 24 24">
-                    <path d="M17 21a6 6 0 0 0-12 0"/>
-                    <circle cx="11" cy="8" r="4"/>
-                </svg>
-            </div>
+    <section class="employee-summary-grid" aria-label="Сводка по сотрудникам">
+        <a class="employee-summary-card is-blue" href="/employees">
+            <span class="employee-summary-icon">
+                <svg viewBox="0 0 24 24"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>
+            </span>
+            <span><small>Всего сотрудников</small><b>{{ statistics.total }}</b></span>
+        </a>
+        <a class="employee-summary-card is-green" href="/employees">
+            <span class="employee-summary-icon">
+                <svg viewBox="0 0 24 24"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/><path d="m17 16 2 2 4-5"/></svg>
+            </span>
+            <span><small>Активные</small><b>{{ statistics.active }}</b></span>
+        </a>
+        <a class="employee-summary-card is-red" href="/employees/dismissed">
+            <span class="employee-summary-icon">
+                <svg viewBox="0 0 24 24"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/><path d="M8 17h8"/></svg>
+            </span>
+            <span><small>Уволены / неактивны</small><b>{{ statistics.dismissed }}</b></span>
+        </a>
+        <a class="employee-summary-card is-violet" href="/employees?key_status=with_keys">
+            <span class="employee-summary-icon">
+                <svg viewBox="0 0 24 24"><circle cx="7.5" cy="14.5" r="4.5"/><path d="m11 11 9-9M16 6l3 3M14 8l2 2"/></svg>
+            </span>
+            <span><small>С ключами</small><b>{{ statistics.with_keys }}</b></span>
+        </a>
+        <a class="employee-summary-card is-cyan" href="/employees?key_status=without_keys">
+            <span class="employee-summary-icon">
+                <svg viewBox="0 0 24 24"><path d="M12 22s7-6 7-12a7 7 0 0 0-14 0c0 6 7 12 7 12z"/><path d="m9 10 6 0"/></svg>
+            </span>
+            <span><small>Без ключей</small><b>{{ statistics.without_keys }}</b></span>
+        </a>
+    </section>
 
-            <div class="employee-card-main">
-                <b>{{ e.full_name }}</b>
-                <span>{{ e.note or 'Без комментария' }}</span>
-
-                {% if current_view == 'dismissed' %}
-                <small class="employee-dismissed-date">
-                    Уволен: {{ e.dismissed_at or 'дата не указана' }}
-                </small>
-                <span class="employee-key-status dismissed employee-list-status">
-                    Уволен
-                </span>
-                {% elif e.history_count %}
-                <small class="employee-history-count">
-                    История ключей: {{ e.history_count }}
-                </small>
-                {% endif %}
-            </div>
-
-            <div class="employee-card-stat">
-                {% if current_view == 'dismissed' %}
-                    <b>{{ e.last_key_number or '—' }}</b>
-                    <span>Последний ключ</span>
-                    <small>История: {{ e.history_count or 0 }}</small>
-                {% elif e.active_key_number %}
-                    <b>{{ e.active_key_number }}</b>
-                    <span>Действующий ключ</span>
-                    {% if e.active_key_comment %}
-                    <small>{{ e.active_key_comment }}</small>
+    <div class="employees-directory-layout">
+        <section class="employee-register panel">
+            <div class="employee-register-toolbar">
+                <div class="employee-register-actions">
+                    {% if current_view == 'active' %}
+                    <button class="btn employee-primary-action" type="button" data-open-employee-modal="employeeAddModal">
+                        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+                        Добавить сотрудника
+                    </button>
+                    <a class="btn btn-ghost employee-archive-link" href="/employees/dismissed">
+                        Архив
+                        {% if statistics.dismissed %}<span>{{ statistics.dismissed }}</span>{% endif %}
+                    </a>
+                    {% else %}
+                    <a class="btn employee-primary-action" href="/employees">← Вернуться к активным</a>
                     {% endif %}
-                {% else %}
-                    <b>—</b>
-                    <span>Ключ не выдан</span>
-                {% endif %}
-            </div>
+                </div>
 
-            <div class="employee-card-actions">
-                {% if current_view != 'dismissed' %}
-                <button
-                    type="button"
-                    class="btn btn-small"
-                    data-employee-select="{{ e.full_name }}"
-                >
-                    Выбрать
-                </button>
-                {% endif %}
-
-                <a
-                    href="/employees/{{ e.id }}"
-                    class="btn btn-small btn-ghost"
-                >
-                    Карточка
-                </a>
-            </div>
-        </div>
-        {% else %}
-        <div class="empty-state">
-            {% if current_view == 'dismissed' %}
-                <h3>Уволенных сотрудников нет</h3>
-                <p>После увольнения сотрудник появится в этом разделе.</p>
-            {% else %}
-                <h3>Сотрудников пока нет</h3>
-                <p>Добавьте первого сотрудника с помощью формы выше.</p>
-            {% endif %}
-        </div>
-        {% endfor %}
-    </div>
-</div>
-
-{% if current_view != 'dismissed' %}
-<div class="modal-backdrop" id="employeePanelsModal">
-    <div class="modal-window panel">
-        <div class="modal-head">
-            <div>
-                <h2>Выбрать панели</h2>
-                <p class="subtitle">Выберите панели, на которые нужно прописать ключ</p>
-            </div>
-
-            <button type="button" class="btn-small btn-ghost" id="closeEmployeePanelsModal">
-                Закрыть
-            </button>
-        </div>
-
-        <div class="panel-actions employee-modal-actions">
-            <button type="button" class="btn-small" id="select-all-panels">
-                Выбрать все
-            </button>
-            <button type="button" class="btn-small btn-ghost" id="clear-all-panels">
-                Снять все
-            </button>
-        </div>
-
-        <div class="panel-search employee-search">
-            <input
-                type="text"
-                id="employeePanelSearch"
-                placeholder="Поиск по адресу, входу или MAC..."
-                autocomplete="off"
-            >
-        </div>
-
-        <div class="panel-list employee-panel-list" id="employeePanelList">
-            {% for p in panels %}
-            <label class="panel-option">
-                <input
-                    type="checkbox"
-                    name="panel_ids"
-                    value="{{ p.id }}"
-                    form="employeeWriteForm"
-                >
-
-                <span class="panel-option-body">
-                    <span class="panel-option-title">{{ p.entrance or '—' }}</span>
-                    <span class="panel-option-meta">{{ p.address }}</span>
-                    <span class="panel-option-mac">{{ p.mac }}</span>
+                <span class="employee-register-updated">
+                    Найдено: <b>{{ employee_page.total }}</b>
                 </span>
-            </label>
-            {% endfor %}
-        </div>
+            </div>
+
+            <form class="employee-filterbar" method="get" action="{{ list_path }}">
+                <label class="employee-search-field">
+                    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4.5 4.5"/></svg>
+                    <input
+                        type="search"
+                        name="q"
+                        value="{{ filters.q }}"
+                        placeholder="Поиск по ФИО, телефону, должности или ключу..."
+                        autocomplete="off"
+                        data-smart-search="employees"
+                    >
+                </label>
+
+                {% if current_view == 'active' %}
+                <label class="employee-filter-control">
+                    <span>Ключи</span>
+                    <select name="key_status">
+                        <option value="">Все</option>
+                        <option value="with_keys" {% if filters.key_status == 'with_keys' %}selected{% endif %}>Есть ключи</option>
+                        <option value="without_keys" {% if filters.key_status == 'without_keys' %}selected{% endif %}>Без ключей</option>
+                    </select>
+                </label>
+                {% endif %}
+
+                <label class="employee-filter-control">
+                    <span>Подразделение</span>
+                    <select name="department">
+                        <option value="">Все</option>
+                        {% for item in filter_options.departments %}
+                        <option value="{{ item }}" {% if filters.department == item %}selected{% endif %}>{{ item }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+
+                <label class="employee-filter-control">
+                    <span>Должность</span>
+                    <select name="position">
+                        <option value="">Все</option>
+                        {% for item in filter_options.positions %}
+                        <option value="{{ item }}" {% if filters.position == item %}selected{% endif %}>{{ item }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+
+                <button class="btn employee-filter-submit" type="submit">Показать</button>
+                <a class="btn btn-ghost employee-filter-reset" href="{{ list_path }}" title="Сбросить фильтры">↻</a>
+            </form>
+
+            <div class="employee-table-scroll custom-scroll">
+                <table class="employee-directory-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>ФИО</th>
+                            <th>Должность</th>
+                            <th>Подразделение</th>
+                            <th>Телефон</th>
+                            <th>Ключи</th>
+                            <th>Статус</th>
+                            <th>Дата добавления</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for employee in employees %}
+                        <tr
+                            class="{% if selected_employee and selected_employee.id == employee.id %}is-selected{% endif %}"
+                            tabindex="0"
+                            data-employee-row
+                            data-href="{{ list_path }}?{% if row_query %}{{ row_query }}&{% endif %}selected_employee_id={{ employee.id }}"
+                        >
+                            <td class="employee-id-cell">{{ employee.id }}</td>
+                            <td>
+                                <div class="employee-name-cell">
+                                    <span class="employee-table-avatar">{{ employee.full_name[:1]|upper }}</span>
+                                    <span>
+                                        <b>{{ employee.full_name }}</b>
+                                        <small>{{ employee.email or employee.note or 'Без дополнительной информации' }}</small>
+                                    </span>
+                                </div>
+                            </td>
+                            <td>{{ employee.position or '—' }}</td>
+                            <td>{{ employee.department or '—' }}</td>
+                            <td class="employee-phone-cell">{{ employee.phone or '—' }}</td>
+                            <td>
+                                {% if employee.active_key_count %}
+                                <span class="employee-key-count" title="{{ employee.active_key_numbers }}">
+                                    {{ employee.active_key_count }}
+                                    <small>активн.</small>
+                                </span>
+                                {% else %}
+                                <span class="employee-no-keys">0</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if employee.enabled %}
+                                <span class="employee-status is-active"><i></i>Активен</span>
+                                {% else %}
+                                <span class="employee-status is-dismissed"><i></i>Уволен</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ (employee.created_at or '—')[:16] }}</td>
+                            <td>
+                                <div class="employee-row-actions">
+                                    <a href="/employees/{{ employee.id }}" title="Открыть карточку" aria-label="Открыть карточку">
+                                        <svg viewBox="0 0 24 24"><path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.5"/></svg>
+                                    </a>
+                                    {% if employee.enabled %}
+                                    <button
+                                        type="button"
+                                        data-open-employee-modal="employeeEditModal"
+                                        data-selected-only="{{ employee.id }}"
+                                        title="Редактировать"
+                                        aria-label="Редактировать"
+                                    >
+                                        <svg viewBox="0 0 24 24"><path d="m4 20 4-1 11-11-3-3L5 16l-1 4Z"/><path d="m14 7 3 3"/></svg>
+                                    </button>
+                                    {% endif %}
+                                    <a href="/employees/{{ employee.id }}#issue-key" title="Ключи сотрудника" aria-label="Ключи сотрудника">
+                                        <svg viewBox="0 0 24 24"><circle cx="7.5" cy="14.5" r="4.5"/><path d="m11 11 9-9M16 6l3 3M14 8l2 2"/></svg>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="9">
+                                <div class="employee-register-empty">
+                                    <span>По заданным условиям сотрудники не найдены.</span>
+                                    <a href="{{ list_path }}">Сбросить фильтры</a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <footer class="employee-pagination">
+                <span>
+                    {% if employee_page.total %}
+                    Показано {{ ((employee_page.page - 1) * employee_page.page_size) + 1 }}–{{ [employee_page.page * employee_page.page_size, employee_page.total]|min }} из {{ employee_page.total }}
+                    {% else %}
+                    Нет записей
+                    {% endif %}
+                </span>
+                {% if employee_page.pages > 1 %}
+                <nav aria-label="Страницы сотрудников">
+                    {% if employee_page.page > 1 %}
+                    <a href="{{ list_path }}?{% if base_query %}{{ base_query }}&{% endif %}page={{ employee_page.page - 1 }}">←</a>
+                    {% endif %}
+                    {% for number in range(1, employee_page.pages + 1) %}
+                        {% if number == 1 or number == employee_page.pages or (number >= employee_page.page - 2 and number <= employee_page.page + 2) %}
+                        <a class="{% if number == employee_page.page %}is-active{% endif %}" href="{{ list_path }}?{% if base_query %}{{ base_query }}&{% endif %}page={{ number }}">{{ number }}</a>
+                        {% elif number == 2 or number == employee_page.pages - 1 %}
+                        <span>…</span>
+                        {% endif %}
+                    {% endfor %}
+                    {% if employee_page.page < employee_page.pages %}
+                    <a href="{{ list_path }}?{% if base_query %}{{ base_query }}&{% endif %}page={{ employee_page.page + 1 }}">→</a>
+                    {% endif %}
+                </nav>
+                {% endif %}
+            </footer>
+        </section>
+
+        <aside class="employee-inspector panel custom-scroll">
+            {% if selected_employee %}
+            <header class="employee-inspector-profile">
+                <span class="employee-inspector-avatar">{{ selected_employee.full_name[:1]|upper }}</span>
+                <div>
+                    <h2>{{ selected_employee.full_name }}</h2>
+                    <span class="employee-status {% if selected_employee.enabled %}is-active{% else %}is-dismissed{% endif %}">
+                        <i></i>{{ 'Активен' if selected_employee.enabled else 'Уволен' }}
+                    </span>
+                    <small>ID: {{ selected_employee.id }}</small>
+                </div>
+            </header>
+
+            <dl class="employee-inspector-data">
+                <div><dt>Должность</dt><dd>{{ selected_employee.position or 'Не указана' }}</dd></div>
+                <div><dt>Подразделение</dt><dd>{{ selected_employee.department or 'Не указано' }}</dd></div>
+                <div><dt>Телефон</dt><dd>{{ selected_employee.phone or 'Не указан' }}</dd></div>
+                <div><dt>Email</dt><dd>{{ selected_employee.email or 'Не указан' }}</dd></div>
+                <div><dt>Дата добавления</dt><dd>{{ (selected_employee.created_at or '—')[:16] }}</dd></div>
+                <div><dt>Добавил</dt><dd>{{ selected_employee.created_by or 'Система' }}</dd></div>
+            </dl>
+
+            {% if selected_employee.note %}
+            <div class="employee-inspector-note">
+                <span>Комментарий</span>
+                <p>{{ selected_employee.note }}</p>
+            </div>
+            {% endif %}
+
+            <section class="employee-inspector-keys">
+                <header>
+                    <div>
+                        <span>Назначенные ключи</span>
+                        <b>{{ selected_keys|length }}</b>
+                    </div>
+                    {% if selected_employee.enabled %}
+                    <a href="/employees/{{ selected_employee.id }}#issue-key">+ Добавить ключ</a>
+                    {% endif %}
+                </header>
+
+                <div class="employee-inspector-key-list custom-scroll">
+                    {% for key in selected_keys %}
+                    <a class="employee-inspector-key" href="/keys/{{ key.key_id }}">
+                        <i style="--key-color: {{ key.key_type_color }}"></i>
+                        <span>
+                            <b>{{ key.key_type or 'Без типа' }} · №{{ key.number }}</b>
+                            <small>HEX: {{ key.hex_value }}</small>
+                        </span>
+                        <em>Активен</em>
+                    </a>
+                    {% else %}
+                    <div class="employee-inspector-no-keys">
+                        <svg viewBox="0 0 24 24"><circle cx="7.5" cy="14.5" r="4.5"/><path d="m11 11 9-9M16 6l3 3M14 8l2 2"/></svg>
+                        <b>Ключи не назначены</b>
+                        <span>Сотруднику можно выдать несколько служебных ключей.</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
+
+            <div class="employee-inspector-actions">
+                <a class="btn" href="/employees/{{ selected_employee.id }}">Полная карточка</a>
+                {% if selected_employee.enabled %}
+                <button class="btn btn-ghost" type="button" data-open-employee-modal="employeeEditModal">Редактировать</button>
+                <form method="post" action="/employees/{{ selected_employee.id }}/dismiss" data-confirm="Уволить сотрудника и освободить все его ключи?">
+                    <input type="hidden" name="comment" value="Сотрудник уволен">
+                    <button class="btn employee-danger-action" type="submit">Уволить / деактивировать</button>
+                </form>
+                {% else %}
+                <form method="post" action="/employees/{{ selected_employee.id }}/restore">
+                    <button class="btn" type="submit">Восстановить сотрудника</button>
+                </form>
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="employee-inspector-empty">
+                <svg viewBox="0 0 24 24"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>
+                <h2>Сотрудник не выбран</h2>
+                <p>Выберите строку в реестре, чтобы увидеть подробности и назначенные ключи.</p>
+            </div>
+            {% endif %}
+        </aside>
+    </div>
+</div>
+
+{% if current_view == 'active' %}
+<div class="employee-modal" id="employeeAddModal" aria-hidden="true">
+    <div class="employee-modal-card panel" role="dialog" aria-modal="true" aria-labelledby="employeeAddTitle">
+        <header>
+            <div>
+                <span class="page-eyebrow">Новая карточка</span>
+                <h2 id="employeeAddTitle">Добавить сотрудника</h2>
+            </div>
+            <button type="button" data-close-employee-modal aria-label="Закрыть">×</button>
+        </header>
+        <form method="post" action="/employees/add" class="employee-profile-form">
+            <label class="is-wide">ФИО<input name="full_name" autocomplete="off" required placeholder="Иванов Сергей Петрович"></label>
+            <label>Должность<input name="position" autocomplete="off" placeholder="Инженер"></label>
+            <label>Подразделение<input name="department" autocomplete="off" placeholder="Технический отдел"></label>
+            <label>Телефон<input name="phone" autocomplete="off" placeholder="+7 999 123-45-67"></label>
+            <label>Email<input name="email" type="email" autocomplete="off" placeholder="employee@dtel.ru"></label>
+            <label class="is-wide">Комментарий<textarea name="note" rows="3" placeholder="Дополнительная информация"></textarea></label>
+            <div class="employee-modal-actions is-wide">
+                <button type="button" class="btn btn-ghost" data-close-employee-modal>Отмена</button>
+                <button type="submit" class="btn">Добавить сотрудника</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if selected_employee %}
+<div class="employee-modal" id="employeeEditModal" aria-hidden="true">
+    <div class="employee-modal-card panel" role="dialog" aria-modal="true" aria-labelledby="employeeEditTitle">
+        <header>
+            <div>
+                <span class="page-eyebrow">Карточка №{{ selected_employee.id }}</span>
+                <h2 id="employeeEditTitle">Редактировать сотрудника</h2>
+            </div>
+            <button type="button" data-close-employee-modal aria-label="Закрыть">×</button>
+        </header>
+        <form method="post" action="/employees/{{ selected_employee.id }}/edit" class="employee-profile-form">
+            <input type="hidden" name="return_to" value="list">
+            <label class="is-wide">ФИО<input name="full_name" value="{{ selected_employee.full_name }}" autocomplete="off" required></label>
+            <label>Должность<input name="position" value="{{ selected_employee.position or '' }}" autocomplete="off"></label>
+            <label>Подразделение<input name="department" value="{{ selected_employee.department or '' }}" autocomplete="off"></label>
+            <label>Телефон<input name="phone" value="{{ selected_employee.phone or '' }}" autocomplete="off"></label>
+            <label>Email<input name="email" type="email" value="{{ selected_employee.email or '' }}" autocomplete="off"></label>
+            <label class="is-wide">Комментарий<textarea name="note" rows="3">{{ selected_employee.note or '' }}</textarea></label>
+            <div class="employee-modal-actions is-wide">
+                <button type="button" class="btn btn-ghost" data-close-employee-modal>Отмена</button>
+                <button type="submit" class="btn">Сохранить изменения</button>
+            </div>
+        </form>
     </div>
 </div>
 {% endif %}
-
-<script src="/static/js/employees.js?v=3"></script>
-
-{% if current_view != 'dismissed' %}
-<script>
-const employeePanelsModal = document.getElementById("employeePanelsModal");
-const openEmployeePanelsModal = document.getElementById("openEmployeePanelsModal");
-const closeEmployeePanelsModal = document.getElementById("closeEmployeePanelsModal");
-
-if (openEmployeePanelsModal && employeePanelsModal) {
-    openEmployeePanelsModal.addEventListener("click", () => {
-        employeePanelsModal.classList.add("active");
-    });
-}
-
-if (closeEmployeePanelsModal && employeePanelsModal) {
-    closeEmployeePanelsModal.addEventListener("click", () => {
-        employeePanelsModal.classList.remove("active");
-    });
-}
-
-if (employeePanelsModal) {
-    employeePanelsModal.addEventListener("click", (event) => {
-        if (event.target === employeePanelsModal) {
-            employeePanelsModal.classList.remove("active");
-        }
-    });
-}
-</script>
 {% endif %}
+{% endblock %}
 
+{% block scripts %}
+<script src="/static/js/employees.js?v=6"></script>
 {% endblock %}

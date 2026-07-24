@@ -3,254 +3,173 @@
 {% block page_name %}Универсальный поиск{% endblock %}
 
 {% block content %}
-<div class="hero-title">
-    <h1>Универсальный поиск</h1>
-    <p class="subtitle">
-        Найдите ключ, историю записи, адрес или квартиру по любым известным данным.
-    </p>
-</div>
+<div class="search-page">
+    <div class="search-hero">
+        <div>
+            <span class="page-kicker">Единый реестр</span>
+            <h1>Универсальный поиск</h1>
+            <p class="subtitle">
+                Ключи, сотрудники, панели, управляющие компании и история операций — одним запросом.
+            </p>
+        </div>
+        <div class="search-hero-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg>
+        </div>
+    </div>
 
-<div class="search-layout">
-
-    <div class="panel search-form-panel">
-        <h2>Поисковый запрос</h2>
-        <p class="subtitle search-form-subtitle">
-            Введите номер ключа, HEX, адрес, квартиру или часть данных.
-        </p>
-
-        <form method="post" action="/search">
+    <form method="get" action="/search" class="panel universal-search-form">
+        <div class="universal-search-field">
+            <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg>
             <input
-                name="query"
+                name="q"
                 value="{{ result.query if result else '' }}"
-                placeholder="39107, 363FFAD7, Тепличная 65, кв 10"
+                placeholder="Номер или HEX ключа, ФИО, телефон, адрес, MAC, УК..."
+                data-smart-search="universal"
+                autocomplete="off"
+                autofocus
                 required
             >
+            {% if result %}
+            <a href="/search" class="search-clear" aria-label="Очистить поиск">×</a>
+            {% endif %}
+        </div>
+        <button type="submit" class="btn">Найти во всей системе</button>
+    </form>
 
-            <button type="submit" class="btn search-main-btn">
-                Найти
-            </button>
-        </form>
+    <div class="search-scope-strip">
+        <span>Можно искать без учёта регистра и знаков:</span>
+        <b>№ ключа</b><b>HEX</b><b>ФИО</b><b>Телефон</b><b>Адрес</b><b>Квартира</b><b>MAC</b>
     </div>
 
-    <div class="panel search-help-panel">
-        <h2>Можно искать</h2>
+    {% if result %}
+    {% set total = result.result_counts['keys'] + result.result_counts['employees'] + result.result_counts['panels'] + result.result_counts['uk'] + result.result_counts['operations'] %}
+    <div class="search-result-head">
+        <div>
+            <span class="page-kicker">Результаты запроса</span>
+            <h2>«{{ result.query }}»</h2>
+        </div>
+        <strong>{{ total }} совпадений в разделах</strong>
+    </div>
 
-        <div class="help-list search-help-list">
+    <div class="search-summary-grid">
+        <a href="#search-keys"><b>{{ result.result_counts['keys'] }}</b><span>Ключи</span></a>
+        <a href="#search-employees"><b>{{ result.result_counts['employees'] }}</b><span>Сотрудники</span></a>
+        <a href="#search-panels"><b>{{ result.result_counts['panels'] }}</b><span>Панели</span></a>
+        <a href="#search-uk"><b>{{ result.result_counts['uk'] }}</b><span>УК</span></a>
+        <a href="#search-operations"><b>{{ result.result_counts['operations'] }}</b><span>Операции</span></a>
+    </div>
 
-            <div>
-                <span class="help-icon">
-                    <svg viewBox="0 0 24 24">
-                        <circle cx="7.5" cy="14.5" r="4.5"/>
-                        <path d="m11 11 9-9M16 6l3 3M14 8l2 2"/>
-                    </svg>
-                </span>
-
-                <p>
-                    <b>По ключу</b>
-                    <span>39107 или 363FFAD7</span>
-                </p>
-            </div>
-
-            <div>
-                <span class="help-icon">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M4 11l8-7 8 7"/>
-                        <path d="M6 10v10h12V10"/>
-                        <path d="M10 20v-6h4v6"/>
-                    </svg>
-                </span>
-
-                <p>
-                    <b>По адресу</b>
-                    <span>Тепличная 65</span>
-                </p>
-            </div>
-
-            <div>
-                <span class="help-icon">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M6 3h12v18H6z"/>
-                        <path d="M9 7h6M9 11h6M9 15h3"/>
-                    </svg>
-                </span>
-
-                <p>
-                    <b>По квартире</b>
-                    <span>10 или кв. 10</span>
-                </p>
-            </div>
-
+    {% if total == 0 %}
+    <div class="panel search-empty">
+        <div class="search-empty-icon">?</div>
+        <div>
+            <h2>Точного совпадения нет</h2>
+            <p>Попробуйте часть адреса, фамилии, номера телефона или HEX без разделителей.</p>
         </div>
     </div>
+    {% endif %}
 
-</div>
-
-{% if result and result.inventory_results %}
-<div class="panel search-address-panel">
-    <h2>Ключи в учётной базе</h2>
-    <p class="subtitle">Совпадения по номеру, HEX, типу, статусу, назначению или комментарию.</p>
-    <div class="table-scroll search-scroll">
-        <table>
-            <thead><tr><th>Номер</th><th>Тип</th><th>HEX</th><th>Статус</th><th>Текущее назначение</th><th></th></tr></thead>
-            <tbody>
-            {% for key in result.inventory_results %}
-            <tr>
-                <td><b>№{{ key.number }}</b></td>
-                <td>{{ key.type_name }}</td>
-                <td>{{ key.hex_value or 'Не считан' }}</td>
-                <td><span class="key-status is-{{ key.status_tone }}">{{ key.status_name }}</span></td>
-                <td>{{ key.assignment_text }}</td>
-                <td><a class="btn-small btn-ghost" href="/keys/{{ key.id }}">Открыть</a></td>
-            </tr>
+    {% if result.inventory_results %}
+    <section class="panel search-section" id="search-keys">
+        <div class="search-section-head">
+            <div><span class="search-section-icon key">⌁</span><h2>Ключи</h2></div>
+            <a href="/keys?q={{ result.query }}">Открыть базу ключей →</a>
+        </div>
+        <div class="search-card-grid">
+            {% for key in result.inventory_results[:12] %}
+            <a class="search-entity-card" href="/keys/{{ key.id }}">
+                <span class="entity-accent" style="--entity-color: {{ key.type_color }}"></span>
+                <div><small>{{ key.type_name }}</small><b>Ключ №{{ key.number }}</b><p>HEX {{ key.hex_value }}</p></div>
+                <span class="key-status is-{{ key.status_tone }}">{{ key.status_name }}</span>
+                <em>{{ key.assignment_text }}</em>
+            </a>
             {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
-{% endif %}
-
-{% if result and result.key %}
-<div class="search-result-grid">
-
-    <div class="panel key-summary">
-        <div class="key-summary-head">
-            <div>
-                <h2>Ключ найден</h2>
-                <p class="subtitle">Последняя известная запись</p>
-            </div>
-
-            <div class="key-icon">
-                <svg viewBox="0 0 24 24">
-                    <circle cx="7.5" cy="14.5" r="4.5"></circle>
-                    <path d="m11 11 9-9M16 6l3 3M14 8l2 2"></path>
-                </svg>
-            </div>
         </div>
+    </section>
+    {% endif %}
 
-        <div class="badge success search-found-badge">
-            Найден в базе
+    {% if result.employee_results %}
+    <section class="panel search-section" id="search-employees">
+        <div class="search-section-head">
+            <div><span class="search-section-icon employee">◯</span><h2>Сотрудники</h2></div>
+            <a href="/employees?q={{ result.query }}">В реестр сотрудников →</a>
         </div>
-
-        <div class="key-info-list">
-            <div class="key-info-row">
-                <span>Номер</span>
-                <b>{{ result.key.number or 'HEX вручную' }}</b>
-            </div>
-
-            <div class="key-info-row">
-                <span>HEX</span>
-                <b>{{ result.key.hex_value }}</b>
-            </div>
-
-            <div class="key-info-row">
-                <span>Адрес</span>
-                <b>{{ result.last_operation.address if result.last_operation else 'Нет записей' }}</b>
-            </div>
-
-            <div class="key-info-row">
-                <span>Квартира</span>
-                <b>
-                    {% if result.last_operation %}
-                        {{ result.last_operation.apartment or result.last_operation.flat_num or '—' }}
-                    {% else %}
-                        —
-                    {% endif %}
-                </b>
-            </div>
+        <div class="search-card-grid">
+            {% for item in result.employee_results %}
+            <a class="search-entity-card" href="/employees?selected_employee_id={{ item.id }}">
+                <span class="entity-avatar">{{ item.full_name[:1] }}</span>
+                <div><small>{{ item.position or 'Должность не указана' }}</small><b>{{ item.full_name }}</b><p>{{ item.department or item.phone or 'Без дополнительных данных' }}</p></div>
+                <span class="entity-count">{{ item.key_count }} ключ.</span>
+                <em>{{ 'Активен' if item.enabled else 'Неактивен' }}</em>
+            </a>
+            {% endfor %}
         </div>
-    </div>
+    </section>
+    {% endif %}
 
-    {% if result.history %}
-    <div class="panel">
-        <h2>История ключа</h2>
+    {% if result.panel_results %}
+    <section class="panel search-section" id="search-panels">
+        <div class="search-section-head">
+            <div><span class="search-section-icon panel-icon">⌂</span><h2>Панели и адреса</h2></div>
+            <a href="/panels?q={{ result.query }}">К списку панелей →</a>
+        </div>
+        <div class="search-card-grid">
+            {% for item in result.panel_results %}
+            <a class="search-entity-card" href="/panels?selected_panel_id={{ item.id }}">
+                <span class="entity-avatar is-panel">P{{ item.id }}</span>
+                <div><small>{{ item.entrance or 'Вход не указан' }}</small><b>{{ item.address }}</b><p>{{ item.mac }}{% if item.ip %} · {{ item.ip }}{% endif %}</p></div>
+                <span class="entity-count">{{ item.status_name }}</span>
+                <em>Открыть панель →</em>
+            </a>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
 
-        <div class="table-scroll search-scroll">
+    {% if result.uk_results %}
+    <section class="panel search-section" id="search-uk">
+        <div class="search-section-head">
+            <div><span class="search-section-icon uk">▥</span><h2>Управляющие компании</h2></div>
+            <a href="/uk?q={{ result.query }}">К реестру УК →</a>
+        </div>
+        <div class="search-card-grid">
+            {% for item in result.uk_results %}
+            <a class="search-entity-card" href="/uk?selected_group_id={{ item.id }}">
+                <span class="entity-avatar is-uk">{{ item.name[:1] }}</span>
+                <div><small>{{ item.contact_name or 'Контакт не указан' }}</small><b>{{ item.name }}</b><p>{{ item.phone or item.email or item.legal_address or 'Без дополнительных данных' }}</p></div>
+                <span class="entity-count">{{ item.panel_count }} пан.</span>
+                <em>{{ item.key_count }} ключ.</em>
+            </a>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    {% if result.operation_results %}
+    <section class="panel search-section" id="search-operations">
+        <div class="search-section-head">
+            <div><span class="search-section-icon log">≡</span><h2>История операций</h2></div>
+            <a href="/log?q={{ result.query }}">В полный журнал →</a>
+        </div>
+        <div class="table-scroll search-log-scroll">
             <table>
-                <thead>
-                <tr>
-                    <th>Дата</th>
-                    <th>Адрес</th>
-                    <th>Квартира</th>
-                    <th>Панель</th>
-                    <th>Статус</th>
-                </tr>
-                </thead>
-
+                <thead><tr><th>Дата</th><th>Действие</th><th>Объект</th><th>Адрес / квартира</th><th>Пользователь</th><th>Результат</th></tr></thead>
                 <tbody>
-                {% for row in result.history %}
+                {% for row in result.operation_results %}
                 <tr>
                     <td>{{ row.created_at }}</td>
-                    <td>{{ row.address or '—' }}</td>
-                    <td>{{ row.apartment or row.flat_num or '—' }}</td>
-                    <td>{{ row.panel_name or '—' }}</td>
-                    <td>
-                        {% if row.status_tone == 'warning' %}
-                            <span class="badge dry-run">{{ row.status_name }}</span>
-                        {% elif row.status_tone == 'error' %}
-                            <span class="badge error">{{ row.status_name }}</span>
-                        {% else %}
-                            <span class="badge success">{{ row.status_name }}</span>
-                        {% endif %}
-                    </td>
+                    <td><b>{{ row.action_name }}</b></td>
+                    <td>{{ row.object_name_view }}</td>
+                    <td>{{ row.address or '—' }}{% if row.apartment or row.flat_num %}, кв. {{ row.apartment or row.flat_num }}{% endif %}</td>
+                    <td>{{ row.user_name }}</td>
+                    <td><span class="badge {% if row.status_tone == 'error' %}error{% elif row.status_tone == 'warning' %}dry-run{% else %}success{% endif %}">{{ row.status_name }}</span></td>
                 </tr>
                 {% endfor %}
                 </tbody>
             </table>
         </div>
-    </div>
+    </section>
     {% endif %}
-
+    {% endif %}
 </div>
-{% endif %}
-
-{% if result and result.address_results %}
-<div class="panel search-address-panel">
-    <h2>Найдено по адресу / квартире</h2>
-
-    <div class="table-scroll search-scroll">
-        <table>
-            <thead>
-            <tr>
-                <th>Дата</th>
-                <th>Ключ</th>
-                <th>HEX</th>
-                <th>Адрес</th>
-                <th>Квартира</th>
-                <th>Панель</th>
-                <th>Статус</th>
-            </tr>
-            </thead>
-
-            <tbody>
-            {% for row in result.address_results %}
-            <tr>
-                <td>{{ row.created_at }}</td>
-                <td>{{ row.printed_number or '—' }}</td>
-                <td>{{ row.hex_value or '—' }}</td>
-                <td>{{ row.address or '—' }}</td>
-                <td>{{ row.apartment or row.flat_num or '—' }}</td>
-                <td>{{ row.panel_name or '—' }}</td>
-                <td>
-                    {% if row.status_tone == 'warning' %}
-                        <span class="badge dry-run">{{ row.status_name }}</span>
-                    {% elif row.status_tone == 'error' %}
-                        <span class="badge error">{{ row.status_name }}</span>
-                    {% else %}
-                        <span class="badge success">{{ row.status_name }}</span>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
-{% endif %}
-
-{% if result and not result.key and not result.history and not result.address_results and not result.inventory_results %}
-<div class="panel compact-alert">
-    <h2 class="warn">Ничего не найдено</h2>
-    <p>Проверь номер ключа, HEX, адрес или квартиру.</p>
-</div>
-{% endif %}
 {% endblock %}

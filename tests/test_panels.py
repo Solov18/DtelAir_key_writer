@@ -74,6 +74,12 @@ class PanelRepositoryTests(unittest.TestCase):
         self.assertEqual(page["items"][0]["supply_voltage"], 12.21)
         self.assertTrue(page["items"][0]["mac_matches"])
 
+        punctuation_page = panel_repository.get_panel_page(
+            query="08.13-cd 00:00:01",
+        )
+        self.assertEqual(punctuation_page["total"], 1)
+        self.assertEqual(punctuation_page["items"][0]["id"], first["id"])
+
         statistics = panel_repository.get_panel_statistics()
         self.assertEqual(statistics["total"], 3)
         self.assertEqual(statistics["online"], 1)

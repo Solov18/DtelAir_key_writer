@@ -53,6 +53,7 @@ def get_users() -> list[dict]:
                     full_name,
                     login,
                     role,
+                    active,
                     created_at,
                     last_login
                 FROM users
@@ -121,6 +122,38 @@ def count_admins() -> int:
             """
             SELECT COUNT(*)
             FROM users
-            WHERE role='admin'
+            WHERE role='admin' AND active = 1
             """
         ).fetchone()[0]
+
+
+def update_user_role(user_id: int, role: str) -> None:
+    with db() as conn:
+        conn.execute(
+            "UPDATE users SET role = ? WHERE id = ?",
+            (role, user_id),
+        )
+
+
+def set_user_active(user_id: int, active: bool) -> None:
+    with db() as conn:
+        conn.execute(
+            "UPDATE users SET active = ? WHERE id = ?",
+            (1 if active else 0, user_id),
+        )
+
+
+def get_user_stats() -> dict:
+    with db() as conn:
+        row = conn.execute(
+            """
+            SELECT
+                COUNT(*) AS total,
+                SUM(CASE WHEN active = 1 THEN 1 ELSE 0 END) AS active,
+                SUM(CASE WHEN role = 'admin' AND active = 1 THEN 1 ELSE 0 END) AS admins,
+                SUM(CASE WHEN role = 'operator' AND active = 1 THEN 1 ELSE 0 END) AS operators,
+                SUM(CASE WHEN role = 'viewer' AND active = 1 THEN 1 ELSE 0 END) AS viewers
+            FROM users
+            """
+        ).fetchone()
+        return {key: int(row[key] or 0) for key in row.keys()}

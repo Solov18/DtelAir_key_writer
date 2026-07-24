@@ -3,266 +3,137 @@
 {% block page_name %}Обычная запись{% endblock %}
 
 {% block content %}
-<div class="hero-title">
-    <h1>Обычная запись</h1>
-    <p class="subtitle">
-        Ручная запись ключа по номеру, HEX-коду или полному идентификатору.
-        После проверки система найдёт панели по указанному адресу.
-    </p>
-</div>
-
-<div class="manual-form-grid">
-
-    <div class="panel manual-form-panel">
-        <h2>Введите данные</h2>
-
-        <form method="post" action="/write/manual/preview">
-            <label>Номер ключа или HEX</label>
-            <input
-                name="key_query"
-                value="{{ query }}"
-                placeholder="39107 или 363FFAD7"
-                required
-            >
-
-            <label>Тип ключа</label>
-            <select name="key_type_id">
-                <option value="0">Определить автоматически</option>
-                {% for item in key_types %}
-                <option value="{{ item.id }}" {% if key_type_id == item.id %}selected{% endif %}>{{ item.name }}</option>
-                {% endfor %}
-            </select>
-
-            <label>Адрес</label>
-            <input
-                name="address"
-                value="{{ address }}"
-                placeholder="Санаторная 50Б Лит А"
-                required
-            >
-
-            <label>Квартира</label>
-            <input
-                name="apartment"
-                value="{{ apartment }}"
-                placeholder="47"
-            >
-
-            <button type="submit" class="btn manual-main-btn">
-                Проверить данные
-            </button>
-        </form>
-    </div>
-
-    <div class="panel manual-help-panel">
-        <h2>Что можно указать</h2>
-
-        <div class="help-list manual-help-list">
-
-            <div>
-                <span class="help-icon">
-                    <svg viewBox="0 0 24 24">
-                        <circle cx="7.5" cy="14.5" r="4.5"/>
-                        <path d="m11 11 9-9M16 6l3 3M14 8l2 2"/>
-                    </svg>
-                </span>
-
-                <p>
-                    <b>Ключ</b>
-                    <span>номер, HEX или полный код</span>
-                </p>
-            </div>
-
-            <div>
-                <span class="help-icon">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M4 11l8-7 8 7"/>
-                        <path d="M6 10v10h12V10"/>
-                        <path d="M10 20v-6h4v6"/>
-                    </svg>
-                </span>
-
-                <p>
-                    <b>Адрес</b>
-                    <span>адрес из базы панелей</span>
-                </p>
-            </div>
-
-            <div>
-                <span class="help-icon">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M6 3h12v18H6z"/>
-                        <path d="M9 7h6M9 11h6M9 15h3"/>
-                    </svg>
-                </span>
-
-                <p>
-                    <b>Квартира</b>
-                    <span>номер квартиры жильца</span>
-                </p>
-            </div>
-
-            <div>
-                <span class="help-icon">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6l7-3z"/>
-                        <path d="M9 12l2 2 4-5"/>
-                    </svg>
-                </span>
-
-                <p>
-                    <b>Проверка</b>
-                    <span>перед записью можно снять лишние панели</span>
-                </p>
-            </div>
-
+<div class="manual-page">
+    <div class="manual-hero">
+        <div>
+            <span class="page-kicker">Контролируемая запись</span>
+            <h1>Обычная запись</h1>
+            <p class="subtitle">Найдите ключ и адрес, проверьте панели, затем подтвердите запись.</p>
+        </div>
+        <div class="manual-safety">
+            <svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6z"/><path d="M9 12l2 2 4-5"/></svg>
+            <div><b>Безопасный сценарий</b><span>Без явного выбора панелей запись не начнётся</span></div>
         </div>
     </div>
 
-</div>
+    <nav class="manual-steps" aria-label="Этапы записи">
+        <span class="is-active"><i>1</i><b>Данные</b><small>Ключ и квартира</small></span>
+        <span class="{% if key %}is-active{% endif %}"><i>2</i><b>Проверка</b><small>Адрес и панели</small></span>
+        <span><i>3</i><b>Результат</b><small>Ответ по каждой панели</small></span>
+    </nav>
 
-{% if error %}
-<div class="panel compact-alert">
-    <h2 class="warn">Проверьте данные</h2>
-    <p>{{ error }}</p>
-</div>
-{% endif %}
-
-{% if key %}
-<div class="manual-layout">
-
-    <div class="panel key-summary">
-        <div class="key-summary-head">
-            <div>
-                <h2>Ключ найден</h2>
-                <p class="subtitle">Проверьте данные перед записью</p>
+    <div class="manual-workspace">
+        <section class="panel manual-entry-card">
+            <div class="manual-section-title">
+                <span>01</span>
+                <div><h2>Данные для записи</h2><p>Все поля сохраняются после проверки.</p></div>
             </div>
+            <form method="post" action="/write/manual/preview" id="manualPreviewForm">
+                <div class="manual-fields">
+                    <label class="field-wide">
+                        <span>Номер ключа или HEX</span>
+                        <input name="key_query" value="{{ query }}" placeholder="Например: 39107 или 363FFAD7" autocomplete="off" required>
+                    </label>
+                    <label>
+                        <span>Тип ключа</span>
+                        <select name="key_type_id">
+                            <option value="0">Определить автоматически</option>
+                            {% for item in key_types %}
+                            <option value="{{ item.id }}" {% if key_type_id == item.id %}selected{% endif %}>{{ item.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label class="field-address">
+                        <span>Адрес из реестра панелей</span>
+                        <input name="address" value="{{ address }}" placeholder="Улица, дом, корпус или литер" data-smart-search="panels" autocomplete="off" required>
+                    </label>
+                    <label>
+                        <span>Квартира</span>
+                        <input name="apartment" value="{{ apartment }}" placeholder="Например: 47" inputmode="numeric" required>
+                    </label>
+                </div>
+                <button type="submit" class="btn manual-check-btn">Проверить данные</button>
+            </form>
+        </section>
 
-            <div class="key-icon">
-                <svg viewBox="0 0 24 24">
-                    <circle cx="7.5" cy="14.5" r="4.5"></circle>
-                    <path d="m11 11 9-9M16 6l3 3M14 8l2 2"></path>
-                </svg>
-            </div>
-        </div>
-
-        <div class="badge success manual-found-badge">
-            Ключ найден в базе
-        </div>
-
-        <div class="key-info-list">
-            <div class="key-info-row">
-                <span>Номер</span>
-                <b>{{ key.number or 'HEX вручную' }}</b>
-            </div>
-
-            <div class="key-info-row">
-                <span>HEX</span>
-                <b>{{ key.hex_value }}</b>
-            </div>
-
-            <div class="key-info-row">
-                <span>Тип</span>
-                <b>{{ key.key_type or 'Не указан' }}</b>
-            </div>
-
-            <div class="key-info-row">
-                <span>Адрес</span>
-                <b>{{ address or '—' }}</b>
-            </div>
-
-            <div class="key-info-row">
-                <span>Квартира</span>
-                <b>{{ apartment or '—' }}</b>
-            </div>
-        </div>
-    </div>
-
-    <div class="panel panels-select">
-        <div class="panels-head">
-            <div>
-                <h2>Панели для записи</h2>
-                <p class="subtitle">Выберите панели, куда нужно записать ключ</p>
-            </div>
-
-            {% if panels %}
-            <div class="panel-actions">
-                <button type="button" class="btn-small" id="select-all-panels">
-                    Выбрать все
-                </button>
-
-                <button type="button" class="btn-small btn-ghost" id="clear-all-panels">
-                    Снять все
-                </button>
-            </div>
+        <aside class="panel manual-guide">
+            <h2>Перед записью</h2>
+            <ol>
+                <li><i>1</i><span><b>Проверьте ключ</b>HEX должен быть считан и ключ должен быть доступен.</span></li>
+                <li><i>2</i><span><b>Выберите точный адрес</b>Система покажет только панели найденного дома.</span></li>
+                <li><i>3</i><span><b>Оставьте нужные входы</b>Ни одна панель не добавится скрыто.</span></li>
+            </ol>
+            {% if training_mode(request) %}
+            <div class="manual-training-note"><b>Учебный режим</b><span>Можно пройти весь сценарий. Запрос в CRM и изменения базы отключены.</span></div>
             {% endif %}
-        </div>
-
-        {% if panels %}
-        <form method="post" action="/write/manual/write">
-            <input type="hidden" name="key_query" value="{{ query }}">
-            <input type="hidden" name="key_type_id" value="{{ key_type_id or 0 }}">
-            <input type="hidden" name="address" value="{{ address }}">
-            <input type="hidden" name="apartment" value="{{ apartment }}">
-            <input type="hidden" name="inner" value="1">
-
-            <div class="panel-list preview-panel-list">
-                {% for p in panels %}
-                <label class="panel-option">
-                    <input
-                        type="checkbox"
-                        name="panel_ids"
-                        value="{{ p.id }}"
-                        checked
-                    >
-
-                    <span class="panel-option-body">
-                        <span class="panel-option-title">
-                            {{ p.entrance or '—' }}
-                        </span>
-
-                        <span class="panel-option-meta">
-                            {{ p.address }}
-                        </span>
-
-                        <span class="panel-option-mac">
-                            {{ p.mac }}
-                        </span>
-                    </span>
-                </label>
-                {% endfor %}
-            </div>
-
-            <button type="submit" class="btn wide-action">
-                Прописать на выбранные панели
-            </button>
-        </form>
-        {% else %}
-            <p class="warn">Панели не найдены</p>
-        {% endif %}
+        </aside>
     </div>
 
+    {% if error %}
+    <div class="manual-alert">
+        <span>!</span>
+        <div><b>Нужно уточнить данные</b><p>{{ error }}</p></div>
+    </div>
+    {% endif %}
+
+    {% if key and panels and not error %}
+    <section class="panel manual-preview">
+        <div class="manual-section-title">
+            <span>02</span>
+            <div><h2>Проверка перед записью</h2><p>Данные найдены. Выберите конкретные панели.</p></div>
+            <span class="manual-ready-badge">Готово к подтверждению</span>
+        </div>
+
+        <div class="manual-preview-grid">
+            <div class="manual-key-card">
+                <div class="manual-key-head">
+                    <span class="manual-key-dot" style="--key-color: {{ key.type_color or '#2A9DF4' }}"></span>
+                    <div><small>{{ key.type_name or key.key_type or 'Ключ' }}</small><h3>Ключ №{{ key.number or 'по HEX' }}</h3></div>
+                    <span class="badge success">Найден</span>
+                </div>
+                <dl>
+                    <div><dt>HEX</dt><dd>{{ key.hex_value }}</dd></div>
+                    <div><dt>Адрес</dt><dd>{{ address }}</dd></div>
+                    <div><dt>Квартира</dt><dd>{{ apartment }}</dd></div>
+                </dl>
+            </div>
+
+            <form method="post" action="/write/manual/write" id="manualWriteForm">
+                <input type="hidden" name="key_query" value="{{ query }}">
+                <input type="hidden" name="key_type_id" value="{{ key_type_id or 0 }}">
+                <input type="hidden" name="address" value="{{ address }}">
+                <input type="hidden" name="apartment" value="{{ apartment }}">
+                <input type="hidden" name="inner" value="1">
+
+                <div class="manual-panel-toolbar">
+                    <div><b>Панели дома</b><span><strong id="selectedPanelCount">{{ panels|length }}</strong> из {{ panels|length }} выбрано</span></div>
+                    <div><button type="button" class="btn-small" id="select-all-panels">Выбрать все</button><button type="button" class="btn-small btn-ghost" id="clear-all-panels">Снять все</button></div>
+                </div>
+                <div class="manual-panel-list">
+                    {% for p in panels %}
+                    <label class="manual-panel-option">
+                        <input type="checkbox" name="panel_ids" value="{{ p.id }}" checked>
+                        <span class="panel-check"></span>
+                        <span><b>{{ p.entrance or p.name or 'Вход' }}</b><small>{{ p.address }}</small></span>
+                        <code>{{ p.mac }}</code>
+                    </label>
+                    {% endfor %}
+                </div>
+                <label class="manual-confirm">
+                    <input type="checkbox" id="confirmManualWrite">
+                    <span>Данные и выбранные панели проверены</span>
+                </label>
+                <button type="submit" class="btn manual-write-btn" id="manualWriteButton" disabled>
+                    {{ "Проверить в учебном режиме" if training_mode(request) else "Прописать ключ на выбранные панели" }}
+                </button>
+                <p class="manual-submit-hint" id="manualSubmitHint">Подтвердите проверку данных, чтобы продолжить.</p>
+            </form>
+        </div>
+    </section>
+    {% endif %}
 </div>
+{% endblock %}
 
-<script>
-const selectAllBtn = document.getElementById("select-all-panels");
-const clearAllBtn = document.getElementById("clear-all-panels");
-
-function setPanelCheckboxes(value) {
-    document
-        .querySelectorAll('input[name="panel_ids"]')
-        .forEach((checkbox) => {
-            checkbox.checked = value;
-        });
-}
-
-if (selectAllBtn) {
-    selectAllBtn.addEventListener("click", () => setPanelCheckboxes(true));
-}
-
-if (clearAllBtn) {
-    clearAllBtn.addEventListener("click", () => setPanelCheckboxes(false));
-}
-</script>
-{% endif %}
+{% block scripts %}
+<script src="/static/js/manual-write.js?v=2"></script>
 {% endblock %}

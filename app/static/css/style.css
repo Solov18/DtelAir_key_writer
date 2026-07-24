@@ -1,17 +1,19 @@
 @import url("./base.css");
-@import url("./layout.css");
+@import url("./layout.css?v=3");
 @import url("./components.css");
 @import url("./forms.css");
 @import url("./tables.css");
 @import url("./scroll.css");
+@import url("./smart-search.css");
 
-@import url("./pages/home.css");
-@import url("./pages/message.css");
-@import url("./pages/manual_write.css");
-@import url("./pages/search.css");
+@import url("./pages/home.css?v=3");
+@import url("./pages/message.css?v=2");
+@import url("./pages/manual_write.css?v=3");
+@import url("./pages/search.css?v=3");
 @import url("./pages/panels.css");
 @import url("./pages/employees.css");
 @import url("./pages/uk.css");
 
 @import url("./light-theme.css");
-@import url("./pages/users.css");
+@import url("./pages/users.css?v=4");
+@import url("./pages/settings.css?v=1");

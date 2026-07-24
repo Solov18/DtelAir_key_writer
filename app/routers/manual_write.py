@@ -64,6 +64,8 @@ def manual_write_preview(
     key_type_id: int = Form(0),
 ):
     key = find_key(key_query, key_type_id or None)
+    address = address.strip()
+    apartment = apartment.strip()
     panels = find_panels_by_address(address)
 
     error = None
@@ -75,6 +77,11 @@ def manual_write_preview(
         error = "Ключ не найден в базе"
     elif not panels:
         error = "Панели по этому адресу не найдены"
+    elif not apartment:
+        error = "Укажите квартиру. Без неё запись жильцу выполнять нельзя."
+
+    if panels:
+        address = panels[0].get("address") or address
 
     return templates.TemplateResponse(
         "manual_write.html",
@@ -107,14 +114,19 @@ def manual_write_execute(
     if is_ambiguous_key(key):
         key = None
 
-    if panel_ids:
-        panels = get_panels(panel_ids=panel_ids)
-    else:
-        panels = find_panels_by_address(address)
+    panels = get_panels(panel_ids=panel_ids) if panel_ids else []
 
     all_results = []
 
-    if key:
+    warning = None
+    if not key:
+        warning = "Ключ не найден или его тип не определён."
+    elif not apartment.strip():
+        warning = "Квартира не указана. Запись не выполнялась."
+    elif not panels:
+        warning = "Не выбрана ни одна панель. Запись не выполнялась."
+
+    if key and apartment.strip() and panels:
         all_results.append(
             {
                 "key": key,
@@ -129,7 +141,7 @@ def manual_write_execute(
                 ),
             }
         )
-    else:
+    elif not key:
         all_results.append(
             {
                 "key": {
@@ -146,5 +158,7 @@ def manual_write_execute(
             "request": request,
             "title": "Результат ручной записи ключа",
             "all_results": all_results,
+            "result_warning": warning,
+            "back_url": "/write/manual",
         },
     )

@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Form, Request
+from urllib.parse import urlencode
+
+from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.repositories.employee_repository import (
@@ -10,9 +12,13 @@ from app.repositories.employee_repository import (
     get_dismissed_employees_count,
     get_employee,
     get_employee_active_key,
+    get_employee_active_keys,
     get_employee_any_status,
     get_employee_by_name,
+    get_employee_filter_options,
     get_employee_key_history,
+    get_employee_page,
+    get_employee_statistics,
     get_employee_keys_count,
     get_employees_count,
     issue_key_to_employee,
@@ -47,11 +53,13 @@ def _employee_detail_context(
 ) -> dict:
     employee = get_employee_any_status(employee_id)
 
+    active_keys = get_employee_active_keys(employee_id)
     return {
         "request": request,
         "employee": employee,
         "is_dismissed": bool(employee and not employee["enabled"]),
-        "active_key": get_employee_active_key(employee_id),
+        "active_key": active_keys[0] if active_keys else None,
+        "active_keys": active_keys,
         "key_history": get_employee_key_history(employee_id),
         "status_labels": KEY_STATUS_LABELS,
         "key_types": get_key_types(include_archived=False),
@@ -63,9 +71,9 @@ def _employee_assignment_context(
     employee_id: int,
     assignment_id: int,
 ) -> dict | None:
-    active_key = get_employee_active_key(employee_id)
-    if active_key and int(active_key["assignment_id"]) == int(assignment_id):
-        return active_key
+    for active_key in get_employee_active_keys(employee_id):
+        if int(active_key["assignment_id"]) == int(assignment_id):
+            return active_key
 
     return next(
         (
@@ -87,37 +95,119 @@ def _key_log_fields(key: dict | None) -> dict:
     }
 
 
+def _employee_list_context(
+    request: Request,
+    *,
+    enabled: bool,
+    query: str,
+    key_status: str,
+    department: str,
+    position: str,
+    page: int,
+    selected_employee_id: int,
+) -> dict:
+    employee_page = get_employee_page(
+        enabled=enabled,
+        query=query,
+        key_status=key_status,
+        department=department,
+        position=position,
+        page=page,
+        page_size=20,
+    )
+    selected_employee = (
+        get_employee_any_status(selected_employee_id)
+        if selected_employee_id
+        else None
+    )
+    if selected_employee and bool(selected_employee["enabled"]) != enabled:
+        selected_employee = None
+    if not selected_employee and employee_page["items"]:
+        selected_employee = get_employee_any_status(
+            int(employee_page["items"][0]["id"])
+        )
+    selected_keys = (
+        get_employee_active_keys(int(selected_employee["id"]))
+        if selected_employee
+        else []
+    )
+
+    filters = {
+        "q": query,
+        "key_status": key_status,
+        "department": department,
+        "position": position,
+    }
+    base_params = {
+        key: value
+        for key, value in filters.items()
+        if value not in ("", None)
+    }
+    if not enabled:
+        base_params["view"] = "dismissed"
+
+    return {
+        "request": request,
+        "employees": employee_page["items"],
+        "employee_page": employee_page,
+        "statistics": get_employee_statistics(),
+        "filter_options": get_employee_filter_options(),
+        "filters": filters,
+        "base_query": urlencode(base_params),
+        "row_query": urlencode({**base_params, "page": employee_page["page"]}),
+        "selected_employee": selected_employee,
+        "selected_keys": selected_keys,
+        "current_view": "active" if enabled else "dismissed",
+        "key_types": get_key_types(include_archived=False),
+    }
+
+
 @router.get("/employees", response_class=HTMLResponse)
-def employees_page(request: Request):
+def employees_page(
+    request: Request,
+    q: str = Query(""),
+    key_status: str = Query(""),
+    department: str = Query(""),
+    position: str = Query(""),
+    page: int = Query(1, ge=1),
+    selected_employee_id: int = Query(0, ge=0),
+):
     return templates.TemplateResponse(
         "employees.html",
-        {
-            "request": request,
-            "panels": get_panels(),
-            "employees": get_active_employees(),
-            "employees_count": get_employees_count(),
-            "dismissed_count": get_dismissed_employees_count(),
-            "employee_keys_count": get_employee_keys_count(),
-            "current_view": "active",
-            "key_types": get_key_types(include_archived=False),
-        },
+        _employee_list_context(
+            request,
+            enabled=True,
+            query=q,
+            key_status=key_status,
+            department=department,
+            position=position,
+            page=page,
+            selected_employee_id=selected_employee_id,
+        ),
     )
 
 
 @router.get("/employees/dismissed", response_class=HTMLResponse)
-def dismissed_employees_page(request: Request):
+def dismissed_employees_page(
+    request: Request,
+    q: str = Query(""),
+    department: str = Query(""),
+    position: str = Query(""),
+    page: int = Query(1, ge=1),
+    selected_employee_id: int = Query(0, ge=0),
+):
     return templates.TemplateResponse(
         "employees.html",
-        {
-            "request": request,
-            "panels": [],
-            "employees": get_dismissed_employees(),
-            "employees_count": get_employees_count(),
-            "dismissed_count": get_dismissed_employees_count(),
-            "employee_keys_count": get_employee_keys_count(),
-            "current_view": "dismissed",
-            "key_types": get_key_types(include_archived=False),
-        },
+        _employee_list_context(
+            request,
+            enabled=False,
+            query=q,
+            key_status="",
+            department=department,
+            position=position,
+            page=page,
+            selected_employee_id=selected_employee_id,
+        ),
     )
 
 
@@ -126,8 +216,20 @@ def employees_add(
     request: Request,
     full_name: str = Form(...),
     note: str = Form(""),
+    position: str = Form(""),
+    department: str = Form(""),
+    phone: str = Form(""),
+    email: str = Form(""),
 ):
-    create_employee(full_name=full_name, note=note)
+    employee_id = create_employee(
+        full_name=full_name,
+        note=note,
+        position=position,
+        department=department,
+        phone=phone,
+        email=email,
+        created_by=request.session.get("user", {}).get("full_name", ""),
+    )
     log_event(
         request=request,
         action="employee_create",
@@ -135,7 +237,10 @@ def employees_add(
         object_name=full_name,
         details=note or "Карточка сотрудника создана",
     )
-    return RedirectResponse("/employees", status_code=303)
+    return RedirectResponse(
+        f"/employees?selected_employee_id={employee_id}",
+        status_code=303,
+    )
 
 
 @router.post("/employees/{employee_id}/edit")
@@ -144,11 +249,20 @@ def employee_edit(
     employee_id: int,
     full_name: str = Form(...),
     note: str = Form(""),
+    position: str = Form(""),
+    department: str = Form(""),
+    phone: str = Form(""),
+    email: str = Form(""),
+    return_to: str = Form("detail"),
 ):
     update_employee(
         employee_id=employee_id,
         full_name=full_name,
         note=note,
+        position=position,
+        department=department,
+        phone=phone,
+        email=email,
     )
     log_event(
         request=request,
@@ -157,7 +271,12 @@ def employee_edit(
         object_name=full_name,
         details=note or "Карточка сотрудника изменена",
     )
-    return RedirectResponse(f"/employees/{employee_id}", status_code=303)
+    redirect_url = (
+        f"/employees?selected_employee_id={employee_id}"
+        if return_to == "list"
+        else f"/employees/{employee_id}"
+    )
+    return RedirectResponse(redirect_url, status_code=303)
 
 
 @router.post("/employees/{employee_id}/dismiss")
@@ -167,7 +286,7 @@ def employee_dismiss(
     comment: str = Form(""),
 ):
     employee = get_employee_any_status(employee_id)
-    active_key = get_employee_active_key(employee_id)
+    active_keys = get_employee_active_keys(employee_id)
     dismiss_employee(employee_id=employee_id, comment=comment)
     log_event(
         request=request,
@@ -176,7 +295,7 @@ def employee_dismiss(
         object_name=(employee or {}).get("full_name") or str(employee_id),
         details=comment or "Сотрудник уволен",
     )
-    if active_key:
+    for active_key in active_keys:
         log_event(
             request=request,
             action="employee_key_close",
@@ -207,7 +326,7 @@ def employee_restore(request: Request, employee_id: int):
 @router.post("/employees/delete")
 def employees_delete(request: Request, employee_id: int = Form(...)):
     employee = get_employee_any_status(employee_id)
-    active_key = get_employee_active_key(employee_id)
+    active_keys = get_employee_active_keys(employee_id)
     dismiss_employee(
         employee_id=employee_id,
         comment="Сотрудник уволен",
@@ -219,7 +338,7 @@ def employees_delete(request: Request, employee_id: int = Form(...)):
         object_name=(employee or {}).get("full_name") or str(employee_id),
         details="Сотрудник уволен",
     )
-    if active_key:
+    for active_key in active_keys:
         log_event(
             request=request,
             action="employee_key_close",
@@ -334,41 +453,26 @@ def employee_add_keys(
             ),
         )
 
-    if len(values) > 1:
-        return templates.TemplateResponse(
-            "employee_detail.html",
-            _employee_detail_context(
-                request,
-                employee_id,
-                {
-                    "type": "error",
-                    "text": (
-                        "У сотрудника может быть только один "
-                        "действующий ключ. Укажите один номер."
-                    ),
-                },
-            ),
-        )
-
-    key = find_key(values[0], key_type_id or None)
-
-    if not key or is_ambiguous_key(key):
-        return templates.TemplateResponse(
-            "employee_detail.html",
-            _employee_detail_context(
-                request,
-                employee_id,
-                {"type": "error", "text": f"Ключ «{values[0]}» не найден."},
-            ),
-        )
+    keys: list[dict] = []
+    for value in dict.fromkeys(values):
+        key = find_key(value, key_type_id or None)
+        if not key or is_ambiguous_key(key):
+            return templates.TemplateResponse(
+                "employee_detail.html",
+                _employee_detail_context(
+                    request,
+                    employee_id,
+                    {"type": "error", "text": f"Ключ «{value}» не найден."},
+                ),
+            )
+        keys.append(key)
 
     try:
-        issue_key_to_employee(
-            employee_id=employee_id,
-            key_id=key["id"],
-            old_key_status="replaced",
-            old_key_reason="Выдан новый ключ",
-        )
+        for key in keys:
+            issue_key_to_employee(
+                employee_id=employee_id,
+                key_id=key["id"],
+            )
     except ValueError as error:
         return templates.TemplateResponse(
             "employee_detail.html",
@@ -380,18 +484,19 @@ def employee_add_keys(
         )
 
     employee = get_employee_any_status(employee_id)
-    log_event(
-        request=request,
-        action="employee_key_issue",
-        object_type="Сотрудник",
-        object_name=(employee or {}).get("full_name") or str(employee_id),
-        details=f"Выдан ключ {key.get('number') or key.get('hex_value')}",
-        printed_number=key.get("number", ""),
-        hex_value=key.get("hex_value", "-"),
-        key_id=key.get("id"),
-        key_type=key.get("type_name") or key.get("key_type", ""),
-        employee_id=employee_id,
-    )
+    for key in keys:
+        log_event(
+            request=request,
+            action="employee_key_issue",
+            object_type="Сотрудник",
+            object_name=(employee or {}).get("full_name") or str(employee_id),
+            details=f"Выдан ключ {key.get('number') or key.get('hex_value')}",
+            printed_number=key.get("number", ""),
+            hex_value=key.get("hex_value", "-"),
+            key_id=key.get("id"),
+            key_type=key.get("type_name") or key.get("key_type", ""),
+            employee_id=employee_id,
+        )
 
     return RedirectResponse(f"/employees/{employee_id}", status_code=303)
 
@@ -492,7 +597,14 @@ def employee_remove_key(
     key_id: int = Form(...),
 ):
     employee = get_employee_any_status(employee_id)
-    active_key = get_employee_active_key(employee_id)
+    active_key = next(
+        (
+            item
+            for item in get_employee_active_keys(employee_id)
+            if int(item["key_id"]) == int(key_id)
+        ),
+        None,
+    )
 
     if active_key and active_key["key_id"] == key_id:
         close_employee_key(

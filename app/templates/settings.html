@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+
+{% block page_name %}Настройки{% endblock %}
+
+{% block content %}
+<div class="settings-page">
+    <div class="settings-hero">
+        <div>
+            <span class="page-kicker">Система и безопасность</span>
+            <h1>Настройки</h1>
+            <p class="subtitle">Режим работы, состояние подключений и понятная модель доступа.</p>
+        </div>
+        <a class="btn btn-ghost" href="/users">Пользователи и роли</a>
+    </div>
+
+    <section class="panel training-settings {% if training_mode(request) %}is-active{% endif %}">
+        <div class="training-settings-icon">
+            <svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6z"/><path d="M8 12h8M12 8v8"/></svg>
+        </div>
+        <div>
+            <span class="page-kicker">Без изменений данных</span>
+            <h2>{{ "Учебный режим включён" if training_mode(request) else "Рабочий режим" }}</h2>
+            <p>
+                {% if training_mode(request) %}
+                Запись ключей имитируется. Запросы в CRM, изменения базы и новые записи журнала не выполняются.
+                {% else %}
+                Доступные пользователю операции могут изменять базу и отправлять запросы во внешние системы.
+                {% endif %}
+            </p>
+        </div>
+        <form method="post" action="/settings/training-mode">
+            <input type="hidden" name="enabled" value="{{ 0 if training_mode(request) else 1 }}">
+            <input type="hidden" name="return_to" value="/settings">
+            <button type="submit" class="btn {% if training_mode(request) %}btn-ghost{% endif %}">
+                {{ "Вернуться в рабочий режим" if training_mode(request) else "Включить учебный режим" }}
+            </button>
+        </form>
+    </section>
+
+    <div class="settings-grid">
+        <section class="panel settings-connections">
+            <div class="settings-title"><span>01</span><div><h2>Подключения</h2><p>Показываются только состояния, секреты не выводятся.</p></div></div>
+            <div class="connection-list">
+                <div>
+                    <span class="connection-dot {% if crm_ready %}is-ready{% endif %}"></span>
+                    <div><b>CRM DTEL</b><small>Авторизация и запись ключей</small></div>
+                    <strong>{{ 'Настроена' if crm_ready else 'Требует настройки' }}</strong>
+                </div>
+                <div>
+                    <span class="connection-dot {% if panel_api_ready %}is-ready{% endif %}"></span>
+                    <div><b>API домофонных панелей</b><small>Общие реквизиты доступа к устройствам</small></div>
+                    <strong>{{ 'Настроен' if panel_api_ready else 'Требует настройки' }}</strong>
+                </div>
+                <div>
+                    <span class="connection-dot {% if dry_run %}is-warning{% else %}is-ready{% endif %}"></span>
+                    <div><b>Системный DRY RUN</b><small>Параметр окружения сервера</small></div>
+                    <strong>{{ 'Включён' if dry_run else 'Выключен' }}</strong>
+                </div>
+                <div>
+                    <span class="connection-dot {% if session_secret_ready %}is-ready{% else %}is-warning{% endif %}"></span>
+                    <div><b>Ключ сессий</b><small>Защищает авторизацию пользователей в браузере</small></div>
+                    <strong>{{ 'Настроен' if session_secret_ready else 'Заменить перед продакшеном' }}</strong>
+                </div>
+            </div>
+            <p class="settings-footnote">Реквизиты подключений задаются в защищённом файле окружения сервера и не изменяются из браузера.</p>
+        </section>
+
+        <section class="panel role-settings">
+            <div class="settings-title"><span>02</span><div><h2>Роли и права</h2><p>Каждая роль получает только необходимый набор действий.</p></div></div>
+            <div class="roles-matrix">
+                <div class="role-row role-head"><span>Роль</span><span>Просмотр</span><span>Запись ключей</span><span>Реестры</span><span>Система</span></div>
+                {% for role in roles %}
+                <div class="role-row">
+                    <span><b>{{ role.label }}</b><small>{{ role.description }}</small></span>
+                    <i class="yes">✓</i>
+                    <i class="{{ 'yes' if 'write_keys' in role.permissions else 'no' }}">{{ '✓' if 'write_keys' in role.permissions else '—' }}</i>
+                    <i class="{{ 'yes' if 'manage_registry' in role.permissions else 'no' }}">{{ '✓' if 'manage_registry' in role.permissions else '—' }}</i>
+                    <i class="{{ 'yes' if 'manage_settings' in role.permissions else 'no' }}">{{ '✓' if 'manage_settings' in role.permissions else '—' }}</i>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+    </div>
+
+    <section class="panel settings-rules">
+        <div class="settings-title"><span>03</span><div><h2>Защитные правила</h2><p>Они действуют независимо от оформления страниц.</p></div></div>
+        <div class="settings-rule-grid">
+            <div><b>Явный выбор панелей</b><span>Обычная запись не подставляет панели повторно, если выбор снят.</span></div>
+            <div><b>HEX обязателен</b><span>Ключ без считанного HEX не может быть отправлен в CRM.</span></div>
+            <div><b>Последний администратор</b><span>Его нельзя отключить, удалить или понизить в роли.</span></div>
+            <div><b>Сессия обучения</b><span>Учебный режим действует только для текущего входа и виден на всех страницах.</span></div>
+        </div>
+    </section>
+</div>
+{% endblock %}

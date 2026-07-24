@@ -2,6 +2,7 @@ import math
 import re
 
 from app.db import db
+from app.search_utils import normalize_search_text
 
 
 PANEL_STATUS_LABELS = {
@@ -266,15 +267,20 @@ def get_panel_page(
 ) -> dict:
     conditions = ["1 = 1"]
     params: list = []
-    clean_query = (query or "").strip()
-    if clean_query:
-        pattern = f"%{clean_query}%"
+    normalized_query = normalize_search_text(query)
+    if normalized_query:
+        pattern = f"%{normalized_query}%"
         conditions.append(
             """
             (
-                CAST(id AS TEXT) LIKE ? OR address LIKE ? OR entrance LIKE ?
-                OR name LIKE ? OR mac LIKE ? OR ip LIKE ? OR device_model LIKE ?
-                OR firmware_version LIKE ?
+                SMART_NORM(CAST(id AS TEXT)) LIKE ?
+                OR SMART_NORM(address) LIKE ?
+                OR SMART_NORM(entrance) LIKE ?
+                OR SMART_NORM(name) LIKE ?
+                OR SMART_NORM(mac) LIKE ?
+                OR SMART_NORM(ip) LIKE ?
+                OR SMART_NORM(device_model) LIKE ?
+                OR SMART_NORM(firmware_version) LIKE ?
             )
             """
         )

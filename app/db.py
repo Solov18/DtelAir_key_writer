@@ -1,12 +1,15 @@
+import os
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
+
+from app.search_utils import normalize_search_text
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
-DB_PATH = DATA_DIR / "app.db"
+DB_PATH = Path(os.environ.get("APP_DB_PATH", DATA_DIR / "app.db"))
 
 
 @contextmanager
@@ -14,6 +17,12 @@ def db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.create_function(
+        "SMART_NORM",
+        1,
+        normalize_search_text,
+        deterministic=True,
+    )
 
     try:
         yield conn
@@ -191,12 +200,7 @@ def _migrate_employee_keys(conn: sqlite3.Connection) -> None:
 
 def _create_employee_key_indexes(conn: sqlite3.Connection) -> None:
     conn.execute(
-        """
-        CREATE UNIQUE INDEX IF NOT EXISTS
-            idx_employee_keys_one_active_per_employee
-        ON employee_keys(employee_id)
-        WHERE status = 'active'
-        """
+        "DROP INDEX IF EXISTS idx_employee_keys_one_active_per_employee"
     )
 
     conn.execute(
@@ -650,6 +654,20 @@ def init_db():
             "dismissed_at",
             "dismissed_at TEXT DEFAULT NULL",
         )
+        employee_profile_columns = {
+            "position": "position TEXT DEFAULT ''",
+            "department": "department TEXT DEFAULT ''",
+            "phone": "phone TEXT DEFAULT ''",
+            "email": "email TEXT DEFAULT ''",
+            "created_by": "created_by TEXT DEFAULT ''",
+        }
+        for column_name, column_sql in employee_profile_columns.items():
+            _add_column_if_missing(
+                conn,
+                "employees",
+                column_name,
+                column_sql,
+            )
         _migrate_employee_keys(conn)
         _create_employee_key_indexes(conn)
         _seed_key_assignments(conn)
@@ -665,6 +683,54 @@ def init_db():
             "uk_groups",
             "crm_password",
             "crm_password TEXT DEFAULT ''",
+        )
+        uk_profile_columns = {
+            "legal_name": "legal_name TEXT DEFAULT ''",
+            "contact_name": "contact_name TEXT DEFAULT ''",
+            "phone": "phone TEXT DEFAULT ''",
+            "email": "email TEXT DEFAULT ''",
+            "legal_address": "legal_address TEXT DEFAULT ''",
+            "contract_number": "contract_number TEXT DEFAULT ''",
+            "created_by": "created_by TEXT DEFAULT ''",
+            "updated_at": "updated_at TEXT DEFAULT ''",
+            "cooperation_status": "cooperation_status TEXT NOT NULL DEFAULT 'potential'",
+            "account_manager": "account_manager TEXT DEFAULT ''",
+            "next_contact_at": "next_contact_at TEXT DEFAULT ''",
+            "cooperation_note": "cooperation_note TEXT DEFAULT ''",
+        }
+        for column_name, column_sql in uk_profile_columns.items():
+            _add_column_if_missing(
+                conn,
+                "uk_groups",
+                column_name,
+                column_sql,
+            )
+
+        conn.executescript(
+            """
+            CREATE INDEX IF NOT EXISTS idx_uk_groups_name
+            ON uk_groups(name);
+
+            CREATE TABLE IF NOT EXISTS uk_notification_drafts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                group_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                body TEXT NOT NULL,
+                category TEXT NOT NULL DEFAULT 'announcement',
+                channel TEXT NOT NULL DEFAULT 'dtel',
+                audience TEXT NOT NULL DEFAULT 'all',
+                audience_details TEXT DEFAULT '',
+                created_by TEXT DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(group_id)
+                    REFERENCES uk_groups(id)
+                    ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_uk_notification_drafts_group
+            ON uk_notification_drafts(group_id, created_at DESC);
+            """
         )
 
         # Обновление старой таблицы operation_log, если база создана раньше.

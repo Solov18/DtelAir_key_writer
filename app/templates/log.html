@@ -24,6 +24,7 @@
                 id="logSearch"
                 placeholder="Поиск по пользователю, действию, объекту..."
                 autocomplete="off"
+                data-smart-search="log"
             >
         </div>
     </div>
@@ -85,11 +86,12 @@ if (logSearch && logTable && logFound) {
     const rows = Array.from(logTable.querySelectorAll("tbody tr"));
 
     logSearch.addEventListener("input", function () {
-        const query = this.value.toLowerCase().trim();
+        const normalize = window.smartSearchNormalize || ((value) => String(value || "").toLowerCase());
+        const query = normalize(this.value);
         let visible = 0;
 
         rows.forEach((row) => {
-            const match = row.innerText.toLowerCase().includes(query);
+            const match = normalize(row.innerText).includes(query);
             row.style.display = match ? "" : "none";
 
             if (match) visible += 1;

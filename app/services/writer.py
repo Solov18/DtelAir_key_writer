@@ -26,6 +26,9 @@ def write_key_to_panels(
     results = []
 
     user = request.session.get("user", {}) if request else {}
+    training_mode = bool(
+        request and request.session.get("training_mode")
+    )
 
     ip_address = ""
     if request and request.client:
@@ -37,7 +40,36 @@ def write_key_to_panels(
             if not (key_item.get("hex_value") or "").strip()
             else UNAVAILABLE_KEY_STATUSES.get(key_item.get("status", ""))
         )
-        if unavailable_reason:
+        if training_mode:
+            result = (
+                {
+                    "ok": False,
+                    "written": False,
+                    "status": "KEY_UNAVAILABLE",
+                    "response": unavailable_reason,
+                    "message": unavailable_reason,
+                }
+                if unavailable_reason
+                else {
+                    "ok": True,
+                    "written": False,
+                    "status": "TRAINING_MODE",
+                    "response": (
+                        "Учебная проверка выполнена. "
+                        "Запрос в CRM не отправлялся, база и журнал не изменены."
+                    ),
+                    "message": "Безопасная имитация записи",
+                }
+            )
+            results.append(
+                {
+                    "panel": panel,
+                    "flat_num": str(flat_num or ""),
+                    **result,
+                }
+            )
+            continue
+        elif unavailable_reason:
             result = {
                 "ok": False,
                 "written": False,

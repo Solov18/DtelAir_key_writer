@@ -3,48 +3,87 @@
 {% block page_name %}Результат{% endblock %}
 
 {% block content %}
-<div class="hero-title">
-    <h1>{{ title }}</h1>
-    <p class="subtitle">Результат фактической отправки в CRM</p>
-</div>
+<div class="{% if message_flow %}message-page message-results-page{% endif %}">
+    <div class="hero-title">
+        <h1>{{ title }}</h1>
+        <p class="subtitle">
+            {% if training_mode(request) %}
+            Учебная проверка без отправки в CRM и изменений базы
+            {% else %}
+            Результат фактической отправки в CRM
+            {% endif %}
+        </p>
+    </div>
 
-{% for block in all_results %}
-<div class="panel">
-    <h2>Ключ {{ block.key.number }} → {{ block.key.hex_value }}</h2>
-
-    {% if block.results %}
-    <table>
-        <tr>
-            <th>Панель</th>
-            <th>MAC</th>
-            <th>Квартира</th>
-            <th>Статус</th>
-            <th>Ответ CRM</th>
-        </tr>
-
-        {% for r in block.results %}
-        <tr>
-            <td>{{ r.panel.name if r.panel else '' }}</td>
-            <td>{{ r.panel.mac if r.panel else '' }}</td>
-            <td>{{ r.flat_num or 'Не указана' }}</td>
-            <td>
-                {% if r.written %}
-                <span class="badge success">Записан</span>
-                {% elif r.status == 'DRY_RUN' %}
-                <span class="badge">Тест</span>
-                {% else %}
-                <span class="badge error">Ошибка</span>
-                {% endif %}
-            </td>
-            <td>{{ r.response or r.message or 'Нет ответа' }}</td>
-        </tr>
-        {% endfor %}
-    </table>
-    {% else %}
-    <p class="warn">Нет результатов.</p>
+    {% if message_flow %}
+    <nav class="message-steps" aria-label="Этапы записи ключей">
+        <a href="{{ back_url }}"><i>1</i><b>Сообщение</b><small>Исходный текст</small></a>
+        <a href="{{ back_url }}"><i>2</i><b>Проверка</b><small>Можно повторить</small></a>
+        <span class="is-active"><i>3</i><b>Результат</b><small>Ответ каждой панели</small></span>
+    </nav>
     {% endif %}
-</div>
-{% endfor %}
 
-<a class="btn" href="/">На главную</a>
+    {% if result_warning %}
+    <div class="message-warning-stack message-result-warning">
+        <div><span>!</span><p>{{ result_warning }}</p></div>
+    </div>
+    {% endif %}
+
+    {% for block in all_results %}
+    <div class="panel">
+        <h2>Ключ {{ block.key.number }} → {{ block.key.hex_value }}</h2>
+
+        {% if block.results %}
+        <div class="table-scroll small-scroll">
+            <table>
+                <tr>
+                    <th>Панель</th>
+                    <th>MAC</th>
+                    <th>Квартира</th>
+                    <th>Статус</th>
+                    <th>Ответ CRM</th>
+                </tr>
+
+                {% for r in block.results %}
+                <tr>
+                    <td>{{ r.panel.name if r.panel else '' }}</td>
+                    <td>{{ r.panel.mac if r.panel else '' }}</td>
+                    <td>{{ r.flat_num or 'Не указана' }}</td>
+                    <td>
+                        {% if r.written %}
+                        <span class="badge success">Записан</span>
+                        {% elif r.status == 'TRAINING_MODE' %}
+                        <span class="badge dry-run">Учебная проверка</span>
+                        {% elif r.status == 'DRY_RUN' %}
+                        <span class="badge dry-run">Без записи</span>
+                        {% else %}
+                        <span class="badge error">Ошибка</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ r.response or r.message or 'Нет ответа' }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+        {% else %}
+        <p class="warn">Запись по этому ключу не выполнялась.</p>
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    {% if not all_results and not result_warning %}
+    <div class="panel">
+        <p class="warn">Нет результатов.</p>
+    </div>
+    {% endif %}
+
+    <div class="message-result-actions">
+        {% if message_flow %}
+        <a class="btn" href="{{ new_message_url }}">Новое сообщение</a>
+        <a class="btn btn-ghost" href="{{ back_url }}">Вернуться и исправить</a>
+        {% else %}
+        <a class="btn" href="/">На главную</a>
+        {% endif %}
+    </div>
+</div>
 {% endblock %}

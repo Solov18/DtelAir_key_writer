@@ -1,617 +1,291 @@
 {% extends 'base.html' %}
 
-{% block page_name %}УК{% endblock %}
+{% block page_name %}Управляющие компании{% endblock %}
 
 {% block content %}
-
-<div class="uk-hero">
-    <div>
-        <h1>Управляющие компании</h1>
-        <p class="subtitle">
-            Реестр компаний, закреплённых панелей и служебных ключей
-        </p>
-    </div>
-
-    <div class="uk-stat-card">
-        <div class="uk-stat-icon">
-            <svg viewBox="0 0 24 24">
-                <path d="M3 21h18"/>
-                <path d="M5 21V7l7-4 7 4v14"/>
-                <path d="M9 21v-6h6v6"/>
-            </svg>
-        </div>
-
+<div class="uk-directory">
+    <header class="uk-directory-hero">
         <div>
-            <b>{{ groups|length }}</b>
-            <span>Компаний в реестре</span>
+            <span class="page-eyebrow">Партнёры и собственники</span>
+            <h1>Управляющие компании</h1>
+            <p class="subtitle">Контакты УК, история сотрудничества, панели, ключи и собственные сервисы DTEL для жителей.</p>
         </div>
-    </div>
-</div>
+        <div class="uk-directory-note">
+            <svg viewBox="0 0 24 24"><path d="M8 12h8M12 8v8"/><path d="M5 7a3 3 0 0 1 3-3h2M19 17a3 3 0 0 1-3 3h-2M17 5a3 3 0 0 1 3 3v2M7 19a3 3 0 0 1-3-3v-2"/></svg>
+            <span><b>Сотрудничество с УК</b><small>Предлагаем собственные сервисы DTEL</small></span>
+        </div>
+    </header>
 
-<div class="uk-workspace">
+    <section class="uk-summary-grid" aria-label="Сводка по управляющим компаниям">
+        <a class="uk-summary-card is-blue" href="/uk">
+            <span class="uk-summary-icon"><svg viewBox="0 0 24 24"><path d="M4 21V4h11v17M15 9h5v12M8 8h3M8 12h3M8 16h3"/></svg></span>
+            <span><small>Компаний в реестре</small><b>{{ statistics.total }}</b></span>
+        </a>
+        <a class="uk-summary-card is-green" href="/uk?cooperation_state=partner">
+            <span class="uk-summary-icon"><svg viewBox="0 0 24 24"><path d="m4 12 5 5L20 6"/><circle cx="12" cy="12" r="9"/></svg></span>
+            <span><small>Сотрудничаем</small><b>{{ statistics.partners }}</b></span>
+        </a>
+        <a class="uk-summary-card is-violet" href="/uk?cooperation_state=negotiation">
+            <span class="uk-summary-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4V5Z"/><path d="M8 9h8M8 12h5"/></svg></span>
+            <span><small>В работе и переговорах</small><b>{{ statistics.in_progress }}</b></span>
+        </a>
+        <div class="uk-summary-card is-cyan">
+            <span class="uk-summary-icon"><svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M9 6h6M9 10h6M9 14h6M10 18h4"/></svg></span>
+            <span><small>Закреплено панелей</small><b>{{ statistics.panels }}</b></span>
+        </div>
+    </section>
 
-<section class="panel uk-create-panel">
-    <div class="panel-head">
-        <div>
-            <h2>
-                <span class="title-svg-icon">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M3 21h18"/>
-                        <path d="M5 21V7l7-4 7 4v14"/>
-                        <path d="M9 21v-6h6v6"/>
-                        <path d="M19 3v6M16 6h6"/>
-                    </svg>
+    <div class="uk-directory-layout">
+        <section class="uk-register panel">
+            <div class="uk-register-toolbar">
+                <div class="uk-register-actions">
+                    <button class="btn uk-primary-action" type="button" data-open-uk-modal="ukAddModal">
+                        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+                        Добавить УК
+                    </button>
+                    <span class="uk-register-hint">От первого контакта до действующего партнёрства</span>
+                </div>
+                <span class="uk-register-found">Найдено: <b>{{ group_page.total }}</b></span>
+            </div>
+
+            <form class="uk-filterbar" method="get" action="/uk">
+                <label class="uk-search-field">
+                    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4.5 4.5"/></svg>
+                    <input
+                        type="search"
+                        name="q"
+                        value="{{ filters.q }}"
+                        placeholder="Название, контакт, телефон, адрес, менеджер или договор..."
+                        autocomplete="off"
+                        data-smart-search="uk"
+                    >
+                </label>
+                <label class="uk-filter-control">
+                    <span>Сотрудничество</span>
+                    <select name="cooperation_state">
+                        <option value="">Все компании</option>
+                        <option value="potential" {% if filters.cooperation_state == 'potential' %}selected{% endif %}>Новый контакт</option>
+                        <option value="contacted" {% if filters.cooperation_state == 'contacted' %}selected{% endif %}>Связались</option>
+                        <option value="negotiation" {% if filters.cooperation_state == 'negotiation' %}selected{% endif %}>Переговоры</option>
+                        <option value="partner" {% if filters.cooperation_state == 'partner' %}selected{% endif %}>Сотрудничаем</option>
+                        <option value="paused" {% if filters.cooperation_state == 'paused' %}selected{% endif %}>Отложено</option>
+                    </select>
+                </label>
+                <button class="btn uk-filter-submit" type="submit">Показать</button>
+                <a class="btn btn-ghost uk-filter-reset" href="/uk" title="Сбросить фильтры">↻</a>
+            </form>
+
+            <div class="uk-table-scroll custom-scroll">
+                <table class="uk-directory-table">
+                    <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Управляющая компания</th>
+                        <th>Контакт</th>
+                        <th>Сотрудничество</th>
+                        <th>Панели</th>
+                        <th>Ключи</th>
+                        <th>Следующий контакт</th>
+                        <th>Действия</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for group in groups %}
+                    <tr
+                        class="{% if selected_group and selected_group.id == group.id %}is-selected{% endif %}"
+                        tabindex="0"
+                        data-uk-row
+                        data-href="/uk?{% if row_query %}{{ row_query }}&{% endif %}selected_group_id={{ group.id }}"
+                    >
+                        <td class="uk-id-cell">{{ group.id }}</td>
+                        <td>
+                            <div class="uk-name-cell">
+                                <span class="uk-table-avatar">{{ group.name[:1]|upper }}</span>
+                                <span>
+                                    <b>{{ group.name }}</b>
+                                    <small>{{ group.legal_name or group.note or 'Без дополнительного описания' }}</small>
+                                </span>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="uk-contact-cell">
+                                <b>{{ group.contact_name or 'Не указан' }}</b>
+                                <small>{{ group.phone or group.email or 'Контакты не заполнены' }}</small>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="uk-cooperation-status is-{{ group.cooperation_status or 'potential' }}"><i></i>
+                                {% if group.cooperation_status == 'partner' %}Сотрудничаем
+                                {% elif group.cooperation_status == 'negotiation' %}Переговоры
+                                {% elif group.cooperation_status == 'contacted' %}Связались
+                                {% elif group.cooperation_status == 'paused' %}Отложено
+                                {% else %}Новый контакт{% endif %}
+                            </span>
+                        </td>
+                        <td><span class="uk-count-badge">{{ group.panels_count }}</span></td>
+                        <td><span class="uk-count-badge is-key">{{ group.keys_count }}</span></td>
+                        <td>
+                            <div class="uk-next-contact">
+                                <b>{{ (group.next_contact_at or 'Не назначен')[:16] }}</b>
+                                <small>{{ group.account_manager or 'Менеджер не указан' }}</small>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="uk-row-actions">
+                                <a href="/uk/{{ group.id }}" title="Открыть карточку" aria-label="Открыть карточку"><svg viewBox="0 0 24 24"><path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.5"/></svg></a>
+                                <button type="button" data-open-uk-modal="ukEditModal" data-selected-only="{{ group.id }}" title="Редактировать" aria-label="Редактировать"><svg viewBox="0 0 24 24"><path d="m4 20 4-1 11-11-3-3L5 16l-1 4Z"/><path d="m14 7 3 3"/></svg></button>
+                                <a href="/uk/{{ group.id }}#notifications" title="Уведомления собственников" aria-label="Уведомления собственников"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg></a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="8"><div class="uk-register-empty"><b>Компании не найдены</b><span>Измените запрос или сбросьте фильтры.</span><a href="/uk">Сбросить фильтры</a></div></td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <footer class="uk-pagination">
+                <span>{% if group_page.total %}Показано {{ ((group_page.page - 1) * group_page.page_size) + 1 }}–{{ [group_page.page * group_page.page_size, group_page.total]|min }} из {{ group_page.total }}{% else %}Нет записей{% endif %}</span>
+                {% if group_page.pages > 1 %}
+                <nav aria-label="Страницы управляющих компаний">
+                    {% if group_page.page > 1 %}<a href="/uk?{% if base_query %}{{ base_query }}&{% endif %}page={{ group_page.page - 1 }}">←</a>{% endif %}
+                    {% for number in range(1, group_page.pages + 1) %}
+                        {% if number == 1 or number == group_page.pages or (number >= group_page.page - 2 and number <= group_page.page + 2) %}
+                        <a class="{% if number == group_page.page %}is-active{% endif %}" href="/uk?{% if base_query %}{{ base_query }}&{% endif %}page={{ number }}">{{ number }}</a>
+                        {% elif number == 2 or number == group_page.pages - 1 %}<span>…</span>{% endif %}
+                    {% endfor %}
+                    {% if group_page.page < group_page.pages %}<a href="/uk?{% if base_query %}{{ base_query }}&{% endif %}page={{ group_page.page + 1 }}">→</a>{% endif %}
+                </nav>
+                {% endif %}
+            </footer>
+        </section>
+
+        <aside class="uk-inspector panel custom-scroll">
+            {% if selected_group %}
+            <header class="uk-inspector-profile">
+                <span class="uk-inspector-avatar">{{ selected_group.name[:1]|upper }}</span>
+                <div><span class="page-eyebrow">Карточка УК · ID {{ selected_group.id }}</span><h2>{{ selected_group.name }}</h2><small>{{ selected_group.legal_name or 'Юридическое название не заполнено' }}</small></div>
+            </header>
+
+            <div class="uk-cooperation-card">
+                <span class="uk-cooperation-status is-{{ selected_group.cooperation_status or 'potential' }}"><i></i>
+                    {% if selected_group.cooperation_status == 'partner' %}Сотрудничаем
+                    {% elif selected_group.cooperation_status == 'negotiation' %}Переговоры
+                    {% elif selected_group.cooperation_status == 'contacted' %}Связались
+                    {% elif selected_group.cooperation_status == 'paused' %}Отложено
+                    {% else %}Новый контакт{% endif %}
                 </span>
-                Создать УК
-            </h2>
+                <dl>
+                    <div><dt>Менеджер</dt><dd>{{ selected_group.account_manager or 'Не назначен' }}</dd></div>
+                    <div><dt>Следующий контакт</dt><dd>{{ (selected_group.next_contact_at or 'Не назначен')[:16] }}</dd></div>
+                </dl>
+                {% if selected_group.cooperation_note %}<p>{{ selected_group.cooperation_note }}</p>{% endif %}
+            </div>
 
-            <p class="subtitle">
-                Карточка компании и служебные реквизиты
-            </p>
-        </div>
-    </div>
+            <dl class="uk-inspector-data">
+                <div><dt>Контактное лицо</dt><dd>{{ selected_group.contact_name or 'Не указано' }}</dd></div>
+                <div><dt>Телефон</dt><dd>{{ selected_group.phone or 'Не указан' }}</dd></div>
+                <div><dt>Email</dt><dd>{{ selected_group.email or 'Не указан' }}</dd></div>
+                <div><dt>Юридический адрес</dt><dd>{{ selected_group.legal_address or 'Не указан' }}</dd></div>
+                <div><dt>Договор</dt><dd>{{ selected_group.contract_number or 'Не указан' }}</dd></div>
+            </dl>
 
-    <form method="post" action="/uk/group" class="uk-create-form">
-        <div class="uk-form-wide">
-            <label>Название УК</label>
-            <input
-                name="name"
-                placeholder="Например: УК Александрия"
-                required
-            >
-        </div>
+            <div class="uk-inspector-counters">
+                <a href="/uk/{{ selected_group.id }}#panels"><b>{{ selected_group.panels_count }}</b><span>панелей</span></a>
+                <a href="/uk/{{ selected_group.id }}#keys"><b>{{ selected_group.keys_count }}</b><span>ключей</span></a>
+                <a href="/uk/{{ selected_group.id }}#notifications"><b>{{ selected_group.notification_drafts_count }}</b><span>черновиков</span></a>
+            </div>
 
-        <div class="uk-form-wide">
-            <label>Комментарий</label>
-            <input
-                name="note"
-                placeholder="Описание или примечание"
-            >
-        </div>
+            <section class="uk-inspector-integrations uk-inspector-notifications">
+                <header><div><span>Уведомления собственников</span><b>{{ selected_notifications|length }}</b></div><a href="/uk/{{ selected_group.id }}#notifications">Открыть</a></header>
+                <div class="uk-inspector-integration-list">
+                    {% for draft in selected_notifications %}
+                    <div class="uk-inspector-integration">
+                        <span class="uk-notification-draft-mark"></span>
+                        <span><b>{{ draft.title }}</b><small>Черновик · отправка не выполнялась</small></span>
+                    </div>
+                    {% else %}
+                    <div class="uk-inspector-integration-empty">
+                        <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>
+                        <b>Наш сервис уведомлений</b>
+                        <span>Создавайте объявления для собственников. Реальная отправка появится после добавления базы контактов жителей.</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
 
-        <div class="uk-form-divider">
-            <span>Реквизиты CRM</span>
-        </div>
-
-        <div>
-            <label>Логин CRM</label>
-            <input
-                name="crm_login"
-                placeholder="Логин для входа в CRM"
-                autocomplete="off"
-            >
-        </div>
-
-        <div>
-            <label>Пароль CRM</label>
-            <input
-                type="password"
-                name="crm_password"
-                placeholder="Пароль для входа в CRM"
-                autocomplete="off"
-            >
-        </div>
-
-        <button type="submit" class="btn">
-            Создать УК
-        </button>
-    </form>
-</section>
-
-<section class="uk-groups-panel">
-<div class="panel-list-head uk-list-head">
-    <div>
-        <h2>
-            <span class="title-svg-icon">
-                <svg viewBox="0 0 24 24">
-                    <path d="M3 21h18"/>
-                    <path d="M5 21V7l7-4 7 4v14"/>
-                    <path d="M9 21v-6h6v6"/>
-                </svg>
-            </span>
-
-            Реестр УК
-        </h2>
-
-        <p class="subtitle">
-            Найдено:
-            <span id="ukFoundCount">{{ groups|length }}</span>
-            из {{ groups|length }}
-        </p>
-    </div>
-
-    <div class="uk-list-tools">
-        <div class="uk-view-switch" aria-label="Вид реестра">
-            <button type="button" class="uk-view-button active" id="ukViewTable" aria-pressed="true">
-                <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-                <span>Таблица</span>
-            </button>
-            <button type="button" class="uk-view-button" id="ukViewCards" aria-pressed="false">
-                <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-                <span>Карточки</span>
-            </button>
-        </div>
-
-        <div class="uk-search-box">
-            <svg viewBox="0 0 24 24">
-                <circle cx="11" cy="11" r="7"/>
-                <path d="m20 20-4-4"/>
-            </svg>
-
-            <input
-                type="text"
-                id="ukSearch"
-                placeholder="Поиск по названию, комментарию или логину..."
-                autocomplete="off"
-            >
-
-            <button
-                type="button"
-                id="clearUkSearch"
-                class="uk-search-clear"
-                title="Очистить поиск"
-            >
-                ×
-            </button>
-        </div>
+            <div class="uk-inspector-actions">
+                <a class="btn" href="/uk/{{ selected_group.id }}">Полная карточка</a>
+                <button class="btn btn-ghost" type="button" data-open-uk-modal="ukEditModal">Редактировать</button>
+                <form method="post" action="/uk/delete" data-confirm="Удалить управляющую компанию и все её связи? Ключи будут освобождены.">
+                    <input type="hidden" name="group_id" value="{{ selected_group.id }}"><button class="btn uk-danger-action" type="submit">Удалить компанию</button>
+                </form>
+            </div>
+            {% else %}
+            <div class="uk-inspector-empty"><svg viewBox="0 0 24 24"><path d="M4 21V4h11v17M15 9h5v12M8 8h3M8 12h3M8 16h3"/></svg><h2>Компания не выбрана</h2><p>Выберите строку, чтобы посмотреть контакты и состояние сотрудничества.</p></div>
+            {% endif %}
+        </aside>
     </div>
 </div>
 
-    <div class="uk-register panel">
-        <div class="uk-table-scroll">
-            <table class="uk-table" id="ukTable">
-                <thead>
-                <tr>
-                    <th aria-sort="none"><button type="button" class="uk-sort-button" data-sort="name">Управляющая компания <span>↕</span></button></th>
-                    <th aria-sort="none"><button type="button" class="uk-sort-button" data-sort="panels">Панели <span>↕</span></button></th>
-                    <th aria-sort="none"><button type="button" class="uk-sort-button" data-sort="keys">Ключи <span>↕</span></button></th>
-                    <th aria-sort="none"><button type="button" class="uk-sort-button" data-sort="login">Логин CRM <span>↕</span></button></th>
-                    <th>Пароль CRM</th>
-                    <th>Действия</th>
-                </tr>
-                </thead>
-                <tbody id="ukRows">
-                {% for g in groups %}
-                <tr
-                    class="uk-row"
-                    data-name="{{ g.name|lower }}"
-                    data-panels="{{ g.panels_count }}"
-                    data-keys="{{ g.keys_count }}"
-                    data-login="{{ (g.crm_login or '')|lower }}"
-                >
-                    <td>
-                        <div class="uk-company-cell">
-                            <span class="uk-company-icon">
-                                <svg viewBox="0 0 24 24">
-                                    <path d="M3 21h18"/>
-                                    <path d="M5 21V7l7-4 7 4v14"/>
-                                    <path d="M9 21v-6h6v6"/>
-                                </svg>
-                            </span>
-                            <span>
-                                <b>{{ g.name }}</b>
-                                <small>{{ g.note or 'Без комментария' }}</small>
-                            </span>
-                        </div>
-                    </td>
-                    <td data-label="Панели"><span class="uk-count-value">{{ g.panels_count }}</span></td>
-                    <td data-label="Ключи"><span class="uk-count-value">{{ g.keys_count }}</span></td>
-                    <td data-label="Логин CRM">
-                        <span class="uk-credential-value{% if not g.crm_login %} is-empty{% endif %}">
-                            <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
-                            <span>{{ g.crm_login or 'Не указан' }}</span>
-                        </span>
-                    </td>
-                    <td data-label="Пароль CRM">
-                        <div class="uk-password-cell{% if not g.crm_password %} is-empty{% endif %}">
-                            <svg class="uk-password-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
-                            <span
-                                class="uk-password-value"
-                                data-password="{{ g.crm_password or '' }}"
-                            >
-                                <b>{% if g.crm_password %}••••••••{% else %}Не указан{% endif %}</b>
-                            </span>
-                            {% if g.crm_password %}
-                            <button
-                                type="button"
-                                class="uk-password-toggle"
-                                aria-label="Показать пароль"
-                            >
-                                <svg class="eye-show" viewBox="0 0 24 24">
-                                    <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12"/>
-                                    <circle cx="12" cy="12" r="3"/>
-                                </svg>
-                                <svg class="eye-hide" viewBox="0 0 24 24">
-                                    <path d="m3 3 18 18"/>
-                                    <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"/>
-                                    <path d="M9.9 4.2A11 11 0 0 1 12 4c6.5 0 10 8 10 8a17 17 0 0 1-2.1 3.2"/>
-                                    <path d="M6.6 6.6C3.5 8.5 2 12 2 12s3.5 8 10 8a10 10 0 0 0 5.4-1.6"/>
-                                </svg>
-                            </button>
-                            {% endif %}
-                        </div>
-                    </td>
-                    <td data-label="Действия">
-                        <div class="uk-row-actions">
-                            <a href="/uk/{{ g.id }}" class="btn btn-small uk-open-button">
-                                Карточка
-                                <svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
-                            </a>
-                            <button
-                                type="button"
-                                class="btn btn-small btn-ghost uk-icon-action"
-                                data-open-uk-edit="{{ g.id }}"
-                                title="Изменить {{ g.name }}"
-                                aria-label="Изменить {{ g.name }}"
-                            >
-                                <svg viewBox="0 0 24 24"><path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Z"/><path d="m14 7 3 3"/></svg>
-                            </button>
-                            <form
-                                method="post"
-                                action="/uk/delete"
-                                onsubmit="return confirm('Удалить УК «{{ g.name }}»?')"
-                            >
-                                <input type="hidden" name="group_id" value="{{ g.id }}">
-                                <button
-                                    type="submit"
-                                    class="danger-btn btn-small uk-icon-action"
-                                    title="Удалить {{ g.name }}"
-                                    aria-label="Удалить {{ g.name }}"
-                                >
-                                    <svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg>
-                                </button>
-                            </form>
-                        </div>
-                    </td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="6">
-                        <div class="uk-empty-state">
-                            <h3>Управляющие компании пока не созданы</h3>
-                            <p>Заполните форму слева, чтобы добавить первую запись.</p>
-                        </div>
-                    </td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </div>
-
-        <div class="uk-pagination" id="ukPagination" hidden>
-            <span id="ukPageInfo"></span>
-            <div>
-                <button type="button" class="btn-small btn-ghost" id="ukPrevPage">Назад</button>
-                <button type="button" class="btn-small btn-ghost" id="ukNextPage">Вперёд</button>
-            </div>
-        </div>
-    </div>
-</section>
-
-</div>
-
-{% for g in groups %}
-<div
-    class="modal-backdrop uk-edit-modal"
-    id="ukEditModal{{ g.id }}"
->
-    <div class="modal-window panel">
-        <div class="modal-head">
-            <div>
-                <h2>Редактировать УК</h2>
-                <p class="subtitle">
-                    Изменение данных {{ g.name }}
-                </p>
-            </div>
-
-            <button
-                type="button"
-                class="btn-small btn-ghost modal-close"
-                data-close="ukEditModal{{ g.id }}"
-            >
-                Закрыть
-            </button>
-        </div>
-
-        <form
-            method="post"
-            action="/uk/{{ g.id }}/update"
-            class="uk-edit-form"
-        >
-            <div>
-                <label>Название УК</label>
-                <input
-                    name="name"
-                    value="{{ g.name }}"
-                    required
-                >
-            </div>
-
-            <div>
-                <label>Комментарий</label>
-                <input
-                    name="note"
-                    value="{{ g.note or '' }}"
-                    placeholder="Описание или примечание"
-                >
-            </div>
-
-            <div>
-                <label>Логин CRM</label>
-                <input
-                    name="crm_login"
-                    value="{{ g.crm_login or '' }}"
-                    placeholder="Логин для входа в CRM"
-                    autocomplete="off"
-                >
-            </div>
-
-            <div>
-                <label>Пароль CRM</label>
-                <input
-                    type="password"
-                    name="crm_password"
-                    value="{{ g.crm_password or '' }}"
-                    placeholder="Пароль для входа в CRM"
-                    autocomplete="off"
-                >
-            </div>
-
-            <button type="submit" class="btn">
-                Сохранить изменения
-            </button>
+<div class="uk-modal" id="ukAddModal" aria-hidden="true">
+    <div class="uk-modal-card panel" role="dialog" aria-modal="true" aria-labelledby="ukAddTitle">
+        <header><div><span class="page-eyebrow">Новый контакт</span><h2 id="ukAddTitle">Добавить управляющую компанию</h2></div><button type="button" data-close-uk-modal aria-label="Закрыть">×</button></header>
+        <form method="post" action="/uk/group" class="uk-profile-form">
+            <label>Короткое название<input name="name" required autocomplete="off" placeholder="УК Александрия"></label>
+            <label>Юридическое название<input name="legal_name" autocomplete="off" placeholder="ООО «УК Александрия»"></label>
+            <label>Контактное лицо<input name="contact_name" autocomplete="off" placeholder="Иванов Сергей Петрович"></label>
+            <label>Телефон<input name="phone" autocomplete="off" placeholder="+7 999 123-45-67"></label>
+            <label>Email<input name="email" type="email" autocomplete="off" placeholder="office@example.ru"></label>
+            <label>Номер договора<input name="contract_number" autocomplete="off" placeholder="Д-2026/15"></label>
+            <label>Статус сотрудничества
+                <select name="cooperation_status"><option value="potential">Новый контакт</option><option value="contacted">Связались</option><option value="negotiation">Переговоры</option><option value="partner">Сотрудничаем</option><option value="paused">Отложено</option></select>
+            </label>
+            <label>Ответственный менеджер<input name="account_manager" autocomplete="off" placeholder="Соловьев Евгений"></label>
+            <label>Следующий контакт<input name="next_contact_at" type="datetime-local"></label>
+            <label class="is-wide">Юридический адрес<input name="legal_address" autocomplete="off" placeholder="г. Сочи, ул. Примерная, 1"></label>
+            <label class="is-wide">План сотрудничества<textarea name="cooperation_note" rows="3" placeholder="Что предложили, о чём договорились, следующий шаг..."></textarea></label>
+            <label class="is-wide">Комментарий<textarea name="note" rows="2" placeholder="Дополнительная информация о компании"></textarea></label>
+            <div class="uk-modal-tip is-wide"><b>Мы предлагаем УК собственные сервисы DTEL.</b><span>В карточке можно подготовить уведомления для собственников, а отправку подключим после появления базы контактов жителей.</span></div>
+            <div class="uk-modal-actions is-wide"><button type="button" class="btn btn-ghost" data-close-uk-modal>Отмена</button><button type="submit" class="btn">Добавить компанию</button></div>
         </form>
     </div>
 </div>
-{% endfor %}
 
-<script>
-document.querySelectorAll("[data-open-uk-edit]").forEach((button) => {
-    button.addEventListener("click", () => {
-        const groupId = button.dataset.openUkEdit;
-        const modal = document.getElementById("ukEditModal" + groupId);
+{% if selected_group %}
+<div class="uk-modal" id="ukEditModal" aria-hidden="true">
+    <div class="uk-modal-card panel" role="dialog" aria-modal="true" aria-labelledby="ukEditTitle">
+        <header><div><span class="page-eyebrow">Карточка №{{ selected_group.id }}</span><h2 id="ukEditTitle">Редактировать компанию</h2></div><button type="button" data-close-uk-modal aria-label="Закрыть">×</button></header>
+        <form method="post" action="/uk/{{ selected_group.id }}/update" class="uk-profile-form">
+            <input type="hidden" name="return_to" value="list">
+            <label>Короткое название<input name="name" value="{{ selected_group.name }}" required></label>
+            <label>Юридическое название<input name="legal_name" value="{{ selected_group.legal_name or '' }}"></label>
+            <label>Контактное лицо<input name="contact_name" value="{{ selected_group.contact_name or '' }}"></label>
+            <label>Телефон<input name="phone" value="{{ selected_group.phone or '' }}"></label>
+            <label>Email<input name="email" type="email" value="{{ selected_group.email or '' }}"></label>
+            <label>Номер договора<input name="contract_number" value="{{ selected_group.contract_number or '' }}"></label>
+            <label>Статус сотрудничества
+                <select name="cooperation_status">
+                    <option value="potential" {% if selected_group.cooperation_status == 'potential' %}selected{% endif %}>Новый контакт</option>
+                    <option value="contacted" {% if selected_group.cooperation_status == 'contacted' %}selected{% endif %}>Связались</option>
+                    <option value="negotiation" {% if selected_group.cooperation_status == 'negotiation' %}selected{% endif %}>Переговоры</option>
+                    <option value="partner" {% if selected_group.cooperation_status == 'partner' %}selected{% endif %}>Сотрудничаем</option>
+                    <option value="paused" {% if selected_group.cooperation_status == 'paused' %}selected{% endif %}>Отложено</option>
+                </select>
+            </label>
+            <label>Ответственный менеджер<input name="account_manager" value="{{ selected_group.account_manager or '' }}"></label>
+            <label>Следующий контакт<input name="next_contact_at" type="datetime-local" value="{{ (selected_group.next_contact_at or '')[:16] }}"></label>
+            <label class="is-wide">Юридический адрес<input name="legal_address" value="{{ selected_group.legal_address or '' }}"></label>
+            <label class="is-wide">План сотрудничества<textarea name="cooperation_note" rows="3">{{ selected_group.cooperation_note or '' }}</textarea></label>
+            <label class="is-wide">Комментарий<textarea name="note" rows="2">{{ selected_group.note or '' }}</textarea></label>
+            <div class="uk-modal-actions is-wide"><button type="button" class="btn btn-ghost" data-close-uk-modal>Отмена</button><button type="submit" class="btn">Сохранить изменения</button></div>
+        </form>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
 
-        if (modal) {
-            modal.classList.add("active");
-        }
-    });
-});
-
-document.querySelectorAll(".modal-close").forEach((button) => {
-    button.addEventListener("click", () => {
-        const modalId = button.dataset.close;
-        const modal = document.getElementById(modalId);
-
-        if (modal) {
-            modal.classList.remove("active");
-        }
-    });
-});
-
-document.querySelectorAll(".modal-backdrop").forEach((modal) => {
-    modal.addEventListener("click", (event) => {
-        if (event.target === modal) {
-            modal.classList.remove("active");
-        }
-    });
-});
-
-document.querySelectorAll(".uk-password-toggle").forEach((button) => {
-    button.addEventListener("click", () => {
-        const wrapper = button.closest(".uk-password-cell");
-        if (!wrapper) {
-            return;
-        }
-
-        const valueElement = wrapper.querySelector(".uk-password-value");
-        if (!valueElement) {
-            return;
-        }
-
-        const valueText = valueElement.querySelector("b");
-        const password = valueElement.dataset.password;
-        const isVisible = button.classList.toggle("visible");
-
-        valueText.textContent = isVisible ? password : "••••••••";
-        button.setAttribute(
-            "aria-label",
-            isVisible ? "Скрыть пароль" : "Показать пароль"
-        );
-    });
-});
-
-document.addEventListener("DOMContentLoaded", () => {
-    const searchInput = document.getElementById("ukSearch");
-    const clearButton = document.getElementById("clearUkSearch");
-    const rowsContainer = document.getElementById("ukRows");
-    const foundCount = document.getElementById("ukFoundCount");
-    const pagination = document.getElementById("ukPagination");
-    const pageInfo = document.getElementById("ukPageInfo");
-    const prevButton = document.getElementById("ukPrevPage");
-    const nextButton = document.getElementById("ukNextPage");
-    const register = document.querySelector(".uk-register");
-    const tableViewButton = document.getElementById("ukViewTable");
-    const cardsViewButton = document.getElementById("ukViewCards");
-    const sortButtons = Array.from(document.querySelectorAll(".uk-sort-button"));
-    const pageSize = 12;
-    let currentPage = 1;
-    let sortKey = "";
-    let sortDirection = 1;
-
-    if (!searchInput || !rowsContainer) {
-        return;
-    }
-
-    const rows = Array.from(
-        rowsContainer.querySelectorAll(".uk-row")
-    );
-
-    function sortRows(key) {
-        if (sortKey === key) {
-            sortDirection *= -1;
-        } else {
-            sortKey = key;
-            sortDirection = 1;
-        }
-
-        rows.sort((leftRow, rightRow) => {
-            const leftValue = leftRow.dataset[key] || "";
-            const rightValue = rightRow.dataset[key] || "";
-
-            if (key === "panels" || key === "keys") {
-                return (Number(leftValue) - Number(rightValue)) * sortDirection;
-            }
-
-            return leftValue.localeCompare(rightValue, "ru", {
-                numeric: true,
-                sensitivity: "base"
-            }) * sortDirection;
-        });
-
-        rows.forEach((row) => rowsContainer.appendChild(row));
-
-        sortButtons.forEach((button) => {
-            const isCurrent = button.dataset.sort === sortKey;
-            const arrow = button.querySelector("span");
-            const header = button.closest("th");
-
-            button.classList.toggle("active", isCurrent);
-
-            if (arrow) {
-                arrow.textContent = isCurrent
-                    ? (sortDirection === 1 ? "↑" : "↓")
-                    : "↕";
-            }
-
-            if (header) {
-                header.setAttribute(
-                    "aria-sort",
-                    isCurrent
-                        ? (sortDirection === 1 ? "ascending" : "descending")
-                        : "none"
-                );
-            }
-        });
-
-        renderRows(true);
-    }
-
-    function renderRows(resetPage = false) {
-        const query = searchInput.value
-            .toLowerCase()
-            .trim();
-
-        const filteredRows = rows.filter((row) => {
-            return query === "" || row.innerText.toLowerCase().includes(query);
-        });
-        const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
-
-        if (resetPage) {
-            currentPage = 1;
-        }
-
-        currentPage = Math.min(currentPage, pageCount);
-        const firstRow = (currentPage - 1) * pageSize;
-        const visibleRows = new Set(
-            filteredRows.slice(firstRow, firstRow + pageSize)
-        );
-
-        rows.forEach((row) => {
-            row.hidden = !visibleRows.has(row);
-        });
-
-        if (foundCount) {
-            foundCount.textContent = filteredRows.length;
-        }
-
-        if (clearButton) {
-            clearButton.classList.toggle(
-                "visible",
-                searchInput.value.length > 0
-            );
-        }
-
-        if (pagination) {
-            pagination.hidden = filteredRows.length <= pageSize;
-        }
-
-        if (pageInfo) {
-            pageInfo.textContent = `Страница ${currentPage} из ${pageCount}`;
-        }
-
-        if (prevButton) {
-            prevButton.disabled = currentPage <= 1;
-        }
-
-        if (nextButton) {
-            nextButton.disabled = currentPage >= pageCount;
-        }
-    }
-
-    searchInput.addEventListener(
-        "input",
-        () => renderRows(true)
-    );
-
-    if (clearButton) {
-        clearButton.addEventListener("click", () => {
-            searchInput.value = "";
-            renderRows(true);
-            searchInput.focus();
-        });
-    }
-
-    if (prevButton) {
-        prevButton.addEventListener("click", () => {
-            if (currentPage > 1) {
-                currentPage--;
-                renderRows();
-            }
-        });
-    }
-
-    if (nextButton) {
-        nextButton.addEventListener("click", () => {
-            currentPage++;
-            renderRows();
-        });
-    }
-
-    sortButtons.forEach((button) => {
-        button.addEventListener("click", () => {
-            sortRows(button.dataset.sort);
-        });
-    });
-
-    function setRegisterView(view) {
-        const showCards = view === "cards";
-
-        if (register) {
-            register.classList.toggle("is-card-view", showCards);
-        }
-
-        if (tableViewButton) {
-            tableViewButton.classList.toggle("active", !showCards);
-            tableViewButton.setAttribute("aria-pressed", String(!showCards));
-        }
-
-        if (cardsViewButton) {
-            cardsViewButton.classList.toggle("active", showCards);
-            cardsViewButton.setAttribute("aria-pressed", String(showCards));
-        }
-    }
-
-    if (tableViewButton) {
-        tableViewButton.addEventListener("click", () => setRegisterView("table"));
-    }
-
-    if (cardsViewButton) {
-        cardsViewButton.addEventListener("click", () => setRegisterView("cards"));
-    }
-
-    renderRows();
-});
-</script>
-
-
+{% block scripts %}
+<script src="/static/js/uk.js?v=2"></script>
 {% endblock %}
