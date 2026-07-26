@@ -1,9 +1,8 @@
-import tempfile
-import unittest
-from pathlib import Path
 from unittest.mock import patch
 
 from starlette.requests import Request
+
+from tests.postgres_test_case import PostgreSQLTestCase
 
 import app.db as database
 from app.routers.manual_write import manual_write_execute
@@ -11,16 +10,9 @@ from app.services.auth import hash_password, verify_password
 from app.services.writer import write_key_to_panels
 
 
-class SystemSafetyTests(unittest.TestCase):
+class SystemSafetyTests(PostgreSQLTestCase):
     def setUp(self):
-        self._original_db_path = database.DB_PATH
-        self._temporary_directory = tempfile.TemporaryDirectory()
-        database.DB_PATH = Path(self._temporary_directory.name) / "test.db"
-        database.init_db()
-
-    def tearDown(self):
-        database.DB_PATH = self._original_db_path
-        self._temporary_directory.cleanup()
+        super().setUp()
 
     @staticmethod
     def _request(path: str, training: bool = False) -> Request:

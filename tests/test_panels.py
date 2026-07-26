@@ -1,25 +1,17 @@
-import tempfile
 import unittest
-from pathlib import Path
 from unittest.mock import Mock, patch
 
 import requests
 
-import app.db as database
+from tests.postgres_test_case import PostgreSQLTestCase
+
 from app.repositories import panel_repository
 from app.services import panel_api
 
 
-class PanelRepositoryTests(unittest.TestCase):
+class PanelRepositoryTests(PostgreSQLTestCase):
     def setUp(self):
-        self._original_db_path = database.DB_PATH
-        self._temporary_directory = tempfile.TemporaryDirectory()
-        database.DB_PATH = Path(self._temporary_directory.name) / "test.db"
-        database.init_db()
-
-    def tearDown(self):
-        database.DB_PATH = self._original_db_path
-        self._temporary_directory.cleanup()
+        super().setUp()
 
     def _create(self, address, entrance, mac, ip=""):
         panel_repository.create_or_update_panel(

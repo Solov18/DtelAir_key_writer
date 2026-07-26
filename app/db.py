@@ -8,6 +8,7 @@ Working SQL must be PostgreSQL-native; this module only converts positional
 
 from __future__ import annotations
 
+import os
 import re
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
@@ -15,7 +16,7 @@ from threading import RLock
 from typing import Any
 
 from sqlalchemy import Engine, create_engine, inspect, text
-from sqlalchemy.engine import Result
+from sqlalchemy.engine import Result, make_url
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.models import TABLES_WITH_ID, metadata
@@ -32,7 +33,7 @@ class DatabaseNotMigratedError(RuntimeError):
     """Raised when PostgreSQL is reachable but Alembic was not applied."""
 
 
-class CompatRow(Mapping[str, Any]):
+class CompatRow:
     """Mapping row that also supports the legacy integer index access."""
 
     def __init__(self, values: Sequence[Any], keys: Sequence[str]):
@@ -45,11 +46,20 @@ class CompatRow(Mapping[str, Any]):
             return self._values[key]
         return self._mapping[key]
 
-    def __iter__(self) -> Iterator[str]:
-        return iter(self._keys)
+    def __iter__(self) -> Iterator[Any]:
+        return iter(self._values)
 
     def __len__(self) -> int:
         return len(self._keys)
+
+    def keys(self) -> tuple[str, ...]:
+        return self._keys
+
+    def items(self) -> tuple[tuple[str, Any], ...]:
+        return tuple(zip(self._keys, self._values))
+
+    def values(self) -> tuple[Any, ...]:
+        return self._values
 
 
 class CompatResult:
@@ -101,11 +111,32 @@ def _current_database_url() -> str:
     return settings.database_url
 
 
+def _assert_test_database_safety(database_url: str) -> None:
+    """Prevent any application engine from targeting production under pytest."""
+
+    if os.environ.get("TEST_DATABASE_ACTIVE") != "1":
+        return
+    database_name = make_url(database_url).database
+    if database_name != "key_writer_test":
+        raise RuntimeError(
+            "TEST SAFETY ABORT: refusing to configure app.db for "
+            f"{database_name!r}; only 'key_writer_test' is allowed."
+        )
+
+
 def configure_database(database_url: str | None = None) -> Engine:
     """Configure and return the shared SQLAlchemy engine."""
 
     global _engine, _session_factory, _configured_url
+    with _lock:
+        # An explicitly selected engine (notably a schema-scoped test engine)
+        # remains active until switch_database() is called.  A plain
+        # get_engine()/db() must never silently fall back to settings.
+        if database_url is None and _engine is not None:
+            return _engine
+
     target_url = database_url or _current_database_url()
+    _assert_test_database_safety(target_url)
     if not target_url.startswith("postgresql+psycopg://"):
         raise ValueError(
             "Рабочая база должна использовать DATABASE_URL вида "
@@ -138,6 +169,31 @@ def configure_database(database_url: str | None = None) -> Engine:
         )
         _configured_url = target_url
         return engine
+
+
+def get_configured_database_url() -> str:
+    """Return the URL currently bound to the shared engine, if any."""
+
+    with _lock:
+        return _configured_url
+
+
+def switch_database(database_url: str) -> Engine:
+    """Atomically replace the engine and session factory with a new URL."""
+
+    global _engine, _session_factory, _configured_url
+    _assert_test_database_safety(database_url)
+    if not database_url.startswith("postgresql+psycopg://"):
+        raise ValueError("Database switch requires postgresql+psycopg:// URL")
+
+    with _lock:
+        if _engine is not None:
+            _engine.dispose()
+        _engine = None
+        _session_factory = None
+        _configured_url = ""
+        settings.database_url = database_url
+        return configure_database(database_url)
 
 
 def get_engine() -> Engine:

@@ -7,12 +7,12 @@ ORM identities for them would change the factual database structure.
 
 from sqlalchemy import (
     Column,
+    DateTime,
     Float,
     ForeignKey,
     Index,
     Integer,
     MetaData,
-    String,
     Table,
     Text,
     UniqueConstraint,
@@ -115,8 +115,8 @@ panels = Table(
     Column("created_at", Text, server_default=_now_text),
     Column("ip", Text, server_default=text("''")),
     Column("api_status", Text, server_default=text("'unknown'")),
-    Column("last_checked_at", Text, server_default=text("''")),
-    Column("last_online_at", Text, server_default=text("''")),
+    Column("last_checked_at", DateTime(timezone=True)),
+    Column("last_online_at", DateTime(timezone=True)),
     Column("response_time_ms", Integer),
     Column("device_model", Text, server_default=text("''")),
     Column("firmware_version", Text, server_default=text("''")),
@@ -213,7 +213,6 @@ Index(
     key_assignments.c.key_id,
     unique=True,
     postgresql_where=key_assignments.c.active == 1,
-    sqlite_where=key_assignments.c.active == 1,
 )
 Index(
     "idx_key_assignments_lookup",
@@ -259,7 +258,6 @@ Index(
     employee_keys.c.key_id,
     unique=True,
     postgresql_where=employee_keys.c.status == "active",
-    sqlite_where=employee_keys.c.status == "active",
 )
 Index(
     "idx_employee_keys_employee_history",

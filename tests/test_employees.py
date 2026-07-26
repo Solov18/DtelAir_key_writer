@@ -1,18 +1,12 @@
-import tempfile
-import unittest
-from pathlib import Path
+from tests.postgres_test_case import PostgreSQLTestCase
 
-import app.db as database
 from app.repositories import employee_repository, key_repository
 from app.services.search import get_search_suggestions
 
 
-class EmployeeRepositoryTests(unittest.TestCase):
+class EmployeeRepositoryTests(PostgreSQLTestCase):
     def setUp(self):
-        self._original_db_path = database.DB_PATH
-        self._temporary_directory = tempfile.TemporaryDirectory()
-        database.DB_PATH = Path(self._temporary_directory.name) / "test.db"
-        database.init_db()
+        super().setUp()
 
         self.key_type_id = key_repository.create_key_type(
             "Синий",
@@ -25,10 +19,6 @@ class EmployeeRepositoryTests(unittest.TestCase):
             phone="+7 (999) 123-45-67",
             email="ivanov@dtel.ru",
         )
-
-    def tearDown(self):
-        database.DB_PATH = self._original_db_path
-        self._temporary_directory.cleanup()
 
     def _create_key(self, number: int, hex_value: str) -> dict:
         return key_repository.save_prepared_key(

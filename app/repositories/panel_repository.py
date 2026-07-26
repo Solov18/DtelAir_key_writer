@@ -391,16 +391,22 @@ def get_all_panels() -> list[dict]:
 
 
 def update_panel_api_status(panel_id: int, result: dict) -> None:
+    status = result.get("status", "error")
+    last_online_sql = (
+        "CURRENT_TIMESTAMP"
+        if status == "online"
+        else "last_online_at"
+    )
     sip_registered = result.get("sip_registered")
     if sip_registered is not None:
         sip_registered = 1 if bool(sip_registered) else 0
     with db() as conn:
         conn.execute(
-            """
+            f"""
             UPDATE panels
             SET api_status = ?,
                 last_checked_at = CURRENT_TIMESTAMP,
-                last_online_at = CASE WHEN ? = 'online' THEN CURRENT_TIMESTAMP ELSE last_online_at END,
+                last_online_at = {last_online_sql},
                 response_time_ms = ?,
                 device_model = COALESCE(?, device_model),
                 firmware_version = COALESCE(?, firmware_version),
@@ -413,8 +419,7 @@ def update_panel_api_status(panel_id: int, result: dict) -> None:
             WHERE id = ?
             """,
             (
-                result.get("status", "error"),
-                result.get("status", "error"),
+                status,
                 result.get("response_time_ms"),
                 result.get("device_model"),
                 result.get("firmware_version"),

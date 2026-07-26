@@ -715,16 +715,20 @@ def save_prepared_key(
                 "У этого номера уже сохранён HEX. Нажмите «Исправить», чтобы заменить его осознанно."
             )
 
-        duplicate = conn.execute(
-            """
+        duplicate_sql = """
             SELECT k.id, k.number, kt.name AS type_name
             FROM keys k
             JOIN key_types kt ON kt.id = k.key_type_id
             WHERE UPPER(k.hex_value) = ?
-              AND (? IS NULL OR k.id <> ?)
-            LIMIT 1
-            """,
-            (clean_hex, existing_id, existing_id),
+        """
+        duplicate_params: list = [clean_hex]
+        if existing_id is not None:
+            duplicate_sql += " AND k.id <> ?"
+            duplicate_params.append(existing_id)
+        duplicate_sql += " LIMIT 1"
+        duplicate = conn.execute(
+            duplicate_sql,
+            duplicate_params,
         ).fetchone()
         if duplicate:
             raise ValueError(

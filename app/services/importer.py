@@ -170,19 +170,19 @@ def import_keys_file(
 
             duplicate_hex = None
             if hex_value:
-                duplicate_hex = conn.execute(
-                    """
+                duplicate_sql = """
                     SELECT id, number, key_type
                     FROM keys
                     WHERE UPPER(hex_value) = ?
-                      AND (? IS NULL OR id <> ?)
-                    LIMIT 1
-                    """,
-                    (
-                        hex_value,
-                        existing["id"] if existing else None,
-                        existing["id"] if existing else None,
-                    ),
+                """
+                duplicate_params: list = [hex_value]
+                if existing is not None:
+                    duplicate_sql += " AND id <> ?"
+                    duplicate_params.append(int(existing["id"]))
+                duplicate_sql += " LIMIT 1"
+                duplicate_hex = conn.execute(
+                    duplicate_sql,
+                    duplicate_params,
                 ).fetchone()
 
             if duplicate_hex:

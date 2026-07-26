@@ -169,8 +169,8 @@ PK: `id`; уникальное ограничение `uq_users_login`.
 | `created_at` | `TEXT`, default current time | Дата добавления. |
 | `ip` | `TEXT`, default `''` | IP-адрес панели. |
 | `api_status` | `TEXT`, default `unknown` | Последний статус API. |
-| `last_checked_at` | `TEXT`, default `''` | Время последней проверки. |
-| `last_online_at` | `TEXT`, default `''` | Последнее успешное соединение. |
+| `last_checked_at` | `TIMESTAMP WITH TIME ZONE`, nullable | Время последней проверки. |
+| `last_online_at` | `TIMESTAMP WITH TIME ZONE`, nullable | Последнее успешное соединение. |
 | `response_time_ms` | `INTEGER NULL` | Время ответа, мс. |
 | `device_model` | `TEXT`, default `''` | Модель устройства. |
 | `firmware_version` | `TEXT`, default `''` | Версия прошивки. |

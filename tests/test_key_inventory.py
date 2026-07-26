@@ -1,10 +1,9 @@
 import io
-import tempfile
-import unittest
-from pathlib import Path
 from unittest.mock import patch
 
 from openpyxl import Workbook
+
+from tests.postgres_test_case import PostgreSQLTestCase
 
 import app.db as database
 from app.repositories import key_repository
@@ -12,16 +11,9 @@ from app.services.importer import import_keys_file
 from app.services.writer import write_key_to_panels
 
 
-class KeyInventoryTests(unittest.TestCase):
+class KeyInventoryTests(PostgreSQLTestCase):
     def setUp(self):
-        self._original_db_path = database.DB_PATH
-        self._temporary_directory = tempfile.TemporaryDirectory()
-        database.DB_PATH = Path(self._temporary_directory.name) / "test.db"
-        database.init_db()
-
-    def tearDown(self):
-        database.DB_PATH = self._original_db_path
-        self._temporary_directory.cleanup()
+        super().setUp()
 
     def _create_key(self, key_type_id, number, hex_value):
         return key_repository.save_prepared_key(

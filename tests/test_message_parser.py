@@ -1,10 +1,8 @@
-import tempfile
-import unittest
-from pathlib import Path
 from unittest.mock import patch
 
-import app.db as database
 from starlette.requests import Request
+
+from tests.postgres_test_case import PostgreSQLTestCase
 
 from app.repositories import panel_repository
 from app.routers.message import message_write
@@ -13,16 +11,9 @@ from app.services.parser import find_address_candidates, parse_message
 from app.services.search import get_search_suggestions
 
 
-class MessageParserTests(unittest.TestCase):
+class MessageParserTests(PostgreSQLTestCase):
     def setUp(self):
-        self._original_db_path = database.DB_PATH
-        self._temporary_directory = tempfile.TemporaryDirectory()
-        database.DB_PATH = Path(self._temporary_directory.name) / "test.db"
-        database.init_db()
-
-    def tearDown(self):
-        database.DB_PATH = self._original_db_path
-        self._temporary_directory.cleanup()
+        super().setUp()
 
     @staticmethod
     def _create_panel(address: str, entrance: str, suffix: int) -> None:

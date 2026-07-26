@@ -58,6 +58,3 @@ app.include_router(keys.router)
 app.include_router(log.router)
 app.include_router(users.router)
 app.include_router(settings_router.router)
-
-for route in app.routes:
-    print("ROUTE:", route.path)

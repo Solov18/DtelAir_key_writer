@@ -1,11 +1,13 @@
 import sqlite3
 import tempfile
-import unittest
 from pathlib import Path
 
-from sqlalchemy import create_engine, select
+from sqlalchemy import select
 
-from app.models import employees, metadata, users
+from tests.postgres_test_case import PostgreSQLTestCase
+
+from app.db import get_engine
+from app.models import employees, users
 from scripts.migrate_sqlite_to_postgres import (
     file_sha256,
     migrate_rows,
@@ -13,12 +15,11 @@ from scripts.migrate_sqlite_to_postgres import (
 )
 
 
-class DatabaseMigrationTests(unittest.TestCase):
+class DatabaseMigrationTests(PostgreSQLTestCase):
     def test_employees_and_users_keep_ids_and_source_is_unchanged(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             source_path = root / "legacy.db"
-            target_path = root / "target.db"
             source = sqlite3.connect(source_path)
             try:
                 source.executescript(
@@ -75,8 +76,7 @@ class DatabaseMigrationTests(unittest.TestCase):
                 source.close()
 
             before_hash = file_sha256(source_path)
-            target_engine = create_engine(f"sqlite+pysqlite:///{target_path}")
-            metadata.create_all(target_engine)
+            target_engine = get_engine()
             legacy = open_legacy_database(source_path)
             try:
                 result = migrate_rows(legacy, target_engine)
@@ -94,7 +94,6 @@ class DatabaseMigrationTests(unittest.TestCase):
                     connection.scalar(select(users.c.id)),
                     12,
                 )
-            target_engine.dispose()
             self.assertEqual(before_hash, file_sha256(source_path))
 
 

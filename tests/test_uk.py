@@ -1,22 +1,12 @@
-import tempfile
-import unittest
-from pathlib import Path
+from tests.postgres_test_case import PostgreSQLTestCase
 
-import app.db as database
 from app.repositories import uk_repository
 from app.services.search import get_search_suggestions
 
 
-class UkRepositoryTests(unittest.TestCase):
+class UkRepositoryTests(PostgreSQLTestCase):
     def setUp(self):
-        self._original_db_path = database.DB_PATH
-        self._temporary_directory = tempfile.TemporaryDirectory()
-        database.DB_PATH = Path(self._temporary_directory.name) / "test.db"
-        database.init_db()
-
-    def tearDown(self):
-        database.DB_PATH = self._original_db_path
-        self._temporary_directory.cleanup()
+        super().setUp()
 
     def test_company_profile_and_punctuation_insensitive_search(self):
         group_id = uk_repository.save_group(
