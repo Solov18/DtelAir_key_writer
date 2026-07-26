@@ -32,7 +32,7 @@ def get_groups() -> list[dict]:
                         WHERE nd.group_id = g.id
                     ) AS notification_drafts_count
                 FROM uk_groups g
-                ORDER BY g.name COLLATE NOCASE
+                ORDER BY LOWER(g.name), g.name
                 """
             )
         ]
@@ -193,7 +193,7 @@ def get_group_page(
                 ) AS latest_notification_at
             FROM uk_groups g
             WHERE {where_sql}
-            ORDER BY g.name COLLATE NOCASE, g.id
+            ORDER BY LOWER(g.name), g.name, g.id
             LIMIT ? OFFSET ?
             """,
             [*params, page_size, offset],
@@ -287,7 +287,7 @@ def save_group(
             ),
         )
         row = conn.execute(
-            "SELECT id FROM uk_groups WHERE name = ? COLLATE NOCASE",
+            "SELECT id FROM uk_groups WHERE LOWER(name) = LOWER(?)",
             (name.strip(),),
         ).fetchone()
         return int(row["id"])
@@ -389,7 +389,7 @@ def get_notification_drafts(
                 SELECT *
                 FROM uk_notification_drafts
                 WHERE group_id = ?
-                ORDER BY datetime(created_at) DESC, id DESC
+                ORDER BY created_at DESC, id DESC
                 LIMIT ?
                 """,
                 (group_id, max(1, min(int(limit), 200))),
@@ -565,11 +565,12 @@ def add_panels(group_id: int, panel_ids: list[int]) -> None:
     with db() as conn:
         conn.executemany(
             """
-            INSERT OR IGNORE INTO uk_group_panels(
+            INSERT INTO uk_group_panels(
                 group_id,
                 panel_id
             )
             VALUES (?, ?)
+            ON CONFLICT (group_id, panel_id) DO NOTHING
             """,
             [
                 (group_id, int(panel_id))
@@ -653,11 +654,12 @@ def add_keys(
 
             conn.execute(
                 """
-                INSERT OR IGNORE INTO uk_group_keys(
+                INSERT INTO uk_group_keys(
                     group_id,
                     key_id
                 )
                 VALUES (?, ?)
+                ON CONFLICT (group_id, key_id) DO NOTHING
                 """,
                 (
                     group_id,

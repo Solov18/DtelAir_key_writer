@@ -274,7 +274,10 @@ def get_panel_addresses() -> list[dict]:
             SELECT
                 MIN(address) AS address,
                 COUNT(*) AS panel_count,
-                GROUP_CONCAT(DISTINCT entrance) AS entrances
+                STRING_AGG(
+                    DISTINCT entrance,
+                    ',' ORDER BY entrance
+                ) AS entrances
             FROM panels
             WHERE enabled = 1
               AND address IS NOT NULL

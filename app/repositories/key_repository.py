@@ -102,8 +102,8 @@ def get_key_types(include_archived: bool = True) -> list[dict]:
                     WHERE k2.key_type_id = kt.id
                       AND TRIM(k2.hex_value) <> ''
                       AND k2.number <> ''
-                      AND k2.number NOT GLOB '*[^0-9]*'
-                    ORDER BY CAST(k2.number AS INTEGER) DESC,
+                      AND k2.number ~ '^[0-9]+$'
+                    ORDER BY CAST(k2.number AS NUMERIC) DESC,
                              LENGTH(k2.number) DESC,
                              k2.id DESC
                     LIMIT 1
@@ -114,7 +114,7 @@ def get_key_types(include_archived: bool = True) -> list[dict]:
                   AND TRIM(k.hex_value) <> ''
             {where}
             GROUP BY kt.id
-            ORDER BY kt.enabled DESC, kt.name COLLATE NOCASE
+            ORDER BY kt.enabled DESC, LOWER(kt.name), kt.name
             """
         ).fetchall()
         items = [dict(row) for row in rows]
@@ -167,8 +167,8 @@ def get_missing_key_numbers(
             WHERE key_type_id = ?
               AND TRIM(hex_value) <> ''
               AND number <> ''
-              AND number NOT GLOB '*[^0-9]*'
-            ORDER BY CAST(number AS INTEGER), LENGTH(number), number
+              AND number ~ '^[0-9]+$'
+            ORDER BY CAST(number AS NUMERIC), LENGTH(number), number
             """,
             (key_type_id,),
         ).fetchall()
@@ -702,7 +702,7 @@ def save_prepared_key(
             """
             SELECT id, hex_value
             FROM keys
-            WHERE key_type_id = ? AND number = ? COLLATE NOCASE
+            WHERE key_type_id = ? AND LOWER(number) = LOWER(?)
             LIMIT 1
             """,
             (key_type_id, clean_number),
@@ -940,8 +940,9 @@ def set_key_assignment_on_connection(
         )
         conn.execute(
             """
-            INSERT OR IGNORE INTO uk_group_keys(group_id, key_id)
+            INSERT INTO uk_group_keys(group_id, key_id)
             VALUES (?, ?)
+            ON CONFLICT (group_id, key_id) DO NOTHING
             """,
             (uk_group_id, key_id),
         )
@@ -1163,7 +1164,7 @@ def get_all_keys_for_export() -> list[dict]:
             FROM keys k
             JOIN key_types kt ON kt.id = k.key_type_id
             WHERE TRIM(k.hex_value) <> ''
-            ORDER BY kt.name COLLATE NOCASE, LENGTH(k.number), k.number
+            ORDER BY LOWER(kt.name), kt.name, LENGTH(k.number), k.number
             """
         ).fetchall()
         return [dict(row) for row in rows]

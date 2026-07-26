@@ -44,14 +44,17 @@ def get_search_suggestions(
                     e.department,
                     e.phone,
                     e.email,
-                    GROUP_CONCAT(k.number, ' ') AS key_numbers
+                    STRING_AGG(
+                        k.number,
+                        ' ' ORDER BY ek.issued_at DESC, ek.id DESC
+                    ) AS key_numbers
                 FROM employees e
                 LEFT JOIN employee_keys ek
                     ON ek.employee_id = e.id AND ek.status = 'active'
                 LEFT JOIN keys k ON k.id = ek.key_id
                 WHERE e.enabled = 1
                 GROUP BY e.id
-                ORDER BY e.full_name COLLATE NOCASE
+                ORDER BY LOWER(e.full_name), e.full_name
                 LIMIT 500
                 """
             ).fetchall()
@@ -85,7 +88,11 @@ def get_search_suggestions(
                 SELECT id, address, entrance, name, mac, ip
                 FROM panels
                 WHERE enabled = 1
-                ORDER BY address COLLATE NOCASE, entrance COLLATE NOCASE
+                ORDER BY
+                    LOWER(address),
+                    address,
+                    LOWER(COALESCE(entrance, '')),
+                    COALESCE(entrance, '')
                 LIMIT 1000
                 """
             ).fetchall()
@@ -171,7 +178,10 @@ def get_search_suggestions(
                     g.contract_number,
                     g.account_manager,
                     g.cooperation_note,
-                    GROUP_CONCAT(nd.title, ' ') AS notification_titles
+                    STRING_AGG(
+                        nd.title,
+                        ' ' ORDER BY nd.created_at DESC, nd.id DESC
+                    ) AS notification_titles
                 FROM uk_groups g
                 LEFT JOIN uk_notification_drafts nd ON nd.group_id = g.id
                 WHERE
@@ -188,7 +198,7 @@ def get_search_suggestions(
                     OR SMART_NORM(nd.title) LIKE ?
                     OR SMART_NORM(nd.body) LIKE ?
                 GROUP BY g.id
-                ORDER BY g.name COLLATE NOCASE
+                ORDER BY LOWER(g.name), g.name
                 LIMIT 80
                 """,
                 [pattern] * 12,
@@ -356,15 +366,15 @@ def universal_search(query: str):
                 SELECT
                     e.*,
                     COUNT(CASE WHEN ek.status = 'active' THEN 1 END) AS key_count,
-                    GROUP_CONCAT(
+                    STRING_AGG(
                         CASE WHEN ek.status = 'active' THEN k.number END,
-                        ' '
+                        ' ' ORDER BY ek.issued_at DESC, ek.id DESC
                     ) AS key_numbers
                 FROM employees e
                 LEFT JOIN employee_keys ek ON ek.employee_id = e.id
                 LEFT JOIN keys k ON k.id = ek.key_id
                 GROUP BY e.id
-                ORDER BY e.enabled DESC, e.full_name COLLATE NOCASE
+                ORDER BY e.enabled DESC, LOWER(e.full_name), e.full_name
                 LIMIT 800
                 """
             )
@@ -390,7 +400,12 @@ def universal_search(query: str):
                 """
                 SELECT *
                 FROM panels
-                ORDER BY enabled DESC, address COLLATE NOCASE, entrance COLLATE NOCASE
+                ORDER BY
+                    enabled DESC,
+                    LOWER(address),
+                    address,
+                    LOWER(COALESCE(entrance, '')),
+                    COALESCE(entrance, '')
                 LIMIT 1500
                 """
             )
@@ -422,7 +437,7 @@ def universal_search(query: str):
                 LEFT JOIN uk_group_panels gp ON gp.group_id = g.id
                 LEFT JOIN uk_group_keys gk ON gk.group_id = g.id
                 GROUP BY g.id
-                ORDER BY g.name COLLATE NOCASE
+                ORDER BY LOWER(g.name), g.name
                 LIMIT 500
                 """
             )

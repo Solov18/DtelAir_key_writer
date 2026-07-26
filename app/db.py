@@ -1,10 +1,9 @@
 """SQLAlchemy 2 database access.
 
-Application repositories historically use small SQL strings.  ``db()`` keeps
-their compact API while every statement now runs through a SQLAlchemy
-``Session``.  The adapter is intentionally temporary-friendly: it accepts the
-old positional ``?`` parameters and rewrites the small SQLite-only SQL surface
-for PostgreSQL without changing repository business rules.
+Application repositories historically use small SQL strings. ``db()`` keeps
+their compact API while every statement runs through a SQLAlchemy ``Session``.
+Working SQL must be PostgreSQL-native; this module only converts positional
+``?`` parameters to SQLAlchemy named parameters.
 """
 
 from __future__ import annotations
@@ -12,23 +11,16 @@ from __future__ import annotations
 import re
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
-from pathlib import Path
 from threading import RLock
 from typing import Any
 
-from sqlalchemy import Engine, create_engine, event, inspect, text
+from sqlalchemy import Engine, create_engine, inspect, text
 from sqlalchemy.engine import Result
 from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import NullPool
 
 from app.models import TABLES_WITH_ID, metadata
-from app.search_utils import normalize_search_text
 from app.settings import settings
 
-
-# Compatibility for the existing isolated unit tests.  Production never reads
-# APP_DB_PATH and always uses DATABASE_URL from settings/.env.
-DB_PATH: Path | None = None
 
 _engine: Engine | None = None
 _session_factory: sessionmaker[Session] | None = None
@@ -106,8 +98,6 @@ class CompatResult:
 
 
 def _current_database_url() -> str:
-    if DB_PATH is not None:
-        return f"sqlite+pysqlite:///{Path(DB_PATH).resolve().as_posix()}"
     return settings.database_url
 
 
@@ -116,6 +106,11 @@ def configure_database(database_url: str | None = None) -> Engine:
 
     global _engine, _session_factory, _configured_url
     target_url = database_url or _current_database_url()
+    if not target_url.startswith("postgresql+psycopg://"):
+        raise ValueError(
+            "Рабочая база должна использовать DATABASE_URL вида "
+            "postgresql+psycopg://..."
+        )
 
     with _lock:
         if _engine is not None and _configured_url == target_url:
@@ -127,20 +122,12 @@ def configure_database(database_url: str | None = None) -> Engine:
         if target_url.startswith("postgresql"):
             connect_args["connect_timeout"] = settings.database_connect_timeout
 
-        engine_options: dict[str, Any] = {
-            "pool_pre_ping": True,
-            "echo": settings.database_echo,
-            "connect_args": connect_args,
-        }
-        if target_url.startswith("sqlite"):
-            engine_options["poolclass"] = NullPool
-
         engine = create_engine(
             target_url,
-            **engine_options,
+            pool_pre_ping=True,
+            echo=settings.database_echo,
+            connect_args=connect_args,
         )
-        if engine.dialect.name == "sqlite":
-            _configure_sqlite_test_engine(engine)
 
         _engine = engine
         _session_factory = sessionmaker(
@@ -155,22 +142,6 @@ def configure_database(database_url: str | None = None) -> Engine:
 
 def get_engine() -> Engine:
     return configure_database()
-
-
-def _configure_sqlite_test_engine(engine: Engine) -> None:
-    """SQLite support is restricted to tests and the one-way import source."""
-
-    @event.listens_for(engine, "connect")
-    def _on_connect(dbapi_connection: Any, _connection_record: Any) -> None:
-        cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA foreign_keys = ON")
-        cursor.close()
-        dbapi_connection.create_function(
-            "SMART_NORM",
-            1,
-            normalize_search_text,
-            deterministic=True,
-        )
 
 
 def _convert_qmark_parameters(
@@ -215,150 +186,9 @@ def _convert_qmark_parameters(
     return "".join(output), bindings
 
 
-def _strip_function(sql: str, function_name: str) -> str:
-    """Remove a one-argument wrapper while preserving nested expressions."""
-
-    needle = function_name.lower() + "("
-    result = sql
-    search_from = 0
-    while True:
-        start = result.lower().find(needle, search_from)
-        if start < 0:
-            return result
-        open_paren = start + len(function_name)
-        depth = 0
-        quote: str | None = None
-        close_paren = -1
-        for index in range(open_paren, len(result)):
-            char = result[index]
-            if quote:
-                if char == quote:
-                    quote = None
-                continue
-            if char in {"'", '"'}:
-                quote = char
-            elif char == "(":
-                depth += 1
-            elif char == ")":
-                depth -= 1
-                if depth == 0:
-                    close_paren = index
-                    break
-        if close_paren < 0:
-            return result
-        inner = result[open_paren + 1 : close_paren]
-        result = result[:start] + inner + result[close_paren + 1 :]
-        search_from = start + len(inner)
-
-
-def _split_top_level_comma(value: str) -> tuple[str, str | None]:
-    depth = 0
-    quote: str | None = None
-    for index, char in enumerate(value):
-        if quote:
-            if char == quote:
-                quote = None
-            continue
-        if char in {"'", '"'}:
-            quote = char
-        elif char == "(":
-            depth += 1
-        elif char == ")":
-            depth -= 1
-        elif char == "," and depth == 0:
-            return value[:index].strip(), value[index + 1 :].strip()
-    return value.strip(), None
-
-
-def _replace_group_concat(sql: str) -> str:
-    result = sql
-    search_from = 0
-    needle = "group_concat("
-    while True:
-        start = result.lower().find(needle, search_from)
-        if start < 0:
-            return result
-        open_paren = start + len("group_concat")
-        depth = 0
-        quote: str | None = None
-        close_paren = -1
-        for index in range(open_paren, len(result)):
-            char = result[index]
-            if quote:
-                if char == quote:
-                    quote = None
-                continue
-            if char in {"'", '"'}:
-                quote = char
-            elif char == "(":
-                depth += 1
-            elif char == ")":
-                depth -= 1
-                if depth == 0:
-                    close_paren = index
-                    break
-        if close_paren < 0:
-            return result
-
-        expression, separator = _split_top_level_comma(
-            result[open_paren + 1 : close_paren]
-        )
-        separator = separator or "','"
-        if expression.upper().startswith("DISTINCT "):
-            expression = expression[9:].strip()
-            replacement = (
-                f"STRING_AGG(DISTINCT CAST({expression} AS TEXT), {separator})"
-            )
-        else:
-            replacement = f"STRING_AGG(CAST({expression} AS TEXT), {separator})"
-        result = result[:start] + replacement + result[close_paren + 1 :]
-        search_from = start + len(replacement)
-
-
-def _rewrite_postgresql_sql(sql: str) -> str:
-    rewritten = _replace_group_concat(sql)
-    rewritten = _strip_function(rewritten, "datetime")
-    rewritten = re.sub(
-        r"\bCURRENT_TIMESTAMP\b",
-        "CAST(CURRENT_TIMESTAMP AS TEXT)",
-        rewritten,
-        flags=re.IGNORECASE,
-    )
-    rewritten = re.sub(
-        r"([\w.]+)\s*=\s*\?\s+COLLATE\s+NOCASE",
-        r"LOWER(\1) = LOWER(?)",
-        rewritten,
-        flags=re.IGNORECASE,
-    )
-    rewritten = re.sub(
-        r"([\w.]+)\s+COLLATE\s+NOCASE",
-        r"LOWER(\1)",
-        rewritten,
-        flags=re.IGNORECASE,
-    )
-    rewritten = re.sub(
-        r"([\w.]+)\s+NOT\s+GLOB\s+'\*\[\^0-9\]\*'",
-        r"\1 !~ '[^0-9]'",
-        rewritten,
-        flags=re.IGNORECASE,
-    )
-    is_insert_ignore = bool(
-        re.search(r"\bINSERT\s+OR\s+IGNORE\s+INTO\b", rewritten, re.IGNORECASE)
-    )
-    rewritten = re.sub(
-        r"\bINSERT\s+OR\s+IGNORE\s+INTO\b",
-        "INSERT INTO",
-        rewritten,
-        flags=re.IGNORECASE,
-    )
-    if is_insert_ignore:
-        rewritten = rewritten.rstrip().rstrip(";") + " ON CONFLICT DO NOTHING"
-    return rewritten
-
-
 def _insert_table_name(sql: str) -> str | None:
     match = re.match(
-        r"^\s*INSERT\s+(?:OR\s+IGNORE\s+)?INTO\s+([A-Za-z_][A-Za-z0-9_]*)",
+        r"^\s*INSERT\s+INTO\s+([A-Za-z_][A-Za-z0-9_]*)",
         sql,
         re.IGNORECASE,
     )
@@ -370,8 +200,6 @@ class DatabaseSession:
 
     def __init__(self, session: Session):
         self.session = session
-        bind = session.get_bind()
-        self.dialect_name = bind.dialect.name
 
     def execute(
         self,
@@ -379,8 +207,6 @@ class DatabaseSession:
         params: Sequence[Any] | Mapping[str, Any] | None = None,
     ) -> CompatResult:
         original_sql = sql
-        if self.dialect_name == "postgresql":
-            sql = _rewrite_postgresql_sql(sql)
 
         parameters: Mapping[str, Any]
         if params is None:
@@ -393,8 +219,7 @@ class DatabaseSession:
         insert_table = _insert_table_name(original_sql)
         returns_insert_id = False
         if (
-            self.dialect_name == "postgresql"
-            and insert_table in TABLES_WITH_ID
+            insert_table in TABLES_WITH_ID
             and not re.search(r"\bRETURNING\b", sql, re.IGNORECASE)
         ):
             sql = sql.rstrip().rstrip(";") + " RETURNING id"
@@ -412,9 +237,6 @@ class DatabaseSession:
         if not parameter_sets:
             result = self.session.execute(text("SELECT 1 WHERE 0 = 1"))
             return CompatResult(result)
-        if self.dialect_name == "postgresql":
-            sql = _rewrite_postgresql_sql(sql)
-
         first = parameter_sets[0]
         if isinstance(first, Mapping):
             bindings = [dict(item) for item in parameter_sets]  # type: ignore[arg-type]
@@ -457,13 +279,9 @@ def db() -> Iterator[DatabaseSession]:
 
 
 def init_db() -> None:
-    """Validate PostgreSQL schema; create metadata only for isolated tests."""
+    """Validate the PostgreSQL connection and migrated schema."""
 
     engine = configure_database()
-    if engine.dialect.name == "sqlite":
-        metadata.create_all(engine)
-        return
-
     with engine.connect() as connection:
         connection.execute(text("SELECT 1"))
 

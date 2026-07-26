@@ -30,14 +30,15 @@ def _employee_card_query(enabled: int) -> str:
                   AND active_count.status = 'active'
             ) AS active_key_count,
             (
-                SELECT STRING_AGG(
-                    active_key.number,
-                    ' · ' ORDER BY active_ek.issued_at DESC, active_ek.id DESC
+                SELECT GROUP_CONCAT(number, ' · ')
+                FROM (
+                    SELECT active_key.number AS number
+                    FROM employee_keys active_ek
+                    JOIN keys active_key ON active_key.id = active_ek.key_id
+                    WHERE active_ek.employee_id = e.id
+                      AND active_ek.status = 'active'
+                    ORDER BY datetime(active_ek.issued_at) DESC, active_ek.id DESC
                 )
-                FROM employee_keys active_ek
-                JOIN keys active_key ON active_key.id = active_ek.key_id
-                WHERE active_ek.employee_id = e.id
-                  AND active_ek.status = 'active'
             ) AS active_key_numbers,
             (
                 SELECT active_key.number
@@ -45,7 +46,7 @@ def _employee_card_query(enabled: int) -> str:
                 JOIN keys active_key ON active_key.id = active_ek.key_id
                 WHERE active_ek.employee_id = e.id
                   AND active_ek.status = 'active'
-                ORDER BY active_ek.issued_at DESC, active_ek.id DESC
+                ORDER BY datetime(active_ek.issued_at) DESC, active_ek.id DESC
                 LIMIT 1
             ) AS active_key_number,
             (
@@ -53,7 +54,7 @@ def _employee_card_query(enabled: int) -> str:
                 FROM employee_keys active_ek
                 WHERE active_ek.employee_id = e.id
                   AND active_ek.status = 'active'
-                ORDER BY active_ek.issued_at DESC, active_ek.id DESC
+                ORDER BY datetime(active_ek.issued_at) DESC, active_ek.id DESC
                 LIMIT 1
             ) AS active_key_comment,
 
@@ -70,18 +71,14 @@ def _employee_card_query(enabled: int) -> str:
                 JOIN keys k ON k.id = last_ek.key_id
                 WHERE last_ek.employee_id = e.id
                 ORDER BY
-                    COALESCE(
-                        NULLIF(last_ek.closed_at, ''),
-                        NULLIF(last_ek.updated_at, ''),
-                        last_ek.created_at
-                    ) DESC,
+                    datetime(COALESCE(last_ek.closed_at, last_ek.updated_at, last_ek.created_at)) DESC,
                     last_ek.id DESC
                 LIMIT 1
             ) AS last_key_number
 
         FROM employees e
         WHERE e.enabled = ?
-        ORDER BY LOWER(e.full_name), e.full_name
+        ORDER BY e.full_name COLLATE NOCASE
     """
 
 
@@ -134,7 +131,7 @@ def get_employee_by_name(full_name: str) -> dict | None:
             SELECT *
             FROM employees
             WHERE enabled = 1
-              AND LOWER(full_name) = LOWER(?)
+              AND full_name = ? COLLATE NOCASE
             LIMIT 1
             """,
             (normalized_name,),
@@ -213,14 +210,10 @@ def get_employee_filter_options() -> dict:
             row[0]
             for row in conn.execute(
                 """
-                SELECT department
-                FROM (
-                    SELECT DISTINCT department
-                    FROM employees
-                    WHERE enabled = 1
-                      AND TRIM(department) <> ''
-                ) AS distinct_departments
-                ORDER BY LOWER(department), department
+                SELECT DISTINCT department
+                FROM employees
+                WHERE enabled = 1 AND TRIM(department) <> ''
+                ORDER BY department COLLATE NOCASE
                 """
             )
         ]
@@ -228,14 +221,10 @@ def get_employee_filter_options() -> dict:
             row[0]
             for row in conn.execute(
                 """
-                SELECT position
-                FROM (
-                    SELECT DISTINCT position
-                    FROM employees
-                    WHERE enabled = 1
-                      AND TRIM(position) <> ''
-                ) AS distinct_positions
-                ORDER BY LOWER(position), position
+                SELECT DISTINCT position
+                FROM employees
+                WHERE enabled = 1 AND TRIM(position) <> ''
+                ORDER BY position COLLATE NOCASE
                 """
             )
         ]
@@ -315,8 +304,8 @@ def get_employee_page(
     page_size = min(100, max(10, int(page_size or 20)))
 
     select_sql = _employee_card_query(1).replace(
-        "WHERE e.enabled = ?\n        ORDER BY LOWER(e.full_name), e.full_name",
-        f"WHERE {where_sql}\n        ORDER BY LOWER(e.full_name), e.full_name",
+        "WHERE e.enabled = ?\n        ORDER BY e.full_name COLLATE NOCASE",
+        f"WHERE {where_sql}\n        ORDER BY e.full_name COLLATE NOCASE",
     )
 
     with db() as conn:
@@ -478,7 +467,7 @@ def get_employee_active_keys(employee_id: int) -> list[dict]:
 
             WHERE ek.employee_id = ?
               AND ek.status = 'active'
-            ORDER BY ek.issued_at DESC, ek.id DESC
+            ORDER BY datetime(ek.issued_at) DESC, ek.id DESC
             """,
             (employee_id,),
         ).fetchall()
@@ -519,11 +508,7 @@ def get_employee_key_history(employee_id: int) -> list[dict]:
               AND ek.status <> 'active'
 
             ORDER BY
-                COALESCE(
-                    NULLIF(ek.closed_at, ''),
-                    NULLIF(ek.updated_at, ''),
-                    ek.created_at
-                ) DESC,
+                datetime(COALESCE(ek.closed_at, ek.updated_at, ek.created_at)) DESC,
                 ek.id DESC
             """,
             (employee_id,),
@@ -560,7 +545,7 @@ def get_employee_keys(employee_id: int) -> list[dict]:
 
             ORDER BY
                 CASE WHEN ek.status = 'active' THEN 0 ELSE 1 END,
-                ek.issued_at DESC,
+                datetime(ek.issued_at) DESC,
                 ek.id DESC
             """,
             (employee_id,),

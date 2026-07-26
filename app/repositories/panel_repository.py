@@ -336,7 +336,12 @@ def get_panel_page(
             SELECT *
             FROM panels
             WHERE {where_sql}
-            ORDER BY address COLLATE NOCASE, entrance COLLATE NOCASE, id
+            ORDER BY
+                LOWER(address),
+                address,
+                LOWER(COALESCE(entrance, '')),
+                COALESCE(entrance, ''),
+                id
             LIMIT ? OFFSET ?
             """,
             [*params, page_size, (page - 1) * page_size],
@@ -371,7 +376,16 @@ def get_panels_for_status_refresh(panel_ids: list[int]) -> list[dict]:
 def get_all_panels() -> list[dict]:
     with db() as conn:
         rows = conn.execute(
-            "SELECT * FROM panels ORDER BY address COLLATE NOCASE, entrance COLLATE NOCASE, id"
+            """
+            SELECT *
+            FROM panels
+            ORDER BY
+                LOWER(address),
+                address,
+                LOWER(COALESCE(entrance, '')),
+                COALESCE(entrance, ''),
+                id
+            """
         ).fetchall()
     return [normalize_panel_row(row) for row in rows]
 

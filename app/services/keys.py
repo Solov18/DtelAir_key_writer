@@ -42,10 +42,10 @@ def find_keys(number_or_hex: str, key_type_id: int | None = None) -> list[dict]:
         number_rows = conn.execute(
             _key_select()
             + f"""
-                WHERE k.number = ? COLLATE NOCASE
+                WHERE LOWER(k.number) = LOWER(?)
                   AND TRIM(k.hex_value) <> ''
                 {type_filter}
-                ORDER BY kt.name COLLATE NOCASE, k.id
+                ORDER BY LOWER(kt.name), kt.name, k.id
             """,
             params,
         ).fetchall()
@@ -58,7 +58,7 @@ def find_keys(number_or_hex: str, key_type_id: int | None = None) -> list[dict]:
                 _key_select()
                 + """
                     WHERE UPPER(k.hex_value) = ?
-                    ORDER BY kt.name COLLATE NOCASE, k.id
+                    ORDER BY LOWER(kt.name), kt.name, k.id
                 """,
                 (hex_value,),
             ).fetchall()

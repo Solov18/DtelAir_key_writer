@@ -162,7 +162,7 @@ def import_keys_file(
             existing = conn.execute(
                 """
                 SELECT * FROM keys
-                WHERE key_type_id = ? AND number = ? COLLATE NOCASE
+                WHERE key_type_id = ? AND LOWER(number) = LOWER(?)
                 LIMIT 1
                 """,
                 (key_type_id, number),
