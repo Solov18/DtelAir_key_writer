@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+
+{% block page_name %}Роли и права{% endblock %}
+
+{% block content %}
+<div class="settings-page roles-page">
+    <div class="settings-hero">
+        <div>
+            <a class="page-back-link" href="/settings">← Настройки</a>
+            <span class="page-kicker">Контроль доступа</span>
+            <h1>Роли и права</h1>
+            <p class="subtitle">Изменения применяются со следующего HTTP-запроса пользователя.</p>
+        </div>
+        <a class="btn btn-ghost" href="/users">Пользователи →</a>
+    </div>
+
+    <div class="roles-workspace">
+        <aside class="panel roles-sidebar">
+            <div class="roles-sidebar-title"><h2>Роли</h2><span>{{ roles|length }}</span></div>
+            <nav class="roles-list">
+                {% for role in roles %}
+                <a href="/settings/roles?selected_role_id={{ role.id }}" class="{% if selected_role and selected_role.id == role.id %}is-active{% endif %}">
+                    <span><b>{{ role.name }}</b><small>{{ role.user_count }} польз.</small></span>
+                    {% if role.is_system %}<em>Системная</em>{% endif %}
+                </a>
+                {% endfor %}
+            </nav>
+            <details class="role-create">
+                <summary>+ Создать роль</summary>
+                <form method="post" action="/settings/roles/create">
+                    <label>Название<input name="name" required maxlength="100"></label>
+                    <label>Описание<textarea name="description" rows="3"></textarea></label>
+                    <fieldset>
+                        <legend>Разрешения</legend>
+                        {% for permission in permissions %}
+                        <label class="permission-check"><input type="checkbox" name="permissions" value="{{ permission.code }}"><span><b>{{ permission.name }}</b><small>{{ permission.description }}</small></span></label>
+                        {% endfor %}
+                    </fieldset>
+                    <button class="btn" type="submit">Создать роль</button>
+                </form>
+            </details>
+        </aside>
+
+        {% if selected_role %}
+        <section class="panel role-editor">
+            <form method="post" action="/settings/roles/{{ selected_role.id }}/update">
+                <div class="role-editor-head">
+                    <div>
+                        <span class="page-kicker">{{ "Системная роль" if selected_role.is_system else "Пользовательская роль" }}</span>
+                        <h2>{{ selected_role.name }}</h2>
+                    </div>
+                    <button class="btn" type="submit">Сохранить изменения</button>
+                </div>
+                <div class="role-main-fields">
+                    <label>Название<input name="name" value="{{ selected_role.name }}" required maxlength="100"></label>
+                    <label>Описание<input name="description" value="{{ selected_role.description or '' }}" maxlength="500"></label>
+                </div>
+                <div class="permission-grid">
+                    {% for permission in permissions %}
+                    {% set locked = selected_role.code == 'admin' and permission.code in critical_permissions %}
+                    <label class="permission-card {% if permission.code in selected_role.permissions %}is-enabled{% endif %} {% if locked %}is-locked{% endif %}">
+                        <input type="checkbox" name="permissions" value="{{ permission.code }}"
+                               {% if permission.code in selected_role.permissions %}checked{% endif %}
+                               {% if locked %}disabled{% endif %}>
+                        {% if locked %}<input type="hidden" name="permissions" value="{{ permission.code }}">{% endif %}
+                        <span><b>{{ permission.name }}</b><small>{{ permission.description }}</small></span>
+                        <em>{{ "Обязательно" if locked else "Разрешено" }}</em>
+                    </label>
+                    {% endfor %}
+                </div>
+            </form>
+
+            <div class="role-users">
+                <div><h3>Пользователи с этой ролью</h3><span>{{ role_users|length }}</span></div>
+                {% if role_users %}
+                    {% for user in role_users %}
+                    <a href="/users"><b>{{ user.full_name }}</b><span>@{{ user.login }} · {{ "активен" if user.active else "отключён" }}</span></a>
+                    {% endfor %}
+                {% else %}
+                    <p>Роль пока никому не назначена.</p>
+                {% endif %}
+            </div>
+
+            {% if not selected_role.is_system %}
+            <form method="post" action="/settings/roles/{{ selected_role.id }}/delete" class="role-delete-form">
+                <button type="submit" class="danger-btn" data-confirm="Роль «{{ selected_role.name }}» будет удалена, если она не назначена пользователям." data-confirm-title="Удалить роль?" data-confirm-action="Удалить роль">Удалить роль</button>
+            </form>
+            {% endif %}
+        </section>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

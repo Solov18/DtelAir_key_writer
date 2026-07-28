@@ -404,7 +404,7 @@
 .operations-head,
 .operations-row {
     display: grid;
-    grid-template-columns: 90px minmax(120px, 1.15fr) minmax(70px, .75fr) minmax(90px, .85fr) minmax(110px, .9fr);
+    grid-template-columns: 112px minmax(120px, 1.15fr) minmax(76px, .75fr) minmax(96px, .85fr) minmax(110px, .9fr);
     gap: 12px;
     align-items: center;
 }
@@ -422,6 +422,33 @@
     color: var(--text);
     font-size: 13px;
     border-bottom: 1px solid var(--soft);
+}
+
+.operations-row > * {
+    min-width: 0;
+}
+
+.operation-time {
+    display: grid;
+    gap: 2px;
+    line-height: 1.15;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.operation-time time {
+    font-weight: 700;
+}
+
+.operation-time small {
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.operation-cell {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .operations-row:last-child {

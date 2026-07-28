@@ -175,16 +175,11 @@ def get_search_suggestions(
                     g.phone,
                     g.email,
                     g.legal_address,
-                    g.contract_number,
-                    g.account_manager,
-                    g.cooperation_note,
-                    STRING_AGG(
-                        nd.title,
-                        ' ' ORDER BY nd.created_at DESC, nd.id DESC
-                    ) AS notification_titles
+                    g.actual_address,
+                    g.crm_login
                 FROM uk_groups g
-                LEFT JOIN uk_notification_drafts nd ON nd.group_id = g.id
-                WHERE
+                WHERE g.archived_at IS NULL
+                  AND (
                     SMART_NORM(g.name) LIKE ?
                     OR SMART_NORM(g.legal_name) LIKE ?
                     OR SMART_NORM(g.note) LIKE ?
@@ -192,16 +187,13 @@ def get_search_suggestions(
                     OR SMART_NORM(g.phone) LIKE ?
                     OR SMART_NORM(g.email) LIKE ?
                     OR SMART_NORM(g.legal_address) LIKE ?
-                    OR SMART_NORM(g.contract_number) LIKE ?
-                    OR SMART_NORM(g.account_manager) LIKE ?
-                    OR SMART_NORM(g.cooperation_note) LIKE ?
-                    OR SMART_NORM(nd.title) LIKE ?
-                    OR SMART_NORM(nd.body) LIKE ?
-                GROUP BY g.id
+                    OR SMART_NORM(g.actual_address) LIKE ?
+                    OR SMART_NORM(g.crm_login) LIKE ?
+                  )
                 ORDER BY LOWER(g.name), g.name
                 LIMIT 80
                 """,
-                [pattern] * 12,
+                [pattern] * 9,
             ).fetchall()
             candidates.extend(
                 {
@@ -212,7 +204,7 @@ def get_search_suggestions(
                         for value in (
                             row["contact_name"],
                             row["phone"],
-                            row["contract_number"],
+                            row["actual_address"] or row["legal_address"],
                         )
                         if value
                     ) or "Управляющая компания",
@@ -226,10 +218,8 @@ def get_search_suggestions(
                             "phone",
                             "email",
                             "legal_address",
-                            "contract_number",
-                            "account_manager",
-                            "cooperation_note",
-                            "notification_titles",
+                            "actual_address",
+                            "crm_login",
                         )
                     ),
                 }
@@ -430,12 +420,25 @@ def universal_search(query: str):
             for row in conn.execute(
                 """
                 SELECT
-                    g.*,
-                    COUNT(DISTINCT gp.panel_id) AS panel_count,
-                    COUNT(DISTINCT gk.key_id) AS key_count
+                    g.id,
+                    g.name,
+                    g.legal_name,
+                    g.note,
+                    g.contact_name,
+                    g.phone,
+                    g.email,
+                    g.legal_address,
+                    g.actual_address,
+                    g.crm_login,
+                    COUNT(DISTINCT pl.panel_id)
+                        FILTER (WHERE pl.active IS TRUE) AS panel_count,
+                    COUNT(DISTINCT ki.key_id)
+                        FILTER (WHERE ki.status IN ('pending', 'active'))
+                        AS key_count
                 FROM uk_groups g
-                LEFT JOIN uk_group_panels gp ON gp.group_id = g.id
-                LEFT JOIN uk_group_keys gk ON gk.group_id = g.id
+                LEFT JOIN uk_panel_links pl ON pl.uk_group_id = g.id
+                LEFT JOIN uk_key_issues ki ON ki.uk_group_id = g.id
+                WHERE g.archived_at IS NULL
                 GROUP BY g.id
                 ORDER BY LOWER(g.name), g.name
                 LIMIT 500
@@ -453,9 +456,8 @@ def universal_search(query: str):
                 "phone",
                 "email",
                 "legal_address",
-                "contract_number",
-                "account_manager",
-                "cooperation_note",
+                "actual_address",
+                "crm_login",
             ),
             limit=20,
         )

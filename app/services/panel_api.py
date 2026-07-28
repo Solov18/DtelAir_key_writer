@@ -27,14 +27,22 @@ def _base_url(panel: dict) -> str:
     return f"http://{host}"
 
 
-def _http_request(method: str, url: str, **kwargs) -> requests.Response:
+def _http_request(
+    method: str,
+    url: str,
+    *,
+    session: requests.Session | None = None,
+    **kwargs,
+) -> requests.Response:
     """Send panel requests directly, without workstation proxy settings."""
-    session = requests.Session()
+    owned_session = session is None
+    session = session or requests.Session()
     session.trust_env = False
     try:
         return session.request(method, url, **kwargs)
     finally:
-        session.close()
+        if owned_session:
+            session.close()
 
 
 def _request(
@@ -43,6 +51,7 @@ def _request(
     path: str,
     *,
     expect_json: bool = True,
+    session: requests.Session | None = None,
 ) -> tuple[requests.Response, Any, int]:
     if not panel_api_configured():
         raise PanelApiError(
@@ -55,6 +64,7 @@ def _request(
         response = _http_request(
             method,
             f"{_base_url(panel)}{path}",
+            session=session,
             auth=HTTPBasicAuth(
                 settings.panel_api_login.strip(),
                 settings.panel_api_password,
@@ -96,11 +106,13 @@ def _firmware_name(payload: dict) -> str:
 
 def check_panel(panel: dict) -> dict:
     started = time.perf_counter()
+    session = requests.Session()
+    session.trust_env = False
     try:
-        _, info, _ = _request(panel, "GET", "/system/info")
+        _, info, _ = _request(panel, "GET", "/system/info", session=session)
         supply_voltage = None
         try:
-            _, mcu_info, _ = _request(panel, "GET", "/v1/mcu/info")
+            _, mcu_info, _ = _request(panel, "GET", "/v1/mcu/info", session=session)
             if isinstance(mcu_info, dict):
                 power = mcu_info.get("power")
                 if isinstance(power, dict):
@@ -111,7 +123,7 @@ def check_panel(panel: dict) -> dict:
 
         firmware = ""
         try:
-            _, versions, _ = _request(panel, "GET", "/v2/system/versions")
+            _, versions, _ = _request(panel, "GET", "/v2/system/versions", session=session)
             firmware = _firmware_name(versions if isinstance(versions, dict) else {})
         except PanelApiError as error:
             if error.status in {"auth_error", "offline", "not_configured"}:
@@ -138,6 +150,8 @@ def check_panel(panel: dict) -> dict:
             "response_time_ms": None,
             "last_error": str(error),
         }
+    finally:
+        session.close()
 
 
 def get_panel_snapshot(panel: dict) -> tuple[bytes, str]:

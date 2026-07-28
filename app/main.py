@@ -6,6 +6,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.db import init_db
 from app.settings import settings
+from app.services.panel_monitor import panel_monitor_worker
 from app.routers import (
     auth,
     home,
@@ -45,6 +46,12 @@ app.mount(
 @app.on_event("startup")
 def startup():
     init_db()
+    panel_monitor_worker.start()
+
+
+@app.on_event("shutdown")
+def shutdown():
+    panel_monitor_worker.stop()
 
 app.include_router(auth.router)
 app.include_router(home.router)

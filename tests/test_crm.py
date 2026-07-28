@@ -215,6 +215,62 @@ class CrmServiceTests(unittest.TestCase):
         self.assertEqual(result["status"], "VALIDATION_ERROR")
         session_factory.assert_not_called()
 
+    def test_company_credentials_use_isolated_session(self):
+        self.configure(crm_buyer_id="42")
+        session = FakeSession()
+
+        with patch.object(crm.requests, "Session", return_value=session):
+            result = crm.crm_add_key_for_company(
+                "08:13:CD:00:1D:C2",
+                "363FFAD7",
+                "150",
+                0,
+                login="uk-operator",
+                password="uk-secret",
+            )
+
+        self.assertTrue(result["written"])
+        self.assertEqual([call[0] for call in session.calls], ["GET", "POST", "POST"])
+        login_payload = session.calls[1][2]["json"]
+        self.assertEqual(login_payload["username"], "uk-operator")
+        self.assertEqual(login_payload["password"], "uk-secret")
+        self.assertEqual(session.calls[2][2]["json"]["flatNum"], "150")
+
+    def test_company_dry_run_does_not_open_session_or_authorize(self):
+        self.configure(dry_run=True, crm_buyer_id="42")
+
+        with patch.object(crm.requests, "Session") as session_factory:
+            result = crm.crm_add_key_for_company(
+                "08:13:CD:00:1D:C2",
+                "363FFAD7",
+                "150",
+                0,
+                login="uk-operator",
+                password="uk-secret",
+            )
+
+        self.assertEqual(result["status"], "DRY_RUN")
+        session_factory.assert_not_called()
+
+    def test_company_remove_is_an_explicit_separate_request(self):
+        self.configure(crm_buyer_id="42")
+        session = FakeSession()
+
+        with patch.object(crm.requests, "Session", return_value=session):
+            result = crm.crm_remove_key_for_company(
+                "08:13:CD:00:1D:C2",
+                "363FFAD7",
+                "87",
+                0,
+                login="uk-operator",
+                password="uk-secret",
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertFalse(result["written"])
+        self.assertTrue(session.calls[2][1].endswith("/delete-key"))
+        self.assertEqual(session.calls[2][2]["json"]["flatNum"], "87")
+
 
 if __name__ == "__main__":
     unittest.main()

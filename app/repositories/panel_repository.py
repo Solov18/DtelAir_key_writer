@@ -1,5 +1,6 @@
 import math
 import re
+from datetime import datetime, timezone
 
 from app.db import db
 from app.search_utils import normalize_search_text
@@ -12,7 +13,8 @@ PANEL_STATUS_LABELS = {
     "error": "Ошибка API",
     "no_ip": "Нет IP",
     "not_configured": "API не настроен",
-    "unknown": "Не проверялась",
+    "unknown": "Не проверено",
+    "checking": "Проверяется",
     "disabled": "Отключена",
 }
 
@@ -24,6 +26,7 @@ PANEL_STATUS_TONES = {
     "no_ip": "muted",
     "not_configured": "warning",
     "unknown": "muted",
+    "checking": "info",
     "disabled": "muted",
 }
 
@@ -43,15 +46,51 @@ def format_uptime(seconds) -> str:
     return f"{hours:02d}:{minutes:02d}"
 
 
-def normalize_panel_row(row) -> dict:
+def _voltage_tone(value) -> str:
+    if value in (None, ""):
+        return "missing"
+    try:
+        voltage = float(value)
+    except (TypeError, ValueError):
+        return "missing"
+    return "normal" if 12.8 <= voltage <= 13.5 else "alert"
+
+
+def _is_stale(value, stale_after_seconds: int) -> bool:
+    if not isinstance(value, datetime):
+        return False
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - value).total_seconds() > stale_after_seconds
+
+
+def normalize_panel_row(
+    row,
+    *,
+    checking_panel_ids: set[int] | None = None,
+    stale_after_seconds: int = 600,
+) -> dict:
     item = dict(row)
-    status = "disabled" if not item.get("enabled") else (item.get("api_status") or "unknown")
+    if not item.get("enabled"):
+        status = "disabled"
+    elif checking_panel_ids and int(item["id"]) in checking_panel_ids:
+        status = "checking"
+    elif not item.get("last_checked_at"):
+        status = "unknown"
+    else:
+        status = item.get("api_status") or "unknown"
     if status not in PANEL_STATUS_LABELS:
         status = "error"
     item["network_status"] = status
     item["status_name"] = PANEL_STATUS_LABELS[status]
     item["status_tone"] = PANEL_STATUS_TONES[status]
     item["uptime_text"] = format_uptime(item.get("uptime_seconds"))
+    item["voltage_tone"] = _voltage_tone(item.get("supply_voltage"))
+    item["is_stale"] = bool(
+        item.get("enabled")
+        and item.get("last_checked_at")
+        and _is_stale(item.get("last_checked_at"), stale_after_seconds)
+    )
     configured_mac = normalize_mac(item.get("mac", ""))
     reported_mac = normalize_mac(item.get("reported_mac", ""))
     item["mac_matches"] = not reported_mac or configured_mac == reported_mac
@@ -117,18 +156,28 @@ def build_internal_name(
     return address
 
 
-def get_enabled_panels() -> list[dict]:
+def get_enabled_panels(skip_checked_within_seconds: int = 0) -> list[dict]:
+    recent_condition = ""
+    params: tuple = ()
+    if skip_checked_within_seconds > 0:
+        recent_condition = (
+            "AND (last_checked_at IS NULL OR "
+            "last_checked_at < CURRENT_TIMESTAMP - (? * INTERVAL '1 second'))"
+        )
+        params = (max(1, int(skip_checked_within_seconds)),)
     with db() as conn:
         rows = conn.execute(
-            """
+            f"""
             SELECT *
             FROM panels
             WHERE enabled = 1
+              {recent_condition}
             ORDER BY
                 address,
                 entrance,
                 id
-            """
+            """,
+            params,
         ).fetchall()
 
     return [normalize_panel_row(row) for row in rows]
@@ -207,29 +256,38 @@ def get_panels_by_tag(
     return [normalize_panel_row(row) for row in rows]
 
 
-def get_panel_statistics() -> dict:
+def get_panel_statistics(stale_after_seconds: int = 600) -> dict:
     with db() as conn:
         row = conn.execute(
             """
             SELECT
                 COUNT(*) AS total,
-                SUM(CASE WHEN enabled = 1 AND api_status = 'online' THEN 1 ELSE 0 END) AS online,
-                SUM(CASE WHEN enabled = 1 AND api_status = 'offline' THEN 1 ELSE 0 END) AS offline,
-                SUM(CASE WHEN enabled = 1 AND api_status IN ('auth_error', 'error') THEN 1 ELSE 0 END) AS errors,
+                SUM(CASE WHEN enabled = 1 AND last_checked_at IS NOT NULL AND api_status = 'online' THEN 1 ELSE 0 END) AS online,
+                SUM(CASE WHEN enabled = 1 AND last_checked_at IS NOT NULL AND api_status = 'offline' THEN 1 ELSE 0 END) AS offline,
+                SUM(CASE WHEN enabled = 1 AND last_checked_at IS NOT NULL AND api_status IN ('auth_error', 'error', 'no_ip', 'not_configured') THEN 1 ELSE 0 END) AS errors,
                 SUM(CASE WHEN enabled = 0 THEN 1 ELSE 0 END) AS disabled,
                 SUM(
                     CASE
                         WHEN enabled = 1
-                         AND COALESCE(api_status, 'unknown') NOT IN ('online', 'offline', 'auth_error', 'error')
+                         AND last_checked_at IS NULL
                         THEN 1 ELSE 0
                     END
                 ) AS unchecked,
+                SUM(
+                    CASE
+                        WHEN enabled = 1
+                         AND last_checked_at IS NOT NULL
+                         AND last_checked_at < CURRENT_TIMESTAMP - (? * INTERVAL '1 second')
+                        THEN 1 ELSE 0
+                    END
+                ) AS stale,
                 MAX(last_checked_at) AS last_checked_at
             FROM panels
-            """
+            """,
+            (max(30, int(stale_after_seconds)),),
         ).fetchone()
     result = dict(row)
-    for key in ("total", "online", "offline", "errors", "disabled", "unchecked"):
+    for key in ("total", "online", "offline", "errors", "disabled", "unchecked", "stale"):
         result[key] = int(result.get(key) or 0)
     result["online_percent"] = (
         round(result["online"] / result["total"] * 100)
@@ -265,7 +323,12 @@ def get_panel_filter_options() -> dict:
                 """
             )
         ]
-    return {"addresses": addresses, "entrances": entrances}
+    return {
+        "addresses": addresses,
+        "entrances": entrances,
+        "address_options": [(value, value) for value in addresses],
+        "entrance_options": [(value, value) for value in entrances],
+    }
 
 
 def get_panel_page(
@@ -276,6 +339,8 @@ def get_panel_page(
     entrance: str = "",
     page: int = 1,
     page_size: int = 20,
+    stale_after_seconds: int = 600,
+    checking_panel_ids: set[int] | None = None,
 ) -> dict:
     conditions = ["1 = 1"]
     params: list = []
@@ -308,15 +373,22 @@ def get_panel_page(
     if status == "disabled":
         conditions.append("enabled = 0")
     elif status == "online":
-        conditions.append("enabled = 1 AND api_status = 'online'")
+        conditions.append("enabled = 1 AND last_checked_at IS NOT NULL AND api_status = 'online'")
     elif status == "offline":
-        conditions.append("enabled = 1 AND api_status = 'offline'")
+        conditions.append("enabled = 1 AND last_checked_at IS NOT NULL AND api_status = 'offline'")
     elif status == "error":
-        conditions.append("enabled = 1 AND api_status IN ('auth_error', 'error')")
-    elif status == "unchecked":
         conditions.append(
-            "enabled = 1 AND COALESCE(api_status, 'unknown') NOT IN ('online', 'offline', 'auth_error', 'error')"
+            "enabled = 1 AND last_checked_at IS NOT NULL "
+            "AND api_status IN ('auth_error', 'error', 'no_ip', 'not_configured')"
         )
+    elif status == "unchecked":
+        conditions.append("enabled = 1 AND last_checked_at IS NULL")
+    elif status == "stale":
+        conditions.append(
+            "enabled = 1 AND last_checked_at IS NOT NULL "
+            "AND last_checked_at < CURRENT_TIMESTAMP - (? * INTERVAL '1 second')"
+        )
+        params.append(max(30, int(stale_after_seconds)))
 
     where_sql = " AND ".join(conditions)
     page_size = min(100, max(10, int(page_size or 20)))
@@ -348,7 +420,14 @@ def get_panel_page(
         ).fetchall()
 
     return {
-        "items": [normalize_panel_row(row) for row in rows],
+        "items": [
+            normalize_panel_row(
+                row,
+                checking_panel_ids=checking_panel_ids,
+                stale_after_seconds=stale_after_seconds,
+            )
+            for row in rows
+        ],
         "total": total,
         "page": page,
         "pages": pages,
@@ -432,6 +511,21 @@ def update_panel_api_status(panel_id: int, result: dict) -> None:
                 panel_id,
             ),
         )
+
+
+def seconds_since_last_check(panel_id: int) -> float | None:
+    with db() as conn:
+        row = conn.execute(
+            """
+            SELECT EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - last_checked_at))
+            FROM panels
+            WHERE id = ? AND last_checked_at IS NOT NULL
+            """,
+            (panel_id,),
+        ).fetchone()
+    if not row or row[0] is None:
+        return None
+    return max(0.0, float(row[0]))
 
 
 def set_panel_enabled(panel_id: int, enabled: bool) -> None:
@@ -565,18 +659,23 @@ def delete_panel(
     """
     Полностью удаляет панель из базы.
 
-    Сначала удаляет её связи с управляющими компаниями,
-    затем саму панель.
+    Исторические и активные связи с УК не удаляются автоматически.
     """
 
     with db() as conn:
-        conn.execute(
+        linked = conn.execute(
             """
-            DELETE FROM uk_group_panels
+            SELECT 1
+            FROM uk_panel_links
             WHERE panel_id = ?
+            LIMIT 1
             """,
             (panel_id,),
-        )
+        ).fetchone()
+        if linked:
+            raise ValueError(
+                "Панель связана с историей УК и не может быть удалена."
+            )
 
         conn.execute(
             """

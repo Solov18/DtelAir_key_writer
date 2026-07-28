@@ -357,7 +357,7 @@ saveAllButton.addEventListener("click", async () => {
     for (const input of candidates) await saveScannedHex(input, false);
 });
 
-finishBatchButton.addEventListener("click", (event) => {
+finishBatchButton.addEventListener("click", async (event) => {
     const counts = rowCounts();
     if (counts.saving || counts.dirty || counts.errors) {
         event.preventDefault();
@@ -366,10 +366,18 @@ finishBatchButton.addEventListener("click", (event) => {
         return;
     }
     const untouched = scanRows.length - counts.saved;
-    if (untouched > 0 && !window.confirm(
-        `Без HEX осталось строк: ${untouched}. Они не будут добавлены в базу. Завершить подготовку?`
-    )) {
+    if (untouched > 0) {
         event.preventDefault();
+        const accepted = await window.showDangerConfirm({
+            title: "Завершить подготовку?",
+            message: `Без HEX осталось строк: ${untouched}. Они не будут добавлены в базу.`,
+            confirmText: "Завершить",
+            cancelText: "Продолжить ввод",
+            source: finishBatchButton,
+        });
+        if (!accepted) return;
+        allowPageExit = true;
+        window.location.assign(finishBatchButton.href);
         return;
     }
     allowPageExit = true;

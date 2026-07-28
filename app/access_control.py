@@ -1,45 +1,31 @@
-ROLE_DEFINITIONS = {
-    "admin": {
-        "label": "Администратор",
-        "description": "Полный доступ, настройки системы и управление пользователями.",
-        "permissions": {
-            "view",
-            "write_keys",
-            "manage_registry",
-            "manage_users",
-            "manage_settings",
-        },
-    },
-    "operator": {
-        "label": "Оператор",
-        "description": "Поиск, работа с реестрами и запись ключей без системных настроек.",
-        "permissions": {
-            "view",
-            "write_keys",
-            "manage_registry",
-        },
-    },
-    "viewer": {
-        "label": "Наблюдатель",
-        "description": "Только просмотр, поиск и учебные проверки без изменений.",
-        "permissions": {"view"},
-    },
+PERMISSION_LABELS = {
+    "view": "Просмотр",
+    "write_keys": "Запись ключей",
+    "manage_keys": "Управление ключами",
+    "manage_panels": "Управление панелями",
+    "manage_uk": "Управление УК",
+    "manage_employees": "Управление сотрудниками",
+    "view_logs": "Просмотр журналов",
+    "manage_users": "Управление пользователями",
+    "manage_settings": "Системные настройки",
 }
 
-ROLE_ORDER = ("admin", "operator", "viewer")
+SYSTEM_ROLE_LABELS = {
+    "admin": "Администратор",
+    "operator": "Оператор",
+    "viewer": "Наблюдатель",
+}
 
 
 def normalize_role(role: str) -> str:
-    return role if role in ROLE_DEFINITIONS else "viewer"
+    return str(role or "viewer")
 
 
 def role_label(role: str) -> str:
-    return ROLE_DEFINITIONS[normalize_role(role)]["label"]
+    return SYSTEM_ROLE_LABELS.get(normalize_role(role), normalize_role(role))
 
 
 def has_permission(user: dict | None, permission: str) -> bool:
     if not user or not int(user.get("active", 1)):
         return False
-    role = normalize_role(str(user.get("role") or ""))
-    return permission in ROLE_DEFINITIONS[role]["permissions"]
-
+    return permission in set(user.get("permissions") or [])

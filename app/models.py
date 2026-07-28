@@ -1,17 +1,15 @@
-"""SQLAlchemy 2 table metadata for the application database.
-
-The project intentionally uses SQLAlchemy Core tables instead of ORM mapped
-classes.  Two legacy linking tables do not have primary keys, and inventing
-ORM identities for them would change the factual database structure.
-"""
+"""SQLAlchemy 2 Core metadata for the PostgreSQL application database."""
 
 from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
     Column,
     DateTime,
     Float,
     ForeignKey,
     Index,
     Integer,
+    JSON,
     MetaData,
     Table,
     Text,
@@ -88,6 +86,48 @@ employees = Table(
 )
 
 
+roles = Table(
+    "roles",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("code", Text, nullable=False, unique=True),
+    Column("name", Text, nullable=False),
+    Column("description", Text, nullable=False, server_default=text("''")),
+    Column("is_system", Boolean, nullable=False, server_default=text("false")),
+    Column("created_at", Text, nullable=False, server_default=_now_text),
+    Column("updated_at", Text, nullable=False, server_default=_now_text),
+)
+Index("uq_roles_name_ci", func.lower(roles.c.name), unique=True)
+
+
+permissions = Table(
+    "permissions",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("code", Text, nullable=False, unique=True),
+    Column("name", Text, nullable=False),
+    Column("description", Text, nullable=False, server_default=text("''")),
+)
+
+
+role_permissions = Table(
+    "role_permissions",
+    metadata,
+    Column(
+        "role_id",
+        Integer,
+        ForeignKey("roles.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "permission_id",
+        Integer,
+        ForeignKey("permissions.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+)
+
+
 users = Table(
     "users",
     metadata,
@@ -95,7 +135,12 @@ users = Table(
     Column("full_name", Text, nullable=False),
     Column("login", Text, nullable=False, unique=True),
     Column("password_hash", Text, nullable=False),
-    Column("role", Text, nullable=False, server_default=text("'operator'")),
+    Column(
+        "role_id",
+        Integer,
+        ForeignKey("roles.id", ondelete="RESTRICT"),
+        nullable=False,
+    ),
     Column("active", Integer, server_default=text("1")),
     Column("created_at", Text, server_default=_now_text),
     Column("last_login", Text, server_default=text("''")),
@@ -130,6 +175,24 @@ panels = Table(
 Index("idx_panels_api_status", panels.c.enabled, panels.c.api_status)
 Index("idx_panels_address_entrance", panels.c.address, panels.c.entrance)
 
+panel_monitor_state = Table(
+    "panel_monitor_state",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("status", Text, nullable=False, server_default=text("'idle'")),
+    Column("total", Integer, nullable=False, server_default=text("0")),
+    Column("completed", Integer, nullable=False, server_default=text("0")),
+    Column("online", Integer, nullable=False, server_default=text("0")),
+    Column("failed", Integer, nullable=False, server_default=text("0")),
+    Column("active_panel_ids", JSON, nullable=False, server_default=text("'[]'::json")),
+    Column("requested_at", DateTime(timezone=True)),
+    Column("started_at", DateTime(timezone=True)),
+    Column("finished_at", DateTime(timezone=True)),
+    Column("heartbeat_at", DateTime(timezone=True)),
+    Column("requested_by", Text, nullable=False, server_default=text("''")),
+    Column("last_error", Text, nullable=False, server_default=text("''")),
+)
+
 
 uk_groups = Table(
     "uk_groups",
@@ -144,38 +207,173 @@ uk_groups = Table(
     Column("phone", Text, server_default=text("''")),
     Column("email", Text, server_default=text("''")),
     Column("legal_address", Text, server_default=text("''")),
-    Column("contract_number", Text, server_default=text("''")),
+    Column("actual_address", Text, server_default=text("''")),
     Column("created_by", Text, server_default=text("''")),
-    Column("updated_at", Text, server_default=text("''")),
-    Column(
-        "cooperation_status",
-        Text,
-        nullable=False,
-        server_default=text("'potential'"),
-    ),
-    Column("account_manager", Text, server_default=text("''")),
-    Column("next_contact_at", Text, server_default=text("''")),
-    Column("cooperation_note", Text, server_default=text("''")),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("archived_at", DateTime(timezone=True)),
 )
 Index("idx_uk_groups_name", uk_groups.c.name)
 
 
-# These two legacy tables deliberately have neither PKs nor FKs.  Their factual
-# structure is retained; see docs/database.md for the associated integrity risk.
-uk_group_panels = Table(
-    "uk_group_panels",
+uk_panel_links = Table(
+    "uk_panel_links",
     metadata,
-    Column("group_id", Integer, nullable=False),
-    Column("panel_id", Integer, nullable=False),
-    UniqueConstraint("group_id", "panel_id"),
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column(
+        "uk_group_id",
+        Integer,
+        ForeignKey("uk_groups.id", ondelete="RESTRICT"),
+        nullable=False,
+    ),
+    Column(
+        "panel_id",
+        Integer,
+        ForeignKey("panels.id", ondelete="RESTRICT"),
+        nullable=False,
+    ),
+    Column("apartment", Text, nullable=False),
+    Column("comment", Text, server_default=text("''")),
+    Column("active", Boolean, nullable=False, server_default=text("true")),
+    Column("created_by", Text, server_default=text("''")),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("detached_at", DateTime(timezone=True)),
 )
+Index(
+    "uq_uk_panel_links_group_panel_active",
+    uk_panel_links.c.uk_group_id,
+    uk_panel_links.c.panel_id,
+    unique=True,
+    postgresql_where=uk_panel_links.c.active.is_(True),
+)
+Index(
+    "uq_uk_panel_links_panel_active",
+    uk_panel_links.c.panel_id,
+    unique=True,
+    postgresql_where=uk_panel_links.c.active.is_(True),
+)
+Index("idx_uk_panel_links_group", uk_panel_links.c.uk_group_id, uk_panel_links.c.active)
 
-uk_group_keys = Table(
-    "uk_group_keys",
+
+uk_key_issues = Table(
+    "uk_key_issues",
     metadata,
-    Column("group_id", Integer, nullable=False),
-    Column("key_id", Integer, nullable=False),
-    UniqueConstraint("group_id", "key_id"),
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column(
+        "uk_group_id",
+        Integer,
+        ForeignKey("uk_groups.id", ondelete="RESTRICT"),
+        nullable=False,
+    ),
+    Column(
+        "key_id",
+        Integer,
+        ForeignKey("keys.id", ondelete="RESTRICT"),
+        nullable=False,
+    ),
+    Column("status", Text, nullable=False, server_default=text("'pending'")),
+    Column("comment", Text, server_default=text("''")),
+    Column("issued_by", Text, server_default=text("''")),
+    Column("issued_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("released_at", DateTime(timezone=True)),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    CheckConstraint(
+        "status IN ('pending', 'active', 'released', 'archived')",
+        name="ck_uk_key_issues_status",
+    ),
+)
+Index(
+    "uq_uk_key_issues_key_active",
+    uk_key_issues.c.key_id,
+    unique=True,
+    postgresql_where=uk_key_issues.c.status.in_(("pending", "active")),
+)
+Index("idx_uk_key_issues_group", uk_key_issues.c.uk_group_id, uk_key_issues.c.status)
+
+
+uk_key_programmings = Table(
+    "uk_key_programmings",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column(
+        "issue_id",
+        Integer,
+        ForeignKey("uk_key_issues.id", ondelete="RESTRICT"),
+        nullable=False,
+    ),
+    Column(
+        "panel_link_id",
+        Integer,
+        ForeignKey("uk_panel_links.id", ondelete="RESTRICT"),
+        nullable=False,
+    ),
+    Column("apartment", Text, nullable=False),
+    Column("is_primary", Boolean, nullable=False, server_default=text("false")),
+    Column("active", Boolean, nullable=False, server_default=text("true")),
+    Column("status", Text, nullable=False, server_default=text("'pending'")),
+    Column("last_error", Text, server_default=text("''")),
+    Column("programmed_at", DateTime(timezone=True)),
+    Column("removed_at", DateTime(timezone=True)),
+    Column("unlinked_at", DateTime(timezone=True)),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    CheckConstraint(
+        "status IN ('pending', 'success', 'error', 'dry_run', 'unlinked', 'removed')",
+        name="ck_uk_key_programmings_status",
+    ),
+)
+Index(
+    "uq_uk_key_programmings_issue_panel_active",
+    uk_key_programmings.c.issue_id,
+    uk_key_programmings.c.panel_link_id,
+    unique=True,
+    postgresql_where=uk_key_programmings.c.active.is_(True),
+)
+Index(
+    "uq_uk_key_programmings_primary_active",
+    uk_key_programmings.c.issue_id,
+    unique=True,
+    postgresql_where=(
+        uk_key_programmings.c.active.is_(True)
+        & uk_key_programmings.c.is_primary.is_(True)
+    ),
+)
+Index("idx_uk_key_programmings_issue", uk_key_programmings.c.issue_id, uk_key_programmings.c.active)
+
+
+uk_crm_operations = Table(
+    "uk_crm_operations",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column(
+        "programming_id",
+        Integer,
+        ForeignKey("uk_key_programmings.id", ondelete="RESTRICT"),
+        nullable=False,
+    ),
+    Column("operation", Text, nullable=False),
+    Column("status", Text, nullable=False),
+    Column("idempotency_key", Text, nullable=False, unique=True),
+    Column("attempt_number", Integer, nullable=False, server_default=text("1")),
+    Column("safe_response", Text, server_default=text("''")),
+    Column("requested_by", Text, server_default=text("''")),
+    Column("started_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("completed_at", DateTime(timezone=True)),
+    CheckConstraint(
+        "operation IN ('add', 'remove')",
+        name="ck_uk_crm_operations_operation",
+    ),
+    CheckConstraint(
+        "status IN ('pending', 'success', 'error', 'dry_run')",
+        name="ck_uk_crm_operations_status",
+    ),
+)
+Index(
+    "idx_uk_crm_operations_programming",
+    uk_crm_operations.c.programming_id,
+    uk_crm_operations.c.started_at.desc(),
 )
 
 
@@ -298,77 +496,6 @@ operation_log = Table(
     Column("panel_id", Integer),
 )
 Index("idx_operation_log_key_id", operation_log.c.key_id)
-
-
-uk_notification_drafts = Table(
-    "uk_notification_drafts",
-    metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column(
-        "group_id",
-        Integer,
-        ForeignKey("uk_groups.id", ondelete="CASCADE"),
-        nullable=False,
-    ),
-    Column("title", Text, nullable=False),
-    Column("body", Text, nullable=False),
-    Column(
-        "category",
-        Text,
-        nullable=False,
-        server_default=text("'announcement'"),
-    ),
-    Column("channel", Text, nullable=False, server_default=text("'dtel'")),
-    Column("audience", Text, nullable=False, server_default=text("'all'")),
-    Column("audience_details", Text, server_default=text("''")),
-    Column("created_by", Text, server_default=text("''")),
-    Column("created_at", Text, nullable=False, server_default=_now_text),
-    Column("updated_at", Text, nullable=False, server_default=_now_text),
-)
-Index(
-    "idx_uk_notification_drafts_group",
-    uk_notification_drafts.c.group_id,
-    uk_notification_drafts.c.created_at.desc(),
-)
-
-
-# Present in the factual SQLite schema even though current application code no
-# longer exposes it.  It is retained to avoid silently dropping structure.
-uk_integrations = Table(
-    "uk_integrations",
-    metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column(
-        "group_id",
-        Integer,
-        ForeignKey("uk_groups.id", ondelete="CASCADE"),
-        nullable=False,
-    ),
-    Column("service_name", Text, nullable=False),
-    Column("integration_type", Text, nullable=False, server_default=text("'api'")),
-    Column("base_url", Text, server_default=text("''")),
-    Column("login", Text, server_default=text("''")),
-    Column("auth_type", Text, nullable=False, server_default=text("'not_selected'")),
-    Column("status", Text, nullable=False, server_default=text("'planned'")),
-    Column("enabled", Integer, nullable=False, server_default=text("0")),
-    Column("note", Text, server_default=text("''")),
-    Column("last_sync_at", Text, server_default=text("''")),
-    Column("last_error", Text, server_default=text("''")),
-    Column("created_at", Text, nullable=False, server_default=_now_text),
-    Column("updated_at", Text, nullable=False, server_default=_now_text),
-)
-Index(
-    "uq_uk_integrations_group_service_ci",
-    uk_integrations.c.group_id,
-    func.lower(uk_integrations.c.service_name),
-    unique=True,
-)
-Index(
-    "idx_uk_integrations_group",
-    uk_integrations.c.group_id,
-    uk_integrations.c.status,
-    uk_integrations.c.service_name,
-)
 
 
 TABLES_WITH_ID = frozenset(

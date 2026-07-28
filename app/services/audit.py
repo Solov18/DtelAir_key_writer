@@ -1,3 +1,4 @@
+from app.audit_security import redact_audit_text
 from app.db import db
 
 
@@ -25,6 +26,9 @@ def log_event(
     uk_group_id: int | None = None,
     comment: str = "",
 ):
+    details = redact_audit_text(details)
+    response = redact_audit_text(response)
+    comment = redact_audit_text(comment)
     user = request.session.get("user", {}) if request else {}
 
     ip_address = ""

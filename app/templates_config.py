@@ -1,4 +1,5 @@
 from pathlib import Path
+from datetime import datetime
 from urllib.parse import parse_qs
 
 from fastapi import Request
@@ -25,6 +26,23 @@ def notice_code(request: Request) -> str:
     return parse_qs(str(raw_query)).get("notice", [""])[0]
 
 
+def csrf_token(request: Request) -> str:
+    return str(request.session.get("csrf_token") or "")
+
+
+def format_datetime(value) -> str:
+    if value in (None, ""):
+        return "—"
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value)
+        except ValueError:
+            return value
+    if isinstance(value, datetime):
+        return value.strftime("%d.%m.%Y %H:%M:%S")
+    return str(value)
+
+
 templates.env.globals["current_user"] = current_user
 templates.env.globals["operation_status_name"] = operation_status_name
 templates.env.globals["operation_status_tone"] = operation_status_tone
@@ -34,3 +52,5 @@ templates.env.globals["training_mode"] = (
     lambda request: bool(request.session.get("training_mode"))
 )
 templates.env.globals["notice_code"] = notice_code
+templates.env.globals["csrf_token"] = csrf_token
+templates.env.globals["format_datetime"] = format_datetime

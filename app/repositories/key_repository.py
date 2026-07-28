@@ -921,9 +921,9 @@ def set_key_assignment_on_connection(
     if not (stored_key["hex_value"] or "").strip():
         raise ValueError("Ключ без HEX нельзя назначить.")
 
-    # Синхронизируем старые разделы сотрудников и УК с единым текущим
-    # назначением. Иначе один физический ключ продолжал отображаться сразу
-    # в нескольких местах после переноса.
+    # Синхронизируем раздел сотрудников с единым текущим назначением.
+    # Выдачи УК хранятся отдельно в uk_key_issues, а здесь остаётся общая
+    # проекция назначения для реестра и истории ключа.
     if assignment_type != "employee":
         conn.execute(
             """
@@ -934,25 +934,6 @@ def set_key_assignment_on_connection(
                 updated_at = CURRENT_TIMESTAMP
             WHERE key_id = ? AND status = 'active'
             """,
-            (key_id,),
-        )
-
-    if assignment_type == "uk" and uk_group_id:
-        conn.execute(
-            "DELETE FROM uk_group_keys WHERE key_id = ? AND group_id <> ?",
-            (key_id, uk_group_id),
-        )
-        conn.execute(
-            """
-            INSERT INTO uk_group_keys(group_id, key_id)
-            VALUES (?, ?)
-            ON CONFLICT (group_id, key_id) DO NOTHING
-            """,
-            (uk_group_id, key_id),
-        )
-    else:
-        conn.execute(
-            "DELETE FROM uk_group_keys WHERE key_id = ?",
             (key_id,),
         )
 
@@ -1093,10 +1074,6 @@ def release_key_on_connection(conn, key_id: int, note: str = "") -> None:
         WHERE key_id = ? AND status = 'active'
         """,
         ((note or "").strip(), (note or "").strip(), key_id),
-    )
-    conn.execute(
-        "DELETE FROM uk_group_keys WHERE key_id = ?",
-        (key_id,),
     )
     conn.execute(
         """

@@ -57,6 +57,38 @@ def crm_auth_configured() -> bool:
     return bool(_normalize_cookie(settings.crm_cookie) or _has_login_credentials())
 
 
+def check_crm_connection() -> dict:
+    """Authenticate and perform one read-only request without exposing secrets."""
+    if not crm_auth_configured():
+        return {
+            "ok": False,
+            "message": "CRM не настроена: задайте Cookie или логин, пароль и Buyer ID.",
+        }
+    try:
+        with _crm_lock:
+            _reset_session()
+            session = _get_session()
+            response = session.get(
+                f"{_base_url()}/",
+                headers={"Content-Type": None},
+                timeout=settings.request_timeout,
+                allow_redirects=False,
+            )
+            if _is_auth_response(response):
+                raise CrmAuthError("CRM отклонила текущие данные авторизации")
+            if response.status_code >= 500:
+                raise CrmAuthError(f"CRM временно недоступна: HTTP {response.status_code}")
+            return {
+                "ok": True,
+                "message": f"CRM доступна, сервер ответил HTTP {response.status_code}.",
+            }
+    except (CrmAuthError, requests.RequestException) as error:
+        return {
+            "ok": False,
+            "message": str(error)[:300] or "Не удалось проверить подключение к CRM.",
+        }
+
+
 def _extract_csrf(html: str) -> str:
     parser = _CsrfParser()
     parser.feed(html or "")
@@ -236,6 +268,211 @@ def _send_create_key(
         json=payload,
         timeout=settings.request_timeout,
         allow_redirects=False,
+    )
+
+
+def _send_delete_key(
+    session: requests.Session,
+    url: str,
+    payload: dict,
+) -> requests.Response:
+    return session.post(
+        url,
+        json=payload,
+        timeout=settings.request_timeout,
+        allow_redirects=False,
+    )
+
+
+def _login_explicit(
+    session: requests.Session,
+    *,
+    login: str,
+    password: str,
+) -> None:
+    """Authenticate an isolated UK session without touching global settings."""
+
+    if not login.strip() or not password or not settings.crm_buyer_id.strip():
+        raise CrmAuthError("Для УК не настроены полные реквизиты CRM")
+
+    login_page = session.get(
+        f"{_base_url()}/site/auth",
+        headers={
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Content-Type": None,
+            "Origin": None,
+            "X-Requested-With": None,
+        },
+        timeout=settings.request_timeout,
+    )
+    if login_page.status_code != 200:
+        raise CrmAuthError(
+            f"CRM не открыла страницу входа: HTTP {login_page.status_code}"
+        )
+    csrf_token = _extract_csrf(login_page.text)
+    if not csrf_token:
+        raise CrmAuthError("CRM не вернула CSRF-токен для входа")
+
+    response = session.post(
+        f"{_base_url()}/site/auth/login",
+        json={
+            "buyer": settings.crm_buyer_id.strip(),
+            "username": login.strip(),
+            "password": password,
+            "rememberMe": False,
+        },
+        headers={"X-CSRF-Token": csrf_token},
+        timeout=settings.request_timeout,
+        allow_redirects=False,
+    )
+    try:
+        data = response.json()
+    except ValueError as error:
+        raise CrmAuthError("CRM вернула некорректный ответ при входе") from error
+    if not response.ok or data.get("result") is not True:
+        raise CrmAuthError("CRM отклонила реквизиты управляющей компании")
+    session.headers["X-CSRF-Token"] = csrf_token
+
+
+def _company_key_operation(
+    *,
+    operation: str,
+    mac: str,
+    hex_value: str,
+    flat_num: str,
+    inner: int,
+    login: str,
+    password: str,
+) -> dict:
+    clean_mac = (mac or "").strip().upper()
+    clean_hex = (hex_value or "").strip().upper()
+    payload = {
+        "value": clean_hex,
+        "numberSystem": "16",
+        "flatNum": str(flat_num or "0"),
+        "inner": int(inner),
+    }
+    validation_error = _validate_write_data(clean_mac, clean_hex)
+    if validation_error:
+        return _result(
+            ok=False,
+            status="VALIDATION_ERROR",
+            response=validation_error,
+        )
+    if settings.dry_run:
+        return _result(
+            ok=True,
+            status="DRY_RUN",
+            response="Тестовый режим: запрос в CRM не отправлен",
+        )
+
+    endpoint = "create-key" if operation == "add" else "delete-key"
+    url = f"{_base_url()}/front/device-keys/{clean_mac}/{endpoint}"
+    sender = _send_create_key if operation == "add" else _send_delete_key
+    session = _new_session()
+    session.headers.pop("Cookie", None)
+    try:
+        _login_explicit(session, login=login, password=password)
+        response = sender(session, url, payload)
+        if _is_auth_response(response):
+            return _result(
+                ok=False,
+                status="AUTH_REQUIRED",
+                response="Авторизация CRM для управляющей компании истекла",
+            )
+        if not response.ok:
+            return _result(
+                ok=False,
+                status=f"HTTP_{response.status_code}",
+                response=_response_text(response),
+            )
+        try:
+            data = response.json()
+        except ValueError:
+            return _result(
+                ok=False,
+                status="INVALID_RESPONSE",
+                response=_response_text(response),
+            )
+        ok = data.get("result") is True
+        message = _message_text(data.get("message"))
+        return _result(
+            ok=ok,
+            written=ok and operation == "add",
+            status="SUCCESS" if ok else "CRM_ERROR",
+            response=message or (
+                "Ключ успешно записан"
+                if ok and operation == "add"
+                else "Ключ успешно удалён"
+                if ok
+                else "CRM отклонила операцию"
+            ),
+        )
+    except CrmAuthError as error:
+        return _result(
+            ok=False,
+            status="AUTH_REQUIRED",
+            response=str(error),
+        )
+    except requests.Timeout:
+        return _result(
+            ok=False,
+            status="TIMEOUT",
+            response="CRM не ответила за отведённое время",
+        )
+    except requests.RequestException:
+        return _result(
+            ok=False,
+            status="CONNECTION_ERROR",
+            response="Ошибка соединения с CRM",
+        )
+    except Exception:
+        return _result(
+            ok=False,
+            status="ERROR",
+            response="Непредвиденная ошибка CRM-операции",
+        )
+    finally:
+        session.close()
+
+
+def crm_add_key_for_company(
+    mac: str,
+    hex_value: str,
+    flat_num: str,
+    inner: int,
+    *,
+    login: str,
+    password: str,
+) -> dict:
+    return _company_key_operation(
+        operation="add",
+        mac=mac,
+        hex_value=hex_value,
+        flat_num=flat_num,
+        inner=inner,
+        login=login,
+        password=password,
+    )
+
+
+def crm_remove_key_for_company(
+    mac: str,
+    hex_value: str,
+    flat_num: str,
+    inner: int,
+    *,
+    login: str,
+    password: str,
+) -> dict:
+    return _company_key_operation(
+        operation="remove",
+        mac=mac,
+        hex_value=hex_value,
+        flat_num=flat_num,
+        inner=inner,
+        login=login,
+        password=password,
     )
 
 

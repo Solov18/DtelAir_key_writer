@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+
+{% block page_name %}CRM и подключения{% endblock %}
+
+{% block content %}
+<div class="settings-page">
+    <div class="settings-hero">
+        <div>
+            <a class="page-back-link" href="/settings">← Настройки</a>
+            <span class="page-kicker">Подключения</span>
+            <h1>CRM DTEL</h1>
+            <p class="subtitle">Параметры читаются из <code>.env</code>. Из браузера изменить их нельзя.</p>
+        </div>
+    </div>
+
+    {% if check_result %}
+    <div class="settings-check-banner {{ 'is-success' if check_result.ok else 'is-error' }}">
+        <b>{{ "Подключение доступно" if check_result.ok else "Проверка не пройдена" }}</b>
+        <span>{{ check_result.message }}</span>
+    </div>
+    {% endif %}
+
+    <div class="crm-settings-layout">
+        <section class="panel crm-config-card">
+            <div class="settings-title">
+                <span>01</span>
+                <div><h2>Параметры среды</h2><p>Секретные значения никогда не передаются на эту страницу.</p></div>
+            </div>
+            <div class="crm-config-list">
+                <div><span>CRM_BASE_URL</span><strong>{{ crm_base_url }}</strong></div>
+                <div><span>Таймаут запросов</span><strong>{{ crm_timeout }} сек.</strong></div>
+                <div><span>CRM_BUYER_ID</span><strong class="{{ 'is-good' if crm_buyer_id_ready else 'is-warning' }}">{{ "Задано" if crm_buyer_id_ready else "Не задано" }}</strong></div>
+                <div><span>CRM_LOGIN</span><strong class="{{ 'is-good' if crm_login_ready else 'is-warning' }}">{{ "Задано" if crm_login_ready else "Не задано" }}</strong></div>
+                <div><span>CRM_PASSWORD</span><strong class="{{ 'is-good' if crm_password_ready else 'is-warning' }}">{{ "Задано" if crm_password_ready else "Не задано" }}</strong></div>
+                <div><span>CRM_COOKIE</span><strong class="{{ 'is-good' if crm_cookie_ready else 'is-warning' }}">{{ "Задано" if crm_cookie_ready else "Не задано" }}</strong></div>
+            </div>
+        </section>
+
+        <aside class="panel crm-check-card">
+            <span class="page-kicker">Безопасная проверка</span>
+            <h2>Проверить соединение</h2>
+            <p>Проверка использует текущую конфигурацию сервера. Значения секретов не выводятся и не записываются в журнал.</p>
+            <form method="post" action="/settings/crm/check">
+                <button class="btn" type="submit" data-confirm="Выполнить реальный запрос к CRM с текущими настройками?">Проверить подключение →</button>
+            </form>
+            <small>После изменения <code>.env</code> необходимо перезапустить приложение.</small>
+        </aside>
+    </div>
+
+    <section class="panel settings-env-help">
+        <h2>Где менять настройки</h2>
+        <p>Остановите приложение, измените переменные CRM в файле <code>.env</code> на сервере и запустите приложение снова. Интерфейс намеренно не принимает и не сохраняет секреты.</p>
+    </section>
+</div>
+{% endblock %}

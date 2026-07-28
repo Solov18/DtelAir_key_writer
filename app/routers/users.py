@@ -1,42 +1,45 @@
-from fastapi import APIRouter, Request, Form
+from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from app.access_control import has_permission
+from app.repositories.role_repository import get_role, get_roles
 from app.repositories.user_repository import (
-    get_users,
-    get_user_by_login,
+    change_user_password,
+    count_admins,
     create_user,
     delete_user,
-    count_admins,
-    change_user_password,
+    get_user_by_login,
     get_user_stats,
+    get_users,
     set_user_active,
-    update_user_role,
+    update_user,
 )
-from app.access_control import ROLE_DEFINITIONS, ROLE_ORDER, role_label
-from app.services.auth import get_current_user, hash_password, is_admin
 from app.services.audit import log_event
+from app.services.auth import get_current_user, hash_password
 from app.templates_config import templates
 
 router = APIRouter()
 
 
+def _can_manage(request: Request) -> bool:
+    return has_permission(get_current_user(request), "manage_users")
+
+
+def _page_context(request: Request, error: str | None = None) -> dict:
+    return {
+        "request": request,
+        "users": get_users(),
+        "stats": get_user_stats(),
+        "roles": get_roles(),
+        "error": error,
+    }
+
+
 @router.get("/users", response_class=HTMLResponse)
 def users_page(request: Request):
-    current_user = get_current_user(request)
-
-    if not is_admin(current_user):
+    if not _can_manage(request):
         return RedirectResponse("/", status_code=303)
-
-    return templates.TemplateResponse(
-        "users.html",
-        {
-            "request": request,
-            "users": get_users(),
-            "stats": get_user_stats(),
-            "roles": ROLE_DEFINITIONS,
-            "role_order": ROLE_ORDER,
-        },
-    )
+    return templates.TemplateResponse("users.html", _page_context(request))
 
 
 @router.post("/users/add")
@@ -45,119 +48,79 @@ def users_add(
     full_name: str = Form(...),
     login: str = Form(...),
     password: str = Form(...),
-    role: str = Form("operator"),
+    role_id: int = Form(...),
 ):
-    current_user = get_current_user(request)
-
-    if not is_admin(current_user):
+    if not _can_manage(request):
         return RedirectResponse("/", status_code=303)
-
     full_name = full_name.strip()
     login = login.strip()
-
+    role = get_role(role_id)
+    if not full_name or not login or not role:
+        return templates.TemplateResponse(
+            "users.html",
+            _page_context(request, "Заполните имя, логин и выберите существующую роль."),
+        )
     if len(password) < 8:
         return RedirectResponse("/users?notice=weak_password", status_code=303)
-
-    if role not in ROLE_DEFINITIONS:
-        role = "operator"
-
     if get_user_by_login(login):
         return templates.TemplateResponse(
             "users.html",
-            {
-                "request": request,
-                "users": get_users(),
-                "stats": get_user_stats(),
-                "roles": ROLE_DEFINITIONS,
-                "role_order": ROLE_ORDER,
-                "error": f"Пользователь с логином '{login}' уже существует",
-            },
-            status_code=200,
+            _page_context(request, f"Пользователь с логином «{login}» уже существует."),
         )
-
-    create_user(
-        full_name=full_name,
-        login=login,
-        password_hash=hash_password(password),
-        role=role,
-    )
-
+    create_user(full_name, login, hash_password(password), role["code"])
     log_event(
         request=request,
         action="user_create",
         object_type="Пользователь",
         object_name=full_name,
         status="success",
-        details=f"Создан пользователь '{login}' с ролью '{role}'",
+        details=f"Создан пользователь с логином «{login}», роль: {role['name']}",
     )
+    return RedirectResponse("/users?notice=user_created", status_code=303)
 
-    return RedirectResponse("/users", status_code=303)
 
-
-@router.post("/users/delete")
-def users_delete(
+@router.post("/users/update")
+def users_update(
     request: Request,
     user_id: int = Form(...),
+    full_name: str = Form(...),
+    login: str = Form(...),
+    role_id: int = Form(...),
 ):
-    current_user = get_current_user(request)
-
-    if not is_admin(current_user):
+    if not _can_manage(request):
         return RedirectResponse("/", status_code=303)
-
-    users = get_users()
-
-    user_to_delete = next(
-        (u for u in users if int(u["id"]) == int(user_id)),
-        None,
-    )
-
-    if not user_to_delete:
-        return RedirectResponse("/users", status_code=303)
-
-    if int(user_id) == int(current_user["id"]):
+    current = get_current_user(request)
+    user = next((item for item in get_users() if item["id"] == user_id), None)
+    role = get_role(role_id)
+    full_name = full_name.strip()
+    login = login.strip()
+    if not user or not role or not full_name or not login:
+        return RedirectResponse("/users?notice=invalid_user", status_code=303)
+    duplicate = get_user_by_login(login)
+    if duplicate and int(duplicate["id"]) != user_id:
         return templates.TemplateResponse(
             "users.html",
-            {
-                "request": request,
-                "users": users,
-                "stats": get_user_stats(),
-                "roles": ROLE_DEFINITIONS,
-                "role_order": ROLE_ORDER,
-                "error": "Нельзя удалить пользователя, под которым вы сейчас вошли",
-            },
-            status_code=200,
+            _page_context(request, f"Логин «{login}» уже занят."),
         )
-
+    if user_id == int(current["id"]) and role["code"] != current["role"]:
+        return RedirectResponse("/users?notice=self_role", status_code=303)
     if (
-        user_to_delete["role"] == "admin"
-        and int(user_to_delete.get("active", 1))
+        user["role"] == "admin"
+        and role["code"] != "admin"
+        and bool(user["active"])
         and count_admins() <= 1
     ):
-        return templates.TemplateResponse(
-            "users.html",
-            {
-                "request": request,
-                "users": users,
-                "stats": get_user_stats(),
-                "roles": ROLE_DEFINITIONS,
-                "role_order": ROLE_ORDER,
-                "error": "Нельзя удалить последнего администратора",
-            },
-            status_code=200,
-        )
-
-    delete_user(user_id)
-
+        return RedirectResponse("/users?notice=last_admin", status_code=303)
+    update_user(user_id, full_name, login, role_id)
     log_event(
         request=request,
-        action="user_delete",
+        action="user_update",
         object_type="Пользователь",
-        object_name=user_to_delete["full_name"],
+        object_name=full_name,
         status="success",
-        details=f"Удалён пользователь '{user_to_delete['login']}'",
+        details=f"Обновлены имя, логин и роль пользователя; роль: {role['name']}",
     )
-
-    return RedirectResponse("/users", status_code=303)
+    return RedirectResponse("/users?notice=user_updated", status_code=303)
 
 
 @router.post("/users/password")
@@ -166,75 +129,23 @@ def users_password(
     user_id: int = Form(...),
     password: str = Form(...),
 ):
-    current_user = get_current_user(request)
-
-    if not is_admin(current_user):
+    if not _can_manage(request):
         return RedirectResponse("/", status_code=303)
-
-    users = get_users()
-
-    user = next(
-        (u for u in users if int(u["id"]) == int(user_id)),
-        None,
-    )
-
+    user = next((item for item in get_users() if item["id"] == user_id), None)
     if not user:
-        return RedirectResponse("/users", status_code=303)
-
+        return RedirectResponse("/users?notice=invalid_user", status_code=303)
     if len(password) < 8:
         return RedirectResponse("/users?notice=weak_password", status_code=303)
-
-    change_user_password(
-        user_id=user_id,
-        password_hash=hash_password(password),
-    )
-
+    change_user_password(user_id, hash_password(password))
     log_event(
         request=request,
         action="user_password_change",
         object_type="Пользователь",
         object_name=user["full_name"],
         status="success",
-        details="Изменён пароль пользователя",
+        details="Пароль пользователя изменён",
     )
-
-    return RedirectResponse("/users", status_code=303)
-
-
-@router.post("/users/role")
-def users_role(
-    request: Request,
-    user_id: int = Form(...),
-    role: str = Form(...),
-):
-    current = get_current_user(request)
-    if not is_admin(current):
-        return RedirectResponse("/", status_code=303)
-    user = next(
-        (item for item in get_users() if int(item["id"]) == int(user_id)),
-        None,
-    )
-    if not user or role not in ROLE_DEFINITIONS:
-        return RedirectResponse("/users?notice=invalid_role", status_code=303)
-    if int(user_id) == int(current["id"]) and role != current["role"]:
-        return RedirectResponse("/users?notice=self_role", status_code=303)
-    if (
-        user["role"] == "admin"
-        and role != "admin"
-        and int(user.get("active", 1))
-        and count_admins() <= 1
-    ):
-        return RedirectResponse("/users?notice=last_admin", status_code=303)
-    update_user_role(user_id, role)
-    log_event(
-        request=request,
-        action="user_role_change",
-        object_type="Пользователь",
-        object_name=user["full_name"],
-        status="success",
-        details=f"Роль изменена: {role_label(role)}",
-    )
-    return RedirectResponse("/users?notice=role_updated", status_code=303)
+    return RedirectResponse("/users?notice=password_updated", status_code=303)
 
 
 @router.post("/users/active")
@@ -243,31 +154,48 @@ def users_active(
     user_id: int = Form(...),
     active: int = Form(...),
 ):
-    current = get_current_user(request)
-    if not is_admin(current):
+    if not _can_manage(request):
         return RedirectResponse("/", status_code=303)
-    user = next(
-        (item for item in get_users() if int(item["id"]) == int(user_id)),
-        None,
-    )
+    current = get_current_user(request)
+    user = next((item for item in get_users() if item["id"] == user_id), None)
+    enabled = bool(active)
     if not user:
-        return RedirectResponse("/users", status_code=303)
-    if int(user_id) == int(current["id"]) and not active:
+        return RedirectResponse("/users?notice=invalid_user", status_code=303)
+    if user_id == int(current["id"]) and not enabled:
         return RedirectResponse("/users?notice=self_disable", status_code=303)
-    if (
-        user["role"] == "admin"
-        and int(user.get("active", 1))
-        and not active
-        and count_admins() <= 1
-    ):
+    if user["role"] == "admin" and bool(user["active"]) and not enabled and count_admins() <= 1:
         return RedirectResponse("/users?notice=last_admin", status_code=303)
-    set_user_active(user_id, bool(active))
+    set_user_active(user_id, enabled)
     log_event(
         request=request,
         action="user_status_change",
         object_type="Пользователь",
         object_name=user["full_name"],
         status="success",
-        details="Доступ включён" if active else "Доступ приостановлен",
+        details="Доступ включён" if enabled else "Доступ приостановлен",
     )
     return RedirectResponse("/users?notice=status_updated", status_code=303)
+
+
+@router.post("/users/delete")
+def users_delete(request: Request, user_id: int = Form(...)):
+    if not _can_manage(request):
+        return RedirectResponse("/", status_code=303)
+    current = get_current_user(request)
+    user = next((item for item in get_users() if item["id"] == user_id), None)
+    if not user:
+        return RedirectResponse("/users?notice=invalid_user", status_code=303)
+    if user_id == int(current["id"]):
+        return RedirectResponse("/users?notice=self_delete", status_code=303)
+    if user["role"] == "admin" and bool(user["active"]) and count_admins() <= 1:
+        return RedirectResponse("/users?notice=last_admin", status_code=303)
+    delete_user(user_id)
+    log_event(
+        request=request,
+        action="user_delete",
+        object_type="Пользователь",
+        object_name=user["full_name"],
+        status="success",
+        details=f"Удалена учётная запись с логином «{user['login']}»",
+    )
+    return RedirectResponse("/users?notice=user_deleted", status_code=303)

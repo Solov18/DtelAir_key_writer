@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+
+{% block page_name %}Журнал безопасности{% endblock %}
+
+{% block content %}
+<div class="settings-page security-page">
+    <div class="settings-hero">
+        <div>
+            <a class="page-back-link" href="/settings">← Настройки</a>
+            <span class="page-kicker">Аудит изменений</span>
+            <h1>Журнал безопасности</h1>
+            <p class="subtitle">Пользователи, роли и системные настройки. Секреты в журнал не записываются.</p>
+        </div>
+        <a class="btn btn-ghost" href="/log">Полный журнал →</a>
+    </div>
+    <section class="panel security-log-card">
+        <div class="security-table-wrap">
+            <table>
+                <thead><tr><th>Дата</th><th>Пользователь</th><th>Действие</th><th>Объект</th><th>Описание</th><th>Статус</th></tr></thead>
+                <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td>{{ row.created_at or row.date or '—' }}</td>
+                    <td>{{ row.user_name or row.username or 'Система' }}</td>
+                    <td>{{ row.action }}</td>
+                    <td>{{ row.object_name or '—' }}</td>
+                    <td>{{ row.details or '—' }}</td>
+                    <td><span class="status-badge status-{{ row.status or 'success' }}">{{ row.status or 'success' }}</span></td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" class="empty-cell">Событий безопасности пока нет.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+{% endblock %}

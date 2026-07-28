@@ -188,7 +188,7 @@
         updateSummary();
     });
 
-    finishButton?.addEventListener("click", (event) => {
+    finishButton?.addEventListener("click", async (event) => {
         const hasDrafts = rows.some((row) => {
             if (row.classList.contains("is-saved")) return false;
             return Boolean(
@@ -196,8 +196,16 @@
                 || row.querySelector(".key-hex-input")?.value.trim()
             );
         });
-        if (hasDrafts && !window.confirm("Есть несохранённые строки. Они останутся в черновике браузера. Завершить?")) {
+        if (hasDrafts) {
             event.preventDefault();
+            const accepted = await window.showConfirm({
+                title: "Завершить ввод?",
+                message: "Есть несохранённые строки. Они останутся в черновике браузера.",
+                confirmText: "Завершить",
+                cancelText: "Продолжить ввод",
+                source: finishButton,
+            });
+            if (accepted) window.location.assign(finishButton.href);
         }
     });
 

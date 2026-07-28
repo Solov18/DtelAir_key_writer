@@ -1,11 +1,14 @@
 import unittest
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 import requests
+from starlette.requests import Request
 
 from tests.postgres_test_case import PostgreSQLTestCase
 
 from app.repositories import panel_repository
+from app.routers import panels as panels_router
 from app.services import panel_api
 
 
@@ -77,6 +80,61 @@ class PanelRepositoryTests(PostgreSQLTestCase):
         self.assertEqual(statistics["online"], 1)
         self.assertEqual(statistics["offline"], 1)
         self.assertEqual(statistics["disabled"], 1)
+        self.assertEqual(statistics["unchecked"], 0)
+
+    def test_unchecked_and_voltage_boundaries_are_not_reported_as_offline(self):
+        unchecked = self._create("Мира 8", "1", "08:13:CD:00:00:07")
+        item = panel_repository.get_panel_by_id(unchecked["id"])
+        self.assertEqual(item["network_status"], "unknown")
+        self.assertEqual(item["status_name"], "Не проверено")
+        self.assertEqual(panel_repository.get_panel_statistics()["offline"], 0)
+
+        for value, expected in (
+            (None, "missing"),
+            (12.79, "alert"),
+            (12.8, "normal"),
+            (13.5, "normal"),
+            (13.51, "alert"),
+        ):
+            row = {**unchecked, "supply_voltage": value}
+            normalized = panel_repository.normalize_panel_row(row)
+            self.assertEqual(normalized["voltage_tone"], expected)
+
+    def test_page_reads_cached_database_values_without_panel_api_calls(self):
+        item = self._create("Курортный 75Д", "Калитка", "08:13:CD:00:00:08")
+        scope = {
+            "type": "http",
+            "http_version": "1.1",
+            "method": "GET",
+            "scheme": "http",
+            "path": "/panels",
+            "raw_path": b"/panels",
+            "query_string": b"",
+            "headers": [],
+            "client": ("127.0.0.1", 1234),
+            "server": ("test", 80),
+            "session": {
+                "user": {
+                    "id": 1,
+                    "login": "admin",
+                    "full_name": "Администратор",
+                    "permissions": ["view", "manage_panels"],
+                }
+            },
+        }
+        request = Request(scope)
+        rendered = Mock()
+        with (
+            patch.object(panels_router.templates, "TemplateResponse", return_value=rendered) as template,
+            patch.object(panels_router, "_is_admin", return_value=True),
+            patch("app.routers.panels.check_panel") as checker,
+        ):
+            result = panels_router.panels_page(request)
+        self.assertIs(result, rendered)
+        checker.assert_not_called()
+        context = template.call_args.args[1]
+        self.assertEqual(context["panels"][0]["id"], item["id"])
+        self.assertIn("monitor_state", context)
 
     def test_status_cache_keeps_last_successful_device_data_on_failure(self):
         item = self._create("Лесная 12", "1", "08:13:CD:00:00:04", "10.0.0.4")
@@ -197,6 +255,16 @@ class PanelApiTests(unittest.TestCase):
         self.assertEqual(content_type, "image/jpeg")
         self.assertEqual(request_mock.call_args_list[0].args[:2], ("GET", "http://10.10.1.15/camera/snapshot"))
         self.assertEqual(request_mock.call_args_list[1].args[:2], ("PUT", "http://10.10.1.15/system/reboot"))
+
+    def test_registry_template_has_monitoring_columns_and_no_eager_camera(self):
+        panels_router.templates.env.get_template("panels.html")
+        source = Path("app/templates/panels.html").read_text(encoding="utf-8")
+        self.assertIn("<th>Температура</th>", source)
+        self.assertIn("<th>Прошивка</th>", source)
+        self.assertNotIn("<th>Панель</th>", source)
+        self.assertNotIn("<th>Последний онлайн</th>", source)
+        self.assertNotIn('<img src="/panels/', source)
+        self.assertIn("loadPanelSnapshot", source)
 
 
 if __name__ == "__main__":

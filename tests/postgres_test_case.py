@@ -69,7 +69,10 @@ def _assert_runtime_context(engine, expected_schema: str | None = None) -> tuple
 def _schema_url(database_url: str, schema: str) -> str:
     url = make_url(database_url)
     scoped = url.update_query_dict(
-        {"options": f"-csearch_path={schema},public"}
+        # Do not include public here.  If public is visible, SQLAlchemy's
+        # has_table() can mistake shared tables for schema-local tables and a
+        # test may read or mutate another test's data.
+        {"options": f"-csearch_path={schema}"}
     )
     return scoped.render_as_string(hide_password=False)
 

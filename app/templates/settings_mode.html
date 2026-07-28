@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+
+{% block page_name %}Режим работы{% endblock %}
+
+{% block content %}
+<div class="settings-page mode-page">
+    <div class="settings-hero">
+        <div>
+            <a class="page-back-link" href="/settings">← Настройки</a>
+            <span class="page-kicker">Безопасность операций</span>
+            <h1>Режим работы</h1>
+            <p class="subtitle">Режим действует только в текущей сессии и использует существующую защиту приложения.</p>
+        </div>
+    </div>
+
+    <section class="panel mode-current {% if training_enabled %}is-training{% endif %}">
+        <div class="training-settings-icon">
+            <svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6z"/><path d="M8 12h8M12 8v8"/></svg>
+        </div>
+        <div>
+            <span class="page-kicker">Текущий режим</span>
+            <h2>{{ "Учебный режим" if training_enabled else "Рабочий режим" }}</h2>
+            <p>{{ "База данных и внешние системы защищены от изменений в этой сессии." if training_enabled else "Разрешённые вашей ролью действия могут менять данные и обращаться к внешним системам." }}</p>
+        </div>
+        <span class="mode-current-badge">{{ "Обучение" if training_enabled else "Работа" }}</span>
+    </section>
+
+    <div class="mode-options">
+        <article class="panel mode-option {% if not training_enabled %}is-selected{% endif %}">
+            <span class="mode-option-number">01</span>
+            <div>
+                <h2>Рабочий режим</h2>
+                <p>Используйте для ежедневной работы. Доступные по роли операции сохраняются в PostgreSQL и могут отправлять запросы в CRM или на панели.</p>
+            </div>
+            <ul>
+                <li>Изменения данных разрешены согласно роли</li>
+                <li>Внешние запросы могут выполняться</li>
+                <li>Все действия записываются в журнал</li>
+            </ul>
+            {% if training_enabled %}
+            <form method="post" action="/settings/training-mode" data-confirm="После переключения разрешённые действия снова смогут изменять данные и обращаться к внешним системам." data-confirm-title="Включить рабочий режим?" data-confirm-action="Переключить режим">
+                <input type="hidden" name="enabled" value="0">
+                <input type="hidden" name="return_to" value="/settings/mode">
+                <button class="btn" type="submit">Включить рабочий режим →</button>
+            </form>
+            {% else %}
+            <span class="mode-selected-label">Текущий режим</span>
+            {% endif %}
+        </article>
+
+        <article class="panel mode-option is-training-option {% if training_enabled %}is-selected{% endif %}">
+            <span class="mode-option-number">02</span>
+            <div>
+                <h2>Учебный режим</h2>
+                <p>Используйте для знакомства с интерфейсом. Сценарии можно проходить безопасно, без записи в базу и без реальных внешних запросов.</p>
+            </div>
+            <ul>
+                <li>Изменяющие операции блокируются</li>
+                <li>CRM и панели не получают команды</li>
+                <li>Режим действует только до завершения сессии</li>
+            </ul>
+            {% if not training_enabled %}
+            <form method="post" action="/settings/training-mode" data-confirm="Изменяющие операции будут заблокированы только для вашей текущей сессии." data-confirm-title="Включить учебный режим?" data-confirm-action="Переключить режим">
+                <input type="hidden" name="enabled" value="1">
+                <input type="hidden" name="return_to" value="/settings/mode">
+                <button class="btn" type="submit">Включить учебный режим →</button>
+            </form>
+            {% else %}
+            <span class="mode-selected-label is-training">Текущий режим</span>
+            {% endif %}
+        </article>
+    </div>
+</div>
+{% endblock %}

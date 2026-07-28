@@ -3239,6 +3239,37 @@ a.uk-summary-card:hover {
     height: 17px;
 }
 
+.uk-row-actions .uk-open-card-link {
+    width: auto;
+    min-width: 94px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 0 10px;
+    color: #dff4ff;
+    border-color: rgba(0, 169, 255, .42);
+    border-radius: 8px;
+    background: linear-gradient(135deg, rgba(0, 151, 255, .82), rgba(0, 107, 226, .88));
+    box-shadow: 0 5px 14px rgba(0, 130, 255, .18);
+    font-size: 10px;
+    font-weight: 800;
+    text-decoration: none;
+}
+
+.uk-row-actions .uk-open-card-link:hover {
+    color: #fff;
+    border-color: rgba(105, 215, 255, .75);
+    background: linear-gradient(135deg, #1ca9ff, #0878ea);
+    box-shadow: 0 7px 18px rgba(0, 150, 255, .3);
+}
+
+.uk-row-actions .uk-open-card-link svg {
+    width: 15px;
+    height: 15px;
+}
+
 .uk-register-empty {
     min-height: 250px;
     display: grid;
@@ -3601,7 +3632,9 @@ a.uk-summary-card:hover {
 .uk-modal-card {
     width: min(760px, 100%);
     max-height: min(800px, calc(100vh - 48px));
-    overflow: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
     padding: 0;
     border-radius: 14px;
     background: rgba(3, 18, 31, .98);
@@ -3729,6 +3762,463 @@ body.light-theme .uk-directory-table tbody tr.is-selected td {
     background: #eaf6ff;
 }
 
+/* Current UK registry: panels, issued physical keys and per-panel CRM state. */
+.uk-filterbar.is-search-only {
+    grid-template-columns: minmax(280px, 1fr) auto auto;
+}
+
+.uk-count-badge.is-master {
+    color: #49c9d9;
+    border-color: rgba(73, 201, 217, .28);
+    background: rgba(73, 201, 217, .08);
+}
+
+.uk-page-notice {
+    padding: 11px 14px;
+    color: #55e2b3;
+    border: 1px solid rgba(54, 214, 166, .35);
+    border-radius: 10px;
+    background: rgba(39, 187, 141, .09);
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.uk-page-notice.is-error {
+    color: #ff8894;
+    border-color: rgba(255, 91, 109, .36);
+    background: rgba(255, 75, 96, .08);
+}
+
+.uk-credential-tools {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.uk-credential-tools span {
+    color: var(--muted);
+    font-size: 10px;
+}
+
+.uk-secret-output {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin: 0;
+    padding: 12px;
+    border: 1px solid rgba(0, 170, 255, .24);
+    border-radius: 9px;
+    background: rgba(0, 153, 255, .06);
+}
+
+.uk-secret-output[hidden] {
+    display: none;
+}
+
+.uk-secret-output div {
+    min-width: 0;
+}
+
+.uk-secret-output dt {
+    color: var(--muted);
+    font-size: 9px;
+    text-transform: uppercase;
+}
+
+.uk-secret-output dd {
+    margin: 4px 0 0;
+    overflow-wrap: anywhere;
+    color: var(--text-strong);
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 12px;
+}
+
+.uk-detail-summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(310px, .55fr);
+    gap: 12px;
+}
+
+.uk-detail-side {
+    display: grid;
+    gap: 12px;
+}
+
+.uk-detail-counter-card {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    padding: 12px;
+}
+
+.uk-detail-counter-card a {
+    display: grid;
+    min-width: 0;
+    gap: 4px;
+    padding: 10px 6px;
+    border: 1px solid var(--line-soft);
+    border-radius: 9px;
+    background: rgba(0, 153, 255, .06);
+    color: var(--text);
+    text-align: center;
+    text-decoration: none;
+}
+
+.uk-detail-counter-card b {
+    color: var(--text-strong);
+    font-size: 18px;
+    line-height: 1;
+}
+
+.uk-detail-counter-card span {
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 9px;
+    font-weight: 800;
+    text-overflow: ellipsis;
+}
+
+.uk-crm-access-card {
+    padding: 17px;
+}
+
+.uk-crm-access-card h2 {
+    margin: 4px 0 0;
+    font-size: 17px;
+}
+
+.uk-crm-access-card p {
+    margin: 12px 0;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.uk-crm-access-card .btn {
+    width: 100%;
+}
+
+.uk-linked-panels-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(260px, 1fr));
+    gap: 10px;
+}
+
+.uk-linked-panel-card,
+.uk-issue-card {
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid var(--line-soft);
+    border-radius: 11px;
+    background: rgba(0, 13, 24, .56);
+}
+
+.uk-linked-panel-card > header {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+}
+
+.uk-linked-panel-card header b,
+.uk-linked-panel-card header small {
+    display: block;
+}
+
+.uk-linked-panel-card header b {
+    color: var(--text-strong);
+    font-size: 12px;
+}
+
+.uk-linked-panel-card header small {
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 9px;
+}
+
+.uk-linked-panel-card header a {
+    color: var(--blue);
+    font-size: 18px;
+    text-decoration: none;
+}
+
+.uk-linked-panel-card > form:first-of-type {
+    display: grid;
+    grid-template-columns: .7fr 1.3fr auto;
+    gap: 7px;
+    align-items: end;
+    margin-top: 12px;
+}
+
+.uk-linked-panel-card label {
+    display: grid;
+    gap: 5px;
+    margin: 0;
+    color: var(--muted);
+    font-size: 9px;
+    font-weight: 800;
+}
+
+.uk-linked-panel-card input,
+.uk-linked-panel-card button {
+    min-height: 35px;
+    font-size: 10px;
+}
+
+.uk-link-danger {
+    min-height: 30px;
+    padding: 5px 9px;
+    color: #ff7a87;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    font-size: 10px;
+}
+
+.uk-link-danger:hover {
+    transform: none;
+    color: #fff;
+    background: rgba(255, 75, 95, .17);
+    box-shadow: none;
+}
+
+.uk-issues-list {
+    display: grid;
+    gap: 11px;
+}
+
+.uk-issue-card.is-master {
+    border-color: rgba(48, 196, 222, .42);
+    box-shadow: inset 3px 0 0 #28bdd7;
+}
+
+.uk-issue-card > header {
+    display: grid;
+    grid-template-columns: 12px minmax(0, 1fr) auto;
+    gap: 11px;
+    align-items: center;
+}
+
+.uk-issue-card h3 {
+    margin: 2px 0;
+    color: var(--text-strong);
+    font-size: 15px;
+}
+
+.uk-issue-card header small,
+.uk-issue-card > p {
+    color: var(--muted);
+    font-size: 10px;
+}
+
+.uk-issue-status {
+    padding: 5px 8px;
+    color: #45d7ad;
+    border: 1px solid rgba(69, 215, 173, .27);
+    border-radius: 999px;
+    background: rgba(69, 215, 173, .08);
+    font-size: 9px;
+    font-weight: 900;
+}
+
+.uk-issue-status.is-pending {
+    color: #f5bd4d;
+    border-color: rgba(245, 189, 77, .3);
+    background: rgba(245, 189, 77, .08);
+}
+
+.uk-programming-list {
+    display: grid;
+    gap: 6px;
+    margin-top: 12px;
+}
+
+.uk-programming-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    padding: 10px;
+    border: 1px solid var(--line-soft);
+    border-radius: 8px;
+    background: rgba(0, 153, 255, .035);
+}
+
+.uk-programming-row.is-inactive {
+    opacity: .58;
+}
+
+.uk-programming-row b,
+.uk-programming-row small {
+    display: block;
+}
+
+.uk-programming-row b {
+    color: var(--text-strong);
+    font-size: 11px;
+}
+
+.uk-programming-row small {
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 9px;
+}
+
+.uk-programming-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 5px;
+}
+
+.uk-programming-actions form {
+    margin: 0;
+}
+
+.uk-programming-actions button {
+    min-height: 30px;
+    padding: 5px 8px;
+    font-size: 9px;
+}
+
+.uk-master-add-form {
+    display: grid;
+    grid-template-columns: minmax(260px, 1fr) auto;
+    gap: 8px;
+    align-items: end;
+    margin-top: 10px;
+}
+
+.uk-master-add-form label {
+    display: grid;
+    gap: 5px;
+    margin: 0;
+    color: var(--muted);
+    font-size: 9px;
+    font-weight: 800;
+}
+
+.uk-comment-section {
+    padding: 17px;
+}
+
+.uk-comment-section p {
+    margin: 0;
+    color: var(--text);
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+.uk-history-section {
+    padding: 0;
+    overflow: hidden;
+}
+
+.uk-history-section .uk-section-head {
+    padding: 16px;
+}
+
+.uk-history-scroll {
+    max-height: 360px;
+    overflow: auto;
+}
+
+.uk-history-scroll table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.uk-history-scroll th,
+.uk-history-scroll td {
+    padding: 10px 12px;
+    border-top: 1px solid var(--line-soft);
+    color: var(--text);
+    font-size: 10px;
+    text-align: left;
+    vertical-align: top;
+}
+
+.uk-history-scroll th {
+    color: var(--muted);
+    background: rgba(0, 153, 255, .055);
+    text-transform: uppercase;
+}
+
+.uk-history-scroll td small {
+    display: block;
+    max-width: 520px;
+    margin-top: 3px;
+    color: var(--muted);
+}
+
+.uk-confirm-field {
+    grid-template-columns: auto 1fr !important;
+    align-items: center;
+    align-self: end;
+    min-height: 42px;
+    padding: 8px 10px;
+    border: 1px solid var(--line-soft);
+    border-radius: 8px;
+}
+
+.uk-confirm-field input {
+    width: 16px;
+    height: 16px;
+}
+
+body.light-theme .uk-linked-panel-card,
+body.light-theme .uk-issue-card {
+    background: rgba(255, 255, 255, .8);
+}
+
+body.light-theme .uk-page-notice {
+    background: #eafbf5;
+}
+
+body.light-theme .uk-page-notice.is-error {
+    background: #fff0f2;
+}
+
+body.light-theme .uk-secret-output,
+body.light-theme .uk-programming-row {
+    background: #f4faff;
+}
+
+body.light-theme .uk-detail-counter-card a {
+    background: #f4faff;
+}
+
+@media (max-width: 1250px) {
+    .uk-detail-summary {
+        grid-template-columns: 1fr;
+    }
+
+    .uk-linked-panels-grid {
+        grid-template-columns: repeat(2, minmax(250px, 1fr));
+    }
+}
+
+@media (max-width: 760px) {
+    .uk-filterbar.is-search-only,
+    .uk-linked-panel-card > form:first-of-type,
+    .uk-master-add-form,
+    .uk-programming-row {
+        grid-template-columns: 1fr;
+    }
+
+    .uk-linked-panels-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .uk-programming-actions {
+        justify-content: flex-start;
+    }
+
+    .uk-secret-output {
+        grid-template-columns: 1fr;
+    }
+}
+
 body.light-theme .uk-pagination nav a,
 body.light-theme .uk-inspector-counters a {
     background: #fff;
@@ -3746,6 +4236,10 @@ body.light-theme .uk-id-cell {
 body.light-theme .uk-row-actions a,
 body.light-theme .uk-row-actions button {
     color: #087dcc;
+}
+
+body.light-theme .uk-row-actions .uk-open-card-link {
+    color: #fff;
 }
 
 @media (max-width: 1500px) {
@@ -3827,7 +4321,9 @@ body.light-theme .uk-row-actions button {
 .uk-detail-v2 {
     display: grid;
     gap: 16px;
+    width: 100%;
     min-width: 0;
+    overflow: hidden;
 }
 
 .uk-detail-v2 .panel:hover {
@@ -3841,9 +4337,14 @@ body.light-theme .uk-row-actions button {
     gap: 24px;
 }
 
+.uk-detail-v2-hero > div:first-child {
+    min-width: 0;
+}
+
 .uk-detail-v2-hero h1 {
     margin: 4px 0 6px;
     font-size: clamp(34px, 3vw, 46px);
+    overflow-wrap: anywhere;
 }
 
 .uk-detail-back {
@@ -3871,6 +4372,19 @@ body.light-theme .uk-row-actions button {
     display: grid;
     grid-template-columns: minmax(0, 1.65fr) minmax(320px, .75fr);
     gap: 12px;
+    min-width: 0;
+}
+
+.uk-detail-v2-summary > * {
+    min-width: 0;
+}
+
+.uk-detail-v2 > .uk-page-notice {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    max-width: 100%;
+    padding: 9px 13px;
 }
 
 .uk-detail-profile-card,

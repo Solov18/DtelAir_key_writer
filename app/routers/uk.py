@@ -1,82 +1,104 @@
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Request, Form, Query
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import APIRouter, Form, Query, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
-from app.services import find_key, is_ambiguous_key, write_key_to_panels
-from app.services.audit import log_event
-from app.templates_config import templates
+from app.access_control import has_permission
+from app.repositories.log_repository import normalize_operation_row
 from app.repositories.panel_repository import get_panel_by_id
-from app.repositories.key_repository import get_key_types
-
 from app.repositories.uk_repository import (
+    add_panel,
+    archive_group,
+    get_available_keys,
+    get_available_panels,
     get_group,
+    get_group_credentials,
+    get_group_keys,
+    get_group_operations,
     get_group_page,
+    get_group_panels,
     get_group_statistics,
+    get_issue,
+    get_issue_programmings,
+    remove_panel,
     save_group,
     update_group,
-    delete_group,
-    delete_notification_draft,
-    get_group_panels,
-    get_available_panels,
-    add_panels,
-    remove_panel,
-    get_group_keys,
-    get_notification_drafts,
-    save_notification_draft,
-    add_keys,
-    remove_key,
+    update_panel_link,
 )
+from app.services.audit import log_event
+from app.services.auth import get_current_user
+from app.services.uk_keys import (
+    add_master_panel,
+    issue_key,
+    remove_from_crm,
+    retry_programming,
+    unlink_accounting,
+)
+from app.templates_config import templates
+
 
 router = APIRouter()
 
 
-# =========================================================
-# СПИСОК УПРАВЛЯЮЩИХ КОМПАНИЙ
-# =========================================================
+def _is_admin(request: Request) -> bool:
+    return has_permission(get_current_user(request), "manage_uk")
+
+
+def _user_name(request: Request) -> str:
+    user = request.session.get("user", {})
+    return user.get("full_name") or user.get("login") or "Система"
+
+
+def _redirect(group_id: int | None = None, **params) -> RedirectResponse:
+    if group_id:
+        path = f"/uk/{group_id}"
+    else:
+        path = "/uk"
+    clean = {key: value for key, value in params.items() if value not in (None, "")}
+    query = f"?{urlencode(clean)}" if clean else ""
+    return RedirectResponse(f"{path}{query}", status_code=303)
+
+
+def _decorate_issues(group_id: int, *, include_closed: bool = False) -> list[dict]:
+    issues = get_group_keys(group_id, include_closed=include_closed)
+    for issue in issues:
+        issue["programmings"] = get_issue_programmings(
+            int(issue["issue_id"]),
+            include_inactive=True,
+        )
+        issue["active_programmings"] = [
+            item for item in issue["programmings"] if item["active"]
+        ]
+        issue["is_master"] = len(issue["active_programmings"]) > 1
+    return issues
+
 
 @router.get("/uk", response_class=HTMLResponse)
 def uk_page(
     request: Request,
     q: str = Query(""),
-    cooperation_state: str = Query(""),
     page: int = Query(1, ge=1),
     selected_group_id: int = Query(0, ge=0),
+    notice: str = Query(""),
 ):
-    group_page = get_group_page(
-        query=q,
-        cooperation_state=cooperation_state,
-        page=page,
-        page_size=20,
-    )
-    selected_group = (
-        get_group(selected_group_id)
-        if selected_group_id
-        else None
-    )
+    group_page = get_group_page(query=q, page=page, page_size=20)
+    selected_group = get_group(selected_group_id) if selected_group_id else None
     if not selected_group and group_page["items"]:
         selected_group = get_group(int(group_page["items"][0]["id"]))
 
-    selected_notifications = (
-        get_notification_drafts(int(selected_group["id"]), limit=5)
-        if selected_group
-        else []
-    )
-    selected_panels = (
-        get_group_panels(int(selected_group["id"]))[:8]
-        if selected_group
-        else []
-    )
-    filters = {
-        "q": q,
-        "cooperation_state": cooperation_state,
-    }
-    base_params = {
-        key: value
-        for key, value in filters.items()
-        if value not in ("", None)
-    }
+    selected_panels = []
+    selected_issues = []
+    selected_operations = []
+    if selected_group:
+        group_id = int(selected_group["id"])
+        selected_panels = get_group_panels(group_id)
+        selected_issues = _decorate_issues(group_id)
+        selected_operations = [
+            normalize_operation_row(item)
+            for item in get_group_operations(group_id, limit=8)
+        ]
 
+    base_query = urlencode({"q": q} if q else {})
     return templates.TemplateResponse(
         "uk.html",
         {
@@ -84,183 +106,156 @@ def uk_page(
             "groups": group_page["items"],
             "group_page": group_page,
             "statistics": get_group_statistics(),
-            "filters": filters,
-            "base_query": urlencode(base_params),
+            "filters": {"q": q},
+            "base_query": base_query,
             "row_query": urlencode(
-                {**base_params, "page": group_page["page"]}
+                {**({"q": q} if q else {}), "page": group_page["page"]}
             ),
             "selected_group": selected_group,
-            "selected_notifications": selected_notifications,
             "selected_panels": selected_panels,
+            "selected_issues": selected_issues,
+            "selected_operations": selected_operations,
+            "is_admin": _is_admin(request),
+            "notice": notice,
         },
     )
 
 
-# =========================================================
-# СОЗДАНИЕ УК
-# =========================================================
-
 @router.post("/uk/group")
-def uk_group(
+def uk_group_create(
     request: Request,
     name: str = Form(...),
-    note: str = Form(""),
     legal_name: str = Form(""),
     contact_name: str = Form(""),
     phone: str = Form(""),
     email: str = Form(""),
     legal_address: str = Form(""),
-    contract_number: str = Form(""),
-    cooperation_status: str = Form("potential"),
-    account_manager: str = Form(""),
-    next_contact_at: str = Form(""),
-    cooperation_note: str = Form(""),
+    actual_address: str = Form(""),
+    crm_login: str = Form(""),
+    crm_password: str = Form(""),
+    note: str = Form(""),
 ):
-    group_id = save_group(
-        name=name,
-        note=note,
-        legal_name=legal_name,
-        contact_name=contact_name,
-        phone=phone,
-        email=email,
-        legal_address=legal_address,
-        contract_number=contract_number,
-        created_by=request.session.get("user", {}).get("full_name", ""),
-        cooperation_status=cooperation_status,
-        account_manager=account_manager,
-        next_contact_at=next_contact_at,
-        cooperation_note=cooperation_note,
-    )
-
+    try:
+        group_id = save_group(
+            name=name,
+            legal_name=legal_name,
+            contact_name=contact_name,
+            phone=phone,
+            email=email,
+            legal_address=legal_address,
+            actual_address=actual_address,
+            crm_login=crm_login if _is_admin(request) else "",
+            crm_password=crm_password if _is_admin(request) else "",
+            note=note,
+            created_by=_user_name(request),
+        )
+    except ValueError:
+        return _redirect(notice="company_error")
     log_event(
         request=request,
         action="uk_create",
         object_type="Управляющая компания",
         object_name=name,
-        details=note or "Карточка УК сохранена",
+        details="Карточка УК создана",
+        uk_group_id=group_id,
     )
+    return _redirect(group_id, notice="company_created")
 
-    return RedirectResponse(
-        url=f"/uk?selected_group_id={group_id}",
-        status_code=303,
-    )
-
-
-# =========================================================
-# УДАЛЕНИЕ УК
-# ВАЖНО: этот роут находится выше /uk/{group_id}
-# =========================================================
-
-@router.post("/uk/delete")
-def uk_delete(
-    request: Request,
-    group_id: int = Form(...),
-):
-    group = get_group(group_id)
-    group_keys = get_group_keys(group_id) if group else []
-    delete_group(group_id)
-
-    if group:
-        for key in group_keys:
-            log_event(
-                request=request,
-                action="key_release",
-                object_type="Ключ",
-                object_name=f"{key.get('type_name') or 'Без типа'} №{key.get('number')}",
-                details=f"Ключ освобождён при удалении УК «{group.get('name')}»",
-                printed_number=key.get("number", ""),
-                hex_value=key.get("hex_value", "-"),
-                key_id=key.get("id"),
-                key_type=key.get("type_name", ""),
-                uk_group_id=group_id,
-            )
-        log_event(
-            request=request,
-            action="uk_delete",
-            object_type="Управляющая компания",
-            object_name=group.get("name") or str(group_id),
-            details="УК и её связи удалены",
-        )
-
-    return RedirectResponse(
-        url="/uk",
-        status_code=303,
-    )
-
-
-# =========================================================
-# РЕДАКТИРОВАНИЕ УК
-# =========================================================
 
 @router.post("/uk/{group_id}/update")
-def uk_update(
+def uk_group_update(
     request: Request,
     group_id: int,
     name: str = Form(...),
-    note: str = Form(""),
     legal_name: str = Form(""),
     contact_name: str = Form(""),
     phone: str = Form(""),
     email: str = Form(""),
     legal_address: str = Form(""),
-    contract_number: str = Form(""),
-    cooperation_status: str = Form("potential"),
-    account_manager: str = Form(""),
-    next_contact_at: str = Form(""),
-    cooperation_note: str = Form(""),
-    return_to: str = Form("list"),
+    actual_address: str = Form(""),
+    crm_login: str = Form(""),
+    crm_password: str = Form(""),
+    note: str = Form(""),
 ):
-    update_group(
-        group_id=group_id,
-        name=name,
-        note=note,
-        legal_name=legal_name,
-        contact_name=contact_name,
-        phone=phone,
-        email=email,
-        legal_address=legal_address,
-        contract_number=contract_number,
-        cooperation_status=cooperation_status,
-        account_manager=account_manager,
-        next_contact_at=next_contact_at,
-        cooperation_note=cooperation_note,
-    )
-
+    try:
+        update_group(
+            group_id,
+            name,
+            legal_name=legal_name,
+            contact_name=contact_name,
+            phone=phone,
+            email=email,
+            legal_address=legal_address,
+            actual_address=actual_address,
+            crm_login=crm_login,
+            crm_password=crm_password or None,
+            note=note,
+            allow_credentials=_is_admin(request),
+        )
+    except ValueError:
+        return _redirect(group_id, notice="company_error")
     log_event(
         request=request,
         action="uk_update",
         object_type="Управляющая компания",
         object_name=name,
-        details=note or "Карточка УК изменена",
-    )
-
-    return RedirectResponse(
-        url=(
-            f"/uk/{group_id}"
-            if return_to == "detail"
-            else f"/uk?selected_group_id={group_id}"
+        details=(
+            "Карточка и CRM-реквизиты обновлены"
+            if _is_admin(request) and (crm_login or crm_password)
+            else "Карточка УК обновлена"
         ),
-        status_code=303,
+        uk_group_id=group_id,
+    )
+    return _redirect(group_id, notice="company_updated")
+
+
+@router.post("/uk/{group_id}/archive")
+def uk_group_archive(request: Request, group_id: int):
+    if not _is_admin(request):
+        return RedirectResponse("/?notice=admin_only", status_code=303)
+    group = get_group(group_id)
+    if group:
+        archive_group(group_id)
+        log_event(
+            request=request,
+            action="uk_archive",
+            object_type="Управляющая компания",
+            object_name=group["name"],
+            details=(
+                "УК архивирована. Панели, ключи и история сохранены. "
+                "CRM-реквизиты очищены."
+            ),
+            uk_group_id=group_id,
+        )
+    return _redirect(notice="company_archived")
+
+
+@router.post("/uk/{group_id}/credentials/reveal")
+def uk_credentials_reveal(request: Request, group_id: int):
+    if not _is_admin(request):
+        return JSONResponse({"error": "Доступ запрещён"}, status_code=403)
+    credentials = get_group_credentials(group_id)
+    if not credentials:
+        return JSONResponse({"error": "УК не найдена"}, status_code=404)
+    return JSONResponse(
+        {
+            "login": credentials.get("crm_login", ""),
+            "password": credentials.get("crm_password", ""),
+        },
+        headers={"Cache-Control": "no-store"},
     )
 
-
-# =========================================================
-# СТРАНИЦА КОНКРЕТНОЙ УК
-# =========================================================
 
 @router.get("/uk/{group_id}", response_class=HTMLResponse)
 def uk_detail(
     request: Request,
     group_id: int,
+    notice: str = Query(""),
 ):
     group = get_group(group_id)
-
     if not group:
-        return RedirectResponse(
-            url="/uk",
-            status_code=303,
-        )
-
+        return _redirect(notice="company_missing")
+    issues = _decorate_issues(group_id, include_closed=True)
     return templates.TemplateResponse(
         "uk_detail.html",
         {
@@ -268,335 +263,203 @@ def uk_detail(
             "group": group,
             "group_panels": get_group_panels(group_id),
             "available_panels": get_available_panels(group_id),
-            "group_keys": get_group_keys(group_id),
-            "notification_drafts": get_notification_drafts(group_id),
-            "key_types": get_key_types(include_archived=False),
-            "message": None,
+            "group_issues": issues,
+            "available_keys": get_available_keys(limit=150),
+            "operations": [
+                normalize_operation_row(item)
+                for item in get_group_operations(group_id, limit=40)
+            ],
+            "is_admin": _is_admin(request),
+            "notice": notice,
         },
-    )
-
-
-# =========================================================
-# ДОБАВЛЕНИЕ ПАНЕЛЕЙ В УК
-# =========================================================
-
-@router.post("/uk/{group_id}/notifications/draft")
-def uk_notification_draft(
-    request: Request,
-    group_id: int,
-    title: str = Form(...),
-    body: str = Form(...),
-    category: str = Form("announcement"),
-    channel: str = Form("dtel"),
-    audience: str = Form("all"),
-    audience_details: str = Form(""),
-):
-    group = get_group(group_id)
-    if not group:
-        return RedirectResponse(url="/uk", status_code=303)
-
-    save_notification_draft(
-        group_id=group_id,
-        title=title,
-        body=body,
-        category=category,
-        channel=channel,
-        audience=audience,
-        audience_details=audience_details,
-        created_by=request.session.get("user", {}).get("full_name", ""),
-    )
-    log_event(
-        request=request,
-        action="uk_notification_draft",
-        object_type="Черновик уведомления",
-        object_name=title,
-        details=f"Черновик создан для УК «{group.get('name')}». Отправка не выполнялась.",
-        uk_group_id=group_id,
-    )
-    return RedirectResponse(
-        url=f"/uk/{group_id}#notifications",
-        status_code=303,
-    )
-
-
-@router.post("/uk/{group_id}/notifications/delete")
-def uk_notification_delete(
-    request: Request,
-    group_id: int,
-    draft_id: int = Form(...),
-):
-    group = get_group(group_id)
-    draft = next(
-        (
-            item
-            for item in get_notification_drafts(group_id)
-            if int(item["id"]) == draft_id
-        ),
-        None,
-    )
-    delete_notification_draft(group_id, draft_id)
-    if group and draft:
-        log_event(
-            request=request,
-            action="uk_notification_draft_delete",
-            object_type="Черновик уведомления",
-            object_name=draft.get("title") or str(draft_id),
-            details=f"Черновик удалён из УК «{group.get('name')}»",
-            uk_group_id=group_id,
-        )
-    return RedirectResponse(
-        url=f"/uk/{group_id}#notifications",
-        status_code=303,
     )
 
 
 @router.post("/uk/{group_id}/panels/add")
-def uk_add_panels(
-    request: Request,
-    group_id: int,
-    panel_ids: list[int] = Form([]),
-):
-    add_panels(
-        group_id=group_id,
-        panel_ids=panel_ids,
-    )
-
-    group = get_group(group_id)
-    log_event(
-        request=request,
-        action="uk_panels_add",
-        object_type="Управляющая компания",
-        object_name=(group or {}).get("name") or str(group_id),
-        details=f"Добавлено панелей: {len(panel_ids)}",
-    )
-
-    return RedirectResponse(
-        url=f"/uk/{group_id}",
-        status_code=303,
-    )
-
-
-# =========================================================
-# УДАЛЕНИЕ ПАНЕЛИ ИЗ УК
-# =========================================================
-
-@router.post("/uk/{group_id}/panels/remove")
-def uk_remove_panel(
+def uk_panel_add(
     request: Request,
     group_id: int,
     panel_id: int = Form(...),
+    apartment: str = Form(...),
+    comment: str = Form(""),
 ):
-    group = get_group(group_id)
+    try:
+        link_id = add_panel(
+            group_id,
+            panel_id,
+            apartment,
+            comment,
+            _user_name(request),
+        )
+    except ValueError:
+        return _redirect(group_id, notice="panel_error")
     panel = get_panel_by_id(panel_id)
-    remove_panel(
-        group_id=group_id,
-        panel_id=panel_id,
-    )
-
+    group = get_group(group_id)
     log_event(
         request=request,
-        action="uk_panel_remove",
-        object_type="Управляющая компания",
-        object_name=(group or {}).get("name") or str(group_id),
-        details=f"Удалена панель: {(panel or {}).get('name') or panel_id}",
+        action="uk_panel_add",
+        object_type="Панель УК",
+        object_name=(panel or {}).get("name") or str(panel_id),
+        details=f"Панель закреплена за «{(group or {}).get('name', group_id)}», кв. {apartment}",
+        panel_id=panel_id,
         panel_name=(panel or {}).get("name", ""),
         mac=(panel or {}).get("mac", ""),
         address=(panel or {}).get("address", ""),
+        apartment=apartment,
+        uk_group_id=group_id,
+        comment=f"Связь №{link_id}. {comment}".strip(),
     )
-
-    return RedirectResponse(
-        url=f"/uk/{group_id}",
-        status_code=303,
-    )
+    return _redirect(group_id, notice="panel_added")
 
 
-# =========================================================
-# ДОБАВЛЕНИЕ КЛЮЧЕЙ В УК
-# =========================================================
-
-@router.post(
-    "/uk/{group_id}/keys/add",
-    response_class=HTMLResponse,
-)
-def uk_add_keys(
+@router.post("/uk/{group_id}/panels/{link_id}/update")
+def uk_panel_update(
     request: Request,
     group_id: int,
-    key_values: str = Form(...),
-    key_type_id: int = Form(0),
+    link_id: int,
+    apartment: str = Form(...),
+    comment: str = Form(""),
 ):
-    numbers = [
-        value.strip()
-        for value in key_values.replace(",", " ").split()
-        if value.strip()
-    ]
-
-    result = add_keys(
-        group_id=group_id,
-        key_numbers=numbers,
-        key_type_id=key_type_id or None,
-    )
-
-    group = get_group(group_id)
-
-    if not group:
-        return RedirectResponse(
-            url="/uk",
-            status_code=303,
-        )
-
-    for key in result["added"]:
-        log_event(
-            request=request,
-            action="key_assign_uk",
-            object_type="Ключ",
-            object_name=f"{key.get('type_name') or 'Без типа'} №{key.get('number')}",
-            details=f"Ключ закреплён за УК «{group.get('name')}»",
-            printed_number=key.get("number", ""),
-            hex_value=key.get("hex_value", "-"),
-            key_id=key.get("id"),
-            key_type=key.get("type_name", ""),
-            uk_group_id=group_id,
-        )
-
+    try:
+        update_panel_link(group_id, link_id, apartment, comment)
+    except ValueError:
+        return _redirect(group_id, notice="panel_error")
     log_event(
         request=request,
-        action="uk_keys_add",
-        object_type="Управляющая компания",
-        object_name=group.get("name") or str(group_id),
-        details=(
-            f"Добавлено ключей: {len(result['added'])}; "
-            f"не найдено: {len(result['not_found'])}; "
-            f"нужно выбрать тип: {len(result['ambiguous'])}"
-        ),
+        action="uk_panel_update",
+        object_type="Связь УК и панели",
+        object_name=str(link_id),
+        details=f"Квартира учётной записи изменена: {apartment}",
+        apartment=apartment,
+        uk_group_id=group_id,
+        comment=comment,
     )
+    return _redirect(group_id, notice="panel_updated")
 
-    return templates.TemplateResponse(
-        "uk_detail.html",
-        {
-            "request": request,
-            "group": group,
-            "group_panels": get_group_panels(group_id),
-            "available_panels": get_available_panels(group_id),
-            "group_keys": get_group_keys(group_id),
-            "notification_drafts": get_notification_drafts(group_id),
-            "key_types": get_key_types(include_archived=False),
-            "message": result,
-        },
+
+@router.post("/uk/{group_id}/panels/{link_id}/detach")
+def uk_panel_detach(request: Request, group_id: int, link_id: int):
+    try:
+        remove_panel(group_id, link_id=link_id)
+    except ValueError:
+        return _redirect(group_id, notice="panel_has_keys")
+    log_event(
+        request=request,
+        action="uk_panel_detach",
+        object_type="Связь УК и панели",
+        object_name=str(link_id),
+        details="Панель откреплена от УК, история сохранена",
+        uk_group_id=group_id,
     )
+    return _redirect(group_id, notice="panel_detached")
 
 
-# =========================================================
-# УДАЛЕНИЕ КЛЮЧА ИЗ УК
-# =========================================================
-
-@router.post("/uk/{group_id}/keys/remove")
-def uk_remove_key(
+@router.post("/uk/{group_id}/keys/issue")
+def uk_key_issue(
     request: Request,
     group_id: int,
     key_id: int = Form(...),
+    panel_link_id: int = Form(...),
+    apartment_override: str = Form(""),
+    override_confirmed: int = Form(0),
+    comment: str = Form(""),
 ):
-    group = get_group(group_id)
-    key = next(
-        (item for item in get_group_keys(group_id) if int(item["id"]) == int(key_id)),
-        None,
-    )
-    remove_key(
-        group_id=group_id,
-        key_id=key_id,
-    )
-
-    log_event(
-        request=request,
-        action="uk_key_remove",
-        object_type="Управляющая компания",
-        object_name=(group or {}).get("name") or str(group_id),
-        details=f"Удалён ключ: {(key or {}).get('number') or key_id}",
-        printed_number=(key or {}).get("number", ""),
-        hex_value=(key or {}).get("hex_value", "-"),
-        key_id=(key or {}).get("id") or key_id,
-        key_type=(key or {}).get("type_name", ""),
-        uk_group_id=group_id,
-    )
-
-    return RedirectResponse(
-        url=f"/uk/{group_id}",
-        status_code=303,
+    try:
+        result = issue_key(
+            group_id=group_id,
+            key_id=key_id,
+            panel_link_id=panel_link_id,
+            apartment_override=apartment_override,
+            override_confirmed=bool(override_confirmed),
+            comment=comment,
+            request=request,
+            training_mode=bool(request.session.get("training_mode")),
+        )
+    except ValueError:
+        return _redirect(group_id, notice="key_issue_error")
+    return _redirect(
+        group_id,
+        notice="key_dry_run" if result["status"] == "DRY_RUN" else "key_issued",
     )
 
 
-# =========================================================
-# ЗАПИСЬ КЛЮЧЕЙ НА ПАНЕЛИ УК
-# =========================================================
-
-@router.post(
-    "/uk/{group_id}/write",
-    response_class=HTMLResponse,
-)
-def uk_write(
+@router.post("/uk/{group_id}/keys/{issue_id}/panels/add")
+def uk_master_panel_add(
     request: Request,
     group_id: int,
-    key_values: str = Form(...),
-    flat_num: str = Form("0"),
-    inner: int = Form(0),
-    key_type_id: int = Form(0),
+    issue_id: int,
+    panel_link_id: int = Form(...),
+    apartment_override: str = Form(""),
+    override_confirmed: int = Form(0),
 ):
-    group = get_group(group_id)
-
-    if not group:
-        return RedirectResponse(
-            url="/uk",
-            status_code=303,
+    try:
+        result = add_master_panel(
+            group_id=group_id,
+            issue_id=issue_id,
+            panel_link_id=panel_link_id,
+            apartment_override=apartment_override,
+            override_confirmed=bool(override_confirmed),
+            request=request,
+            training_mode=bool(request.session.get("training_mode")),
         )
+    except ValueError:
+        return _redirect(group_id, notice="master_error")
+    return _redirect(
+        group_id,
+        notice="key_dry_run" if result["status"] == "DRY_RUN" else "master_added",
+    )
 
-    panels = get_group_panels(group_id)
 
-    all_results = []
+@router.post("/uk/{group_id}/programming/{programming_id}/retry")
+def uk_programming_retry(
+    request: Request,
+    group_id: int,
+    programming_id: int,
+):
+    try:
+        result = retry_programming(
+            programming_id,
+            request=request,
+            training_mode=bool(request.session.get("training_mode")),
+        )
+    except ValueError:
+        return _redirect(group_id, notice="programming_error")
+    return _redirect(
+        group_id,
+        notice="key_dry_run" if result["status"] == "DRY_RUN" else "programming_retried",
+    )
 
-    numbers = [
-        value.strip()
-        for value in key_values.replace(",", " ").split()
-        if value.strip()
-    ]
 
-    for value in numbers:
-        item = find_key(value, key_type_id or None)
+@router.post("/uk/{group_id}/programming/{programming_id}/unlink")
+def uk_programming_unlink(
+    request: Request,
+    group_id: int,
+    programming_id: int,
+):
+    try:
+        unlink_accounting(programming_id, request=request)
+    except ValueError:
+        return _redirect(group_id, notice="programming_error")
+    return _redirect(group_id, notice="programming_unlinked")
 
-        if item and not is_ambiguous_key(item):
-            results = write_key_to_panels(
-                "uk",
-                item,
-                panels,
-                flat_num=flat_num,
-                inner=inner,
-                address=f"УК: {group['name']}",
-                request=request,
-                assignment_type="uk",
-                uk_group_id=group_id,
-            )
 
-            all_results.append(
-                {
-                    "key": item,
-                    "results": results,
-                }
-            )
-
-        else:
-            all_results.append(
-                {
-                    "key": {
-                        "number": value,
-                        "hex_value": "НЕ НАЙДЕН",
-                    },
-                    "results": [],
-                }
-            )
-
-    return templates.TemplateResponse(
-        "write_results.html",
-        {
-            "request": request,
-            "title": f"Результат записи УК: {group['name']}",
-            "all_results": all_results,
-        },
+@router.post("/uk/{group_id}/programming/{programming_id}/remove-crm")
+def uk_programming_remove_crm(
+    request: Request,
+    group_id: int,
+    programming_id: int,
+):
+    if not _is_admin(request):
+        return RedirectResponse("/?notice=admin_only", status_code=303)
+    try:
+        result = remove_from_crm(
+            programming_id,
+            request=request,
+            training_mode=bool(request.session.get("training_mode")),
+        )
+    except ValueError:
+        return _redirect(group_id, notice="programming_error")
+    return _redirect(
+        group_id,
+        notice="key_dry_run" if result["status"] == "DRY_RUN" else "crm_removed",
     )

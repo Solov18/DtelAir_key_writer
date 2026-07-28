@@ -29,11 +29,15 @@
     <!-- Стили -->
     <link
         rel="stylesheet"
-        href="/static/css/style.css?v=9"
+        href="/static/css/style.css?v=20"
     >
     <link
         rel="stylesheet"
         href="/static/css/pages/keys_log.css?v=8"
+    >
+    <link
+        rel="stylesheet"
+        href="/static/css/pages/log.css?v=2"
     >
 </head>
 
@@ -136,7 +140,7 @@
                 <span>Журнал операций</span>
             </a>
 
-            {% if current_user(request) and current_user(request)["role"] == "admin" %}
+            {% if has_permission(current_user(request), "manage_settings") %}
             <a class="nav-item" href="/settings">
                 <svg viewBox="0 0 24 24">
                     <circle cx="12" cy="12" r="3"/>
@@ -188,6 +192,7 @@
 
             <div class="topbar-right">
 
+                {% if has_permission(current_user(request), "manage_settings") %}
                 <form
                     method="post"
                     action="/settings/training-mode"
@@ -212,6 +217,7 @@
                         {{ "Учебный режим" if training_mode(request) else "Рабочий режим" }}
                     </button>
                 </form>
+                {% endif %}
 
                 <div class="top-info">
                     <svg viewBox="0 0 24 24">
@@ -226,7 +232,7 @@
 
                 <a
                     class="user-pill"
-                    href="{{ '/users' if current_user(request) and current_user(request)['role'] == 'admin' else '/' }}"
+                    href="{{ '/users' if has_permission(current_user(request), 'manage_users') else '/' }}"
                     title="Пользователи"
                 >
                     <svg viewBox="0 0 24 24">
@@ -267,6 +273,13 @@
                     <span class="theme-text">Светлая</span>
                 </button>
 
+                <form method="post" action="/logout" class="topbar-logout-form">
+                    <button type="submit" class="topbar-logout" title="Выйти из системы" aria-label="Выйти из системы">
+                        <svg viewBox="0 0 24 24"><path d="M10 5H5v14h5M14 8l4 4-4 4M8 12h10"/></svg>
+                        <span>Выйти</span>
+                    </button>
+                </form>
+
             </div>
 
         </header>
@@ -277,33 +290,35 @@
         ================================================== -->
 
         <section class="content">
-            {% set notice = notice_code(request) %}
-            {% if notice %}
-            <div class="global-notice {% if notice in ['training_on', 'training_blocked'] %}is-training{% elif notice in ['read_only', 'admin_only', 'last_admin', 'self_disable', 'self_role', 'invalid_role', 'weak_password'] %}is-warning{% else %}is-success{% endif %}">
-                <b>
-                    {% if notice == "training_on" %}Учебный режим включён
-                    {% elif notice == "training_off" %}Рабочий режим включён
-                    {% elif notice == "training_blocked" %}Изменение заблокировано
-                    {% elif notice == "read_only" %}Недостаточно прав
-                    {% elif notice == "admin_only" %}Раздел доступен администратору
-                    {% elif notice == "last_admin" %}Нельзя отключить последнего администратора
-                    {% elif notice == "self_disable" %}Нельзя отключить собственную учётную запись
-                    {% elif notice == "self_role" %}Нельзя изменить собственную роль
-                    {% elif notice == "weak_password" %}Пароль слишком короткий
-                    {% elif notice == "role_updated" %}Роль пользователя обновлена
-                    {% elif notice == "status_updated" %}Доступ пользователя обновлён
-                    {% else %}Изменения сохранены{% endif %}
-                </b>
-                <span>
-                    {% if notice == "training_on" %}Запись в CRM и изменения базы теперь только имитируются.
-                    {% elif notice == "training_off" %}Операции снова могут изменять данные согласно вашей роли.
-                    {% elif notice == "training_blocked" %}Учебный режим не допускает эту операцию.
-                    {% elif notice == "read_only" %}Ваша роль разрешает просмотр, поиск и учебные проверки.
-                    {% elif notice == "weak_password" %}Используйте не менее 8 символов.
-                    {% else %}Проверьте состояние страницы и продолжайте работу.{% endif %}
-                </span>
-            </div>
-            {% endif %}
+            {% block global_notice %}
+                {% set notice = notice_code(request) %}
+                {% if notice %}
+                <div class="global-notice {% if notice in ['training_on', 'training_blocked'] %}is-training{% elif notice in ['read_only', 'admin_only', 'last_admin', 'self_disable', 'self_role', 'invalid_role', 'weak_password'] %}is-warning{% else %}is-success{% endif %}">
+                    <b>
+                        {% if notice == "training_on" %}Учебный режим включён
+                        {% elif notice == "training_off" %}Рабочий режим включён
+                        {% elif notice == "training_blocked" %}Изменение заблокировано
+                        {% elif notice == "read_only" %}Недостаточно прав
+                        {% elif notice == "admin_only" %}Раздел доступен администратору
+                        {% elif notice == "last_admin" %}Нельзя отключить последнего администратора
+                        {% elif notice == "self_disable" %}Нельзя отключить собственную учётную запись
+                        {% elif notice == "self_role" %}Нельзя изменить собственную роль
+                        {% elif notice == "weak_password" %}Пароль слишком короткий
+                        {% elif notice == "role_updated" %}Роль пользователя обновлена
+                        {% elif notice == "status_updated" %}Доступ пользователя обновлён
+                        {% else %}Изменения сохранены{% endif %}
+                    </b>
+                    <span>
+                        {% if notice == "training_on" %}Запись в CRM и изменения базы теперь только имитируются.
+                        {% elif notice == "training_off" %}Операции снова могут изменять данные согласно вашей роли.
+                        {% elif notice == "training_blocked" %}Учебный режим не допускает эту операцию.
+                        {% elif notice == "read_only" %}Ваша роль разрешает просмотр, поиск и учебные проверки.
+                        {% elif notice == "weak_password" %}Используйте не менее 8 символов.
+                        {% else %}Проверьте состояние страницы и продолжайте работу.{% endif %}
+                    </span>
+                </div>
+                {% endif %}
+            {% endblock %}
             {% if training_mode(request) %}
             <div class="training-ribbon">
                 Учебный режим: CRM и база защищены от изменений
@@ -317,12 +332,46 @@
 
 </div>
 
+<div id="appDialog" class="app-dialog" role="presentation" aria-hidden="true">
+    <section class="app-dialog__panel" role="dialog" aria-modal="true" aria-labelledby="appDialogTitle" aria-describedby="appDialogMessage">
+        <button type="button" class="app-dialog__close" data-dialog-close aria-label="Закрыть">×</button>
+        <span class="app-dialog__icon" aria-hidden="true">!</span>
+        <span class="app-dialog__eyebrow" data-dialog-eyebrow>Подтверждение</span>
+        <h2 id="appDialogTitle" data-dialog-title>Подтвердите действие</h2>
+        <p id="appDialogMessage" data-dialog-message></p>
+        <div class="app-dialog__actions">
+            <button type="button" class="btn btn-ghost" data-dialog-cancel>Отмена</button>
+            <button type="button" class="btn" data-dialog-confirm>Продолжить</button>
+        </div>
+    </section>
+</div>
 
 <!-- ==================================================
      ОСНОВНОЙ JAVASCRIPT
 ================================================== -->
 
+<script src="/static/js/dialogs.js?v=2"></script>
 <script>
+    const csrfToken = {{ csrf_token(request)|tojson }};
+    document.querySelectorAll("form").forEach((form) => {
+        if ((form.method || "").toLowerCase() !== "post") return;
+        if (form.querySelector('input[name="csrf_token"]')) return;
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "csrf_token";
+        input.value = csrfToken;
+        form.appendChild(input);
+    });
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = (resource, options = {}) => {
+        const method = String(options.method || "GET").toUpperCase();
+        if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
+            const headers = new Headers(options.headers || {});
+            headers.set("X-CSRF-Token", csrfToken);
+            options = {...options, headers};
+        }
+        return nativeFetch(resource, options);
+    };
     function updateClock() {
         const clockElement = document.getElementById("live-time");
 

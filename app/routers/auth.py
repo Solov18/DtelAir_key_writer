@@ -53,7 +53,7 @@ def login(
     return RedirectResponse("/", status_code=303)
 
 
-@router.get("/logout")
+@router.post("/logout")
 def logout(request: Request):
     request.session.clear()
 

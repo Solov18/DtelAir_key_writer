@@ -2,8 +2,32 @@
 
 {% block page_name %}Панели / Адреса{% endblock %}
 
+{% macro combobox(name, label, current_value, current_label, options, empty_label) -%}
+<label class="panels-combobox-field">
+    <span>{{ label }}</span>
+    <div class="app-combobox" data-combobox>
+        <input type="hidden" name="{{ name }}" value="{{ current_value }}">
+        <button type="button" class="app-combobox__trigger" aria-haspopup="listbox" aria-expanded="false">
+            <span data-combobox-label>{{ current_label or empty_label }}</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>
+        </button>
+        <div class="app-combobox__popup" hidden>
+            <input class="app-combobox__search" type="search" placeholder="Найти..." aria-label="Поиск в списке" autocomplete="off">
+            <div class="app-combobox__options custom-scroll" role="listbox">
+                <button type="button" role="option" data-value="" {% if not current_value %}aria-selected="true"{% endif %}>{{ empty_label }}</button>
+                {% for value, title in options %}
+                <button type="button" role="option" data-value="{{ value }}" {% if current_value == value %}aria-selected="true"{% endif %}>{{ title }}</button>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</label>
+{%- endmacro %}
+
 {% block content %}
-<div class="panels-page" id="panelsPage" data-panel-ids='{{ visible_panel_ids|tojson }}'>
+<div class="panels-page" id="panelsPage"
+    data-selected-panel-id="{{ selected_panel.id if selected_panel else '' }}"
+    data-monitor-status="{{ monitor_state.status }}">
     <header class="panels-hero">
         <div>
             <span class="panels-eyebrow">Устройства доступа</span>
@@ -31,23 +55,31 @@
     <section class="panels-stats" aria-label="Статистика панелей">
         <article class="panel-stat is-total">
             <span class="panel-stat-icon"><svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="3"/><circle cx="12" cy="14" r="3"/><path d="M9 7h6"/></svg></span>
-            <div><small>Всего панелей</small><b>{{ statistics.total }}</b></div>
+            <div><small>Всего панелей</small><b data-stat="total">{{ statistics.total }}</b></div>
         </article>
         <article class="panel-stat is-online">
             <span class="panel-stat-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.6 2.6L16 9"/></svg></span>
-            <div><small>В сети</small><b>{{ statistics.online }} <em>{{ statistics.online_percent }}%</em></b></div>
+            <div><small>В сети</small><b><span data-stat="online">{{ statistics.online }}</span> <em data-stat-percent="online">{{ statistics.online_percent }}%</em></b></div>
         </article>
         <article class="panel-stat is-offline">
             <span class="panel-stat-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 8l8 8M16 8l-8 8"/></svg></span>
-            <div><small>Нет связи</small><b>{{ statistics.offline }}</b></div>
+            <div><small>Нет связи</small><b data-stat="offline">{{ statistics.offline }}</b></div>
         </article>
         <article class="panel-stat is-error">
             <span class="panel-stat-icon"><svg viewBox="0 0 24 24"><path d="M12 3 2.8 20h18.4Z"/><path d="M12 9v5M12 17h.01"/></svg></span>
-            <div><small>Ошибки API</small><b>{{ statistics.errors }}</b></div>
+            <div><small>Ошибки API</small><b data-stat="errors">{{ statistics.errors }}</b></div>
         </article>
         <article class="panel-stat is-disabled">
             <span class="panel-stat-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M8 16h8"/></svg></span>
-            <div><small>Отключены</small><b>{{ statistics.disabled }}</b></div>
+            <div><small>Отключены</small><b data-stat="disabled">{{ statistics.disabled }}</b></div>
+        </article>
+        <article class="panel-stat is-unchecked">
+            <span class="panel-stat-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.8 9a2.4 2.4 0 1 1 3.7 2c-1 .6-1.5 1.1-1.5 2M12 17h.01"/></svg></span>
+            <div><small>Не проверено</small><b data-stat="unchecked">{{ statistics.unchecked }}</b></div>
+        </article>
+        <article class="panel-stat is-stale">
+            <span class="panel-stat-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+            <div><small>Данные устарели</small><b data-stat="stale">{{ statistics.stale }}</b></div>
         </article>
     </section>
 
@@ -68,13 +100,23 @@
                 </a>
             </div>
             <div class="panels-toolbar-status">
-                <button type="button" class="btn btn-ghost" id="refreshPanelsButton" {% if not visible_panel_ids %}disabled{% endif %}>
+                <button type="button" class="btn btn-ghost" id="refreshPanelsButton" {% if not api_configured or not is_admin %}disabled{% endif %}>
                     <svg class="refresh-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/></svg>
-                    Проверить текущую страницу
+                    Обновить мониторинг
                 </button>
-                <small>
-                    {% if statistics.last_checked_at %}Обновлено: {{ statistics.last_checked_at }}{% else %}Статусы ещё не проверялись{% endif %}
-                </small>
+                <div class="panel-monitor-progress" id="panelMonitorProgress" aria-live="polite">
+                    <b data-monitor-message>
+                        {% if monitor_state.status == 'running' %}Проверено {{ monitor_state.completed }} из {{ monitor_state.total }}
+                        {% elif monitor_state.status == 'queued' %}Обновление ожидает запуска
+                        {% else %}Мониторинг готов{% endif %}
+                    </b>
+                    <span><i data-monitor-bar style="width: {% if monitor_state.total %}{{ monitor_state.completed * 100 / monitor_state.total }}{% else %}0{% endif %}%"></i></span>
+                    <small data-monitor-time>
+                        {% if monitor_state.finished_at %}Последний полный цикл: {{ format_datetime(monitor_state.finished_at) }}
+                        {% elif statistics.last_checked_at %}Последняя проверка: {{ format_datetime(statistics.last_checked_at) }}
+                        {% else %}Панели ещё не проверялись{% endif %}
+                    </small>
+                </div>
             </div>
         </div>
 
@@ -83,22 +125,36 @@
                 <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg>
                 <input name="q" value="{{ filters.q }}" placeholder="Поиск по адресу, названию, MAC, IP или ID..." aria-label="Поиск панелей" data-smart-search="panels" autocomplete="off">
             </label>
-            <label><span>Статус сети</span><select name="status">
-                <option value="">Все состояния</option>
-                <option value="online" {% if filters.status == 'online' %}selected{% endif %}>В сети</option>
-                <option value="offline" {% if filters.status == 'offline' %}selected{% endif %}>Нет связи</option>
-                <option value="error" {% if filters.status == 'error' %}selected{% endif %}>Ошибки API</option>
-                <option value="unchecked" {% if filters.status == 'unchecked' %}selected{% endif %}>Не проверялись</option>
-                <option value="disabled" {% if filters.status == 'disabled' %}selected{% endif %}>Отключены</option>
-            </select></label>
-            <label><span>Адрес</span><select name="address">
-                <option value="">Все адреса</option>
-                {% for item in filter_options.addresses %}<option value="{{ item }}" {% if filters.address == item %}selected{% endif %}>{{ item }}</option>{% endfor %}
-            </select></label>
-            <label><span>Подъезд / вход</span><select name="entrance">
-                <option value="">Все</option>
-                {% for item in filter_options.entrances %}<option value="{{ item }}" {% if filters.entrance == item %}selected{% endif %}>{{ item }}</option>{% endfor %}
-            </select></label>
+            {{ combobox(
+                'status',
+                'Статус сети',
+                filters.status,
+                {
+                    'online': 'В сети',
+                    'offline': 'Нет связи',
+                    'error': 'Ошибки API',
+                    'unchecked': 'Не проверено',
+                    'stale': 'Данные устарели',
+                    'disabled': 'Отключены'
+                }.get(filters.status, ''),
+                [
+                    ('online', 'В сети'),
+                    ('offline', 'Нет связи'),
+                    ('error', 'Ошибки API'),
+                    ('unchecked', 'Не проверено'),
+                    ('stale', 'Данные устарели'),
+                    ('disabled', 'Отключены')
+                ],
+                'Все состояния'
+            ) }}
+            {{ combobox(
+                'address', 'Адрес', filters.address, filters.address,
+                filter_options.address_options, 'Все адреса'
+            ) }}
+            {{ combobox(
+                'entrance', 'Подъезд / вход', filters.entrance, filters.entrance,
+                filter_options.entrance_options, 'Все входы'
+            ) }}
             <button class="btn panels-filter-submit" type="submit">Показать</button>
             {% if base_query %}<a class="btn btn-ghost panels-filter-reset" href="/panels">Сбросить</a>{% endif %}
         </form>
@@ -108,33 +164,40 @@
                 <div class="panels-table-scroll custom-scroll">
                     <table class="panels-table" id="panelsTable">
                         <thead><tr>
-                            <th>ID</th><th>Адрес</th><th>Вход</th><th>Панель</th><th>MAC-адрес</th>
-                            <th>Состояние</th><th>Питание</th><th>Время работы</th><th>Последний онлайн</th><th>Действия</th>
+                            <th>ID</th><th>Адрес</th><th>Вход</th><th>MAC-адрес</th><th>Состояние</th>
+                            <th>Питание</th><th>Температура</th><th>Время работы</th><th>Прошивка</th><th>Действия</th>
                         </tr></thead>
                         <tbody>
                         {% for panel in panels %}
                         <tr class="{% if selected_panel and selected_panel.id == panel.id %}is-selected{% endif %}"
                             data-panel-id="{{ panel.id }}"
+                            data-enabled="{{ 1 if panel.enabled else 0 }}"
                             data-panel-url="/panels?{{ row_query }}{% if row_query %}&{% endif %}selected_panel_id={{ panel.id }}"
                             tabindex="0">
                             <td class="panel-id-cell">{{ panel.id }}</td>
                             <td><b class="panel-address">{{ panel.address }}</b></td>
                             <td>{{ panel.entrance or '—' }}</td>
-                            <td><span class="panel-name">{{ panel.name }}</span></td>
                             <td><code class="panel-mac">{{ panel.mac }}</code></td>
-                            <td><span class="panel-status is-{{ panel.status_tone }}"><i></i>{{ panel.status_name }}</span></td>
-                            <td class="panel-voltage">{% if panel.supply_voltage is not none %}{{ "%.2f"|format(panel.supply_voltage) }} В{% else %}—{% endif %}</td>
-                            <td>{{ panel.uptime_text }}</td>
-                            <td>{{ panel.last_online_at or '—' }}</td>
+                            <td data-panel-cell="status">
+                                <span class="panel-status is-{{ panel.status_tone }}"><i></i>{{ panel.status_name }}</span>
+                                {% if panel.is_stale %}<small class="panel-stale-flag">Данные устарели</small>{% endif %}
+                            </td>
+                            <td class="panel-voltage is-{{ panel.voltage_tone }}" data-panel-cell="voltage">{% if panel.supply_voltage is not none %}{{ "%.2f"|format(panel.supply_voltage) }} В{% else %}—{% endif %}</td>
+                            <td data-panel-cell="temperature">{% if panel.temperature is not none %}{{ "%.1f"|format(panel.temperature) }} °C{% else %}—{% endif %}</td>
+                            <td data-panel-cell="uptime">{{ panel.uptime_text }}</td>
+                            <td data-panel-cell="firmware">{{ panel.firmware_version or '—' }}</td>
                             <td class="panel-row-actions">
                                 <a href="/panels?{{ row_query }}{% if row_query %}&{% endif %}selected_panel_id={{ panel.id }}" title="Открыть карточку" aria-label="Открыть панель {{ panel.id }}">
                                     <svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></svg>
                                 </a>
-                                <button type="button" title="Редактировать" aria-label="Редактировать панель {{ panel.id }}"
+                                {% if is_admin %}<button type="button" title="Редактировать" aria-label="Редактировать панель {{ panel.id }}"
                                     data-edit-panel data-id="{{ panel.id }}" data-address="{{ panel.address }}"
                                     data-entrance="{{ panel.entrance or '' }}" data-ip="{{ panel.ip or '' }}" data-mac="{{ panel.mac }}">
                                     <svg viewBox="0 0 24 24"><path d="m4 20 4.5-1 10-10-3.5-3.5-10 10Z"/><path d="m13.5 7 3.5 3.5"/></svg>
                                 </button>
+                                {% if panel.enabled %}<button type="button" data-check-panel="{{ panel.id }}" title="Проверить эту панель" aria-label="Проверить панель {{ panel.id }}">
+                                    <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/></svg>
+                                </button>{% endif %}{% endif %}
                                 {% if panel.ip %}<a href="http://{{ panel.ip }}" target="_blank" rel="noopener noreferrer" title="Открыть веб-интерфейс" aria-label="Веб-интерфейс панели {{ panel.id }}">
                                     <svg viewBox="0 0 24 24"><path d="M14 5h5v5M19 5l-9 9"/><path d="M18 13v6H5V6h6"/></svg>
                                 </a>{% endif %}
@@ -167,21 +230,19 @@
                 {% if selected_panel %}
                 <header>
                     <div><small>Выбранное устройство</small><h2>Панель ID: {{ selected_panel.id }}</h2></div>
-                    <span class="panel-status is-{{ selected_panel.status_tone }}"><i></i>{{ selected_panel.status_name }}</span>
+                    <span class="panel-status is-{{ selected_panel.status_tone }}" data-inspector-field="status"><i></i>{{ selected_panel.status_name }}</span>
                 </header>
 
                 <div class="panel-camera">
-                    <div class="panel-camera-label"><span>Камера панели</span><small>кадр по запросу</small></div>
-                    {% if selected_panel.network_status == 'online' and selected_panel.ip and api_configured %}
-                    <img src="/panels/{{ selected_panel.id }}/snapshot?t={{ statistics.last_checked_at|urlencode }}" alt="Камера панели {{ selected_panel.id }}" loading="lazy" id="panelCameraImage">
-                    <span class="panel-live-badge">LIVE</span>
-                    {% else %}
-                    <div class="panel-camera-placeholder">
+                    <div class="panel-camera-label"><span>Камера панели</span><small>кадр только по запросу</small></div>
+                    <div class="panel-camera-placeholder" id="panelCameraPlaceholder">
                         <svg viewBox="0 0 24 24"><path d="M4 7h11a2 2 0 0 1 2 2v8H4Z"/><path d="m17 11 4-2v8l-4-2M8 7l1.5-2h3L14 7"/></svg>
-                        <b>Кадр недоступен</b>
-                        <span>{% if not selected_panel.ip %}Не указан IP-адрес{% elif not api_configured %}Не настроен доступ API{% else %}Сначала проверьте связь{% endif %}</span>
+                        <b>Кадр не загружен</b>
+                        <span>Камера не запрашивается при открытии страницы</span>
+                        <button type="button" class="btn btn-ghost" id="loadPanelSnapshot"
+                            data-panel-id="{{ selected_panel.id }}"
+                            {% if not selected_panel.ip or not api_configured %}disabled{% endif %}>Загрузить кадр</button>
                     </div>
-                    {% endif %}
                 </div>
 
                 <dl class="panel-detail-list">
@@ -190,28 +251,30 @@
                     <div><dt>Подъезд</dt><dd>{{ selected_panel.entrance or '—' }}</dd></div>
                     <div><dt>MAC-адрес</dt><dd><code>{{ selected_panel.mac }}</code></dd></div>
                     <div><dt>IP-адрес</dt><dd>{% if selected_panel.ip %}<a class="panel-external-link" href="http://{{ selected_panel.ip }}" target="_blank" rel="noopener"><span>{{ selected_panel.ip }}</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-9 9"/><path d="M18 13v6H5V6h6"/></svg></a>{% else %}—{% endif %}</dd></div>
-                    <div><dt>Модель</dt><dd>{{ selected_panel.device_model or '—' }}</dd></div>
-                    <div><dt>Прошивка</dt><dd>{{ selected_panel.firmware_version or '—' }}</dd></div>
+                    <div><dt>Модель</dt><dd data-inspector-field="device_model">{{ selected_panel.device_model or '—' }}</dd></div>
+                    <div><dt>Прошивка</dt><dd data-inspector-field="firmware_version">{{ selected_panel.firmware_version or '—' }}</dd></div>
                     {% if not selected_panel.mac_matches %}<div class="is-problem"><dt>MAC из API</dt><dd>{{ selected_panel.reported_mac }}</dd></div>{% endif %}
                 </dl>
 
                 <section class="panel-health">
                     <h3>Статус и параметры</h3>
                     <dl>
-                        <div><dt>Состояние</dt><dd><span class="panel-status is-{{ selected_panel.status_tone }}"><i></i>{{ selected_panel.status_name }}</span></dd></div>
-                        <div class="panel-power-row"><dt>Напряжение питания</dt><dd>{% if selected_panel.supply_voltage is not none %}<b>{{ "%.2f"|format(selected_panel.supply_voltage) }} В</b>{% else %}—{% endif %}</dd></div>
-                        <div><dt>Температура</dt><dd>{% if selected_panel.temperature is not none %}{{ "%.1f"|format(selected_panel.temperature) }} °C{% else %}—{% endif %}</dd></div>
-                        <div><dt>Время работы</dt><dd>{{ selected_panel.uptime_text }}</dd></div>
+                        <div><dt>Состояние</dt><dd><span class="panel-status is-{{ selected_panel.status_tone }}" data-inspector-field="health_status"><i></i>{{ selected_panel.status_name }}</span></dd></div>
+                        <div class="panel-power-row"><dt>Напряжение питания</dt><dd><b class="is-{{ selected_panel.voltage_tone }}" data-inspector-field="supply_voltage">{% if selected_panel.supply_voltage is not none %}{{ "%.2f"|format(selected_panel.supply_voltage) }} В{% else %}—{% endif %}</b></dd></div>
+                        <div><dt>Температура</dt><dd data-inspector-field="temperature">{% if selected_panel.temperature is not none %}{{ "%.1f"|format(selected_panel.temperature) }} °C{% else %}—{% endif %}</dd></div>
+                        <div><dt>Время работы</dt><dd data-inspector-field="uptime_text">{{ selected_panel.uptime_text }}</dd></div>
                         <div><dt>SIP-регистрация</dt><dd>{% if selected_panel.sip_registered is none %}—{% elif selected_panel.sip_registered %}Есть{% else %}Нет{% endif %}</dd></div>
+                        <div><dt>Последний онлайн</dt><dd data-inspector-field="last_online_at">{{ format_datetime(selected_panel.last_online_at) }}</dd></div>
+                        <div><dt>Последняя проверка</dt><dd data-inspector-field="last_checked_at">{{ format_datetime(selected_panel.last_checked_at) }}</dd></div>
                     </dl>
-                    {% if selected_panel.last_error %}<p class="panel-last-error">{{ selected_panel.last_error }}</p>{% endif %}
+                    <p class="panel-last-error" data-inspector-field="last_error" {% if not selected_panel.last_error %}hidden{% endif %}>{{ selected_panel.last_error }}</p>
                 </section>
 
                 <section class="panel-quick-actions">
                     <h3>Быстрые действия</h3>
-                    <button type="button" class="btn btn-ghost" id="checkSelectedPanel" data-panel-id="{{ selected_panel.id }}">Проверить связь</button>
+                    {% if is_admin and selected_panel.enabled %}<button type="button" class="btn btn-ghost" id="checkSelectedPanel" data-panel-id="{{ selected_panel.id }}">Проверить эту панель</button>{% endif %}
                     {% if is_admin and selected_panel.enabled and selected_panel.ip %}<button type="button" class="btn btn-ghost" id="rebootPanelButton" data-panel-id="{{ selected_panel.id }}">Перезагрузить панель</button>{% endif %}
-                    <button type="button" class="btn btn-ghost" data-edit-panel data-id="{{ selected_panel.id }}" data-address="{{ selected_panel.address }}" data-entrance="{{ selected_panel.entrance or '' }}" data-ip="{{ selected_panel.ip or '' }}" data-mac="{{ selected_panel.mac }}">Редактировать данные</button>
+                    {% if is_admin %}<button type="button" class="btn btn-ghost" data-edit-panel data-id="{{ selected_panel.id }}" data-address="{{ selected_panel.address }}" data-entrance="{{ selected_panel.entrance or '' }}" data-ip="{{ selected_panel.ip or '' }}" data-mac="{{ selected_panel.mac }}">Редактировать данные</button>{% endif %}
                     {% if is_admin %}
                     <form method="post" action="/panels/{{ selected_panel.id }}/toggle" data-confirm="{% if selected_panel.enabled %}Отключить панель только в локальном учёте? Команда на устройство не отправляется.{% else %}Вернуть панель в рабочий реестр?{% endif %}">
                         <input type="hidden" name="enabled" value="{% if selected_panel.enabled %}0{% else %}1{% endif %}">
@@ -267,5 +330,9 @@
 </div>
 
 <div class="panels-toast" id="panelsToast" role="status" aria-live="polite"></div>
-<script src="/static/js/panels.js?v=7"></script>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/combobox.js?v=1"></script>
+<script src="/static/js/panels.js?v=8"></script>
 {% endblock %}

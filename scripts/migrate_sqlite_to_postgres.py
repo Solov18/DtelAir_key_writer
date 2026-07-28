@@ -17,7 +17,7 @@ from typing import Any
 from sqlalchemy import Engine, create_engine, func, inspect, insert, select, text
 from sqlalchemy.orm import Session
 
-from app.models import employees, users
+from app.models import employees, roles, users
 from app.settings import settings
 
 
@@ -123,7 +123,40 @@ def migrate_rows(
             inserted_tables: list[str] = []
             for table in MIGRATED_TABLES:
                 columns = [column.name for column in table.columns]
-                source_rows = read_source_rows(source, table.name, columns)
+                if table.name == "users":
+                    legacy_columns = [
+                        column for column in columns if column != "role_id"
+                    ] + ["role"]
+                    legacy_rows = read_source_rows(
+                        source,
+                        table.name,
+                        legacy_columns,
+                    )
+                    role_ids = {
+                        str(code): int(role_id)
+                        for role_id, code in session.execute(
+                            select(roles.c.id, roles.c.code)
+                        )
+                    }
+                    viewer_role_id = role_ids.get("viewer")
+                    source_rows = []
+                    for legacy_row in legacy_rows:
+                        role_code = str(legacy_row.pop("role", "viewer"))
+                        role_id = role_ids.get(role_code, viewer_role_id)
+                        if role_id is None:
+                            raise RuntimeError(
+                                "В PostgreSQL не созданы системные роли. "
+                                "Сначала выполните alembic upgrade head."
+                            )
+                        source_rows.append(
+                            {**legacy_row, "role_id": role_id}
+                        )
+                else:
+                    source_rows = read_source_rows(
+                        source,
+                        table.name,
+                        columns,
+                    )
                 source_by_id = {
                     int(row["id"]): _normalize_row(row)
                     for row in source_rows

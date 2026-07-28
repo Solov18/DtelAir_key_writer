@@ -269,3 +269,30 @@ input[type="submit"]:active {
 .theme-toggle::after {
     content: "";
 }
+
+.topbar-logout-form { margin:0; }
+.topbar-logout { min-height:38px; display:flex; align-items:center; gap:7px; padding:7px 11px; color:var(--muted); border:1px solid var(--line-soft); border-radius:10px; background:var(--panel); cursor:pointer; font:inherit; font-size:11px; font-weight:800; }
+.topbar-logout:hover { color:var(--text-strong); border-color:var(--line); background:rgba(0,145,255,.08); }
+.topbar-logout svg { width:17px; fill:none; stroke:currentColor; stroke-width:1.8; }
+@media(max-width:780px){.topbar-logout span{display:none}.topbar-logout{padding:8px}}
+.dialog-open { overflow:hidden; }
+.app-dialog { position:fixed; inset:0; z-index:5000; display:grid; place-items:center; padding:20px; background:rgba(0,10,22,.72); opacity:0; visibility:hidden; transition:opacity .18s ease,visibility .18s ease; backdrop-filter:blur(5px); }
+.app-dialog.is-open { opacity:1; visibility:visible; }
+.app-dialog__panel { position:relative; width:min(500px,100%); padding:27px; color:var(--text); border:1px solid var(--line); border-radius:18px; background:var(--panel); box-shadow:0 24px 80px rgba(0,0,0,.42); transform:translateY(12px) scale(.98); transition:transform .2s ease; }
+.app-dialog.is-open .app-dialog__panel { transform:translateY(0) scale(1); }
+.app-dialog__close { position:absolute; top:14px; right:14px; width:34px; height:34px; display:grid; place-items:center; padding:0; color:var(--muted); border:1px solid var(--line-soft); border-radius:10px; background:transparent; font-size:22px; cursor:pointer; }
+.app-dialog__close:hover,.app-dialog__close:focus-visible { color:var(--text-strong); border-color:var(--line); outline:none; }
+.app-dialog__icon { width:46px; height:46px; display:grid; place-items:center; margin-bottom:16px; color:var(--blue-2); border:1px solid var(--line); border-radius:14px; background:rgba(0,145,255,.09); font-size:20px; font-weight:900; }
+.app-dialog__eyebrow { display:block; margin-bottom:5px; color:var(--blue-2); font-size:11px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; }
+.app-dialog h2 { margin:0; color:var(--text-strong); font-size:22px; }
+.app-dialog p { min-height:24px; margin:10px 0 22px; color:var(--muted); font-size:14px; line-height:1.55; white-space:pre-line; }
+.app-dialog__actions { display:flex; justify-content:flex-end; gap:10px; }
+.app-dialog__actions .btn { min-width:130px; }
+.app-dialog[data-variant="danger"] .app-dialog__panel { border-color:rgba(255,74,95,.5); box-shadow:0 24px 80px rgba(0,0,0,.48),0 0 34px rgba(255,44,75,.12); }
+.app-dialog[data-variant="danger"] .app-dialog__icon { color:#ff6b7b; border-color:rgba(255,74,95,.4); background:rgba(255,74,95,.1); }
+.app-dialog[data-variant="danger"] .app-dialog__eyebrow { color:#ff6b7b; }
+.app-dialog[data-variant="danger"] [data-dialog-confirm] { border-color:#ff6374; background:linear-gradient(180deg,#ff4a5f,#c91f35); box-shadow:0 8px 22px rgba(255,44,75,.22); }
+body.light-theme .app-dialog { background:rgba(15,36,55,.42); }
+body.light-theme .app-dialog__panel { background:#fff; box-shadow:0 24px 70px rgba(31,67,96,.24); }
+@media(max-width:560px){.app-dialog{padding:12px}.app-dialog__panel{padding:22px 18px}.app-dialog__actions{flex-direction:column-reverse}.app-dialog__actions .btn{width:100%}}
+@media(prefers-reduced-motion:reduce){.app-dialog,.app-dialog__panel{transition:none}}

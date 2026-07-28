@@ -310,7 +310,7 @@ class KeyInventoryTests(PostgreSQLTestCase):
         self.assertEqual(results[0]["status"], "KEY_UNAVAILABLE")
         self.assertFalse(results[0]["written"])
 
-    def test_assignment_keeps_employee_and_uk_sections_in_sync(self):
+    def test_generic_uk_assignment_replaces_employee_and_can_be_released(self):
         key_type_id = key_repository.create_key_type("Служебный", "#159ED9")
         key = self._create_key(key_type_id, 91, "A1B2C391")
 
@@ -341,24 +341,36 @@ class KeyInventoryTests(PostgreSQLTestCase):
                 "SELECT status FROM employee_keys WHERE key_id = ?",
                 (key["id"],),
             ).fetchone()[0]
-            uk_links = conn.execute(
-                "SELECT COUNT(*) FROM uk_group_keys WHERE key_id = ?",
+            uk_assignments = conn.execute(
+                """
+                SELECT COUNT(*)
+                FROM key_assignments
+                WHERE key_id = ?
+                  AND assignment_type = 'uk'
+                  AND active = 1
+                """,
                 (key["id"],),
             ).fetchone()[0]
 
         self.assertEqual(employee_status, "replaced")
-        self.assertEqual(uk_links, 1)
+        self.assertEqual(uk_assignments, 1)
         self.assertEqual(key_repository.get_key(key["id"])["status"], "assigned_uk")
 
         key_repository.release_key(key["id"], "Возвращён")
 
         with database.db() as conn:
-            uk_links_after_release = conn.execute(
-                "SELECT COUNT(*) FROM uk_group_keys WHERE key_id = ?",
+            uk_assignments_after_release = conn.execute(
+                """
+                SELECT COUNT(*)
+                FROM key_assignments
+                WHERE key_id = ?
+                  AND assignment_type = 'uk'
+                  AND active = 1
+                """,
                 (key["id"],),
             ).fetchone()[0]
 
-        self.assertEqual(uk_links_after_release, 0)
+        self.assertEqual(uk_assignments_after_release, 0)
         self.assertEqual(key_repository.get_key(key["id"])["status"], "free")
 
     def test_panel_id_and_previous_address_remain_searchable_in_history(self):

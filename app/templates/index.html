@@ -57,8 +57,8 @@
         <span class="context-dot is-role"></span>
         <p><small>Ваш уровень доступа</small><b>{{ role_label(current_user(request).role) }}</b></p>
     </div>
-    <a href="{{ '/settings' if current_user(request).role == 'admin' else '/search' }}">
-        {{ 'Настройки системы' if current_user(request).role == 'admin' else 'Перейти к поиску' }} →
+    <a href="{{ '/settings' if has_permission(current_user(request), 'manage_settings') else '/search' }}">
+        {{ 'Настройки системы' if has_permission(current_user(request), 'manage_settings') else 'Перейти к поиску' }} →
     </a>
 </div>
 
@@ -211,10 +211,13 @@
                         <i class="op-green"></i>
                     {% endif %}
 
-                    <span>{{ r.created_at }}</span>
-                    <span>{{ r.action_name }}</span>
-                    <span>{{ r.object_name_view }}</span>
-                    <span>{{ r.user_name }}</span>
+                    <span class="operation-time">
+                        <time>{{ r.created_date }}</time>
+                        {% if r.created_time %}<small>{{ r.created_time }}</small>{% endif %}
+                    </span>
+                    <span class="operation-cell" title="{{ r.action_name }}">{{ r.action_name }}</span>
+                    <span class="operation-cell" title="{{ r.object_name_view }}">{{ r.object_name_view }}</span>
+                    <span class="operation-cell" title="{{ r.user_name }}">{{ r.user_name }}</span>
                     <span class="badge {% if r.status_tone == 'error' %}error{% elif r.status_tone == 'warning' %}dry-run{% else %}success{% endif %}">
                         {{ r.status_name }}
                     </span>
@@ -235,7 +238,7 @@
 
         <div class="dashboard-quick-grid">
 
-    {% if has_permission(current_user(request), 'manage_registry') %}
+    {% if has_permission(current_user(request), 'manage_employees') or has_permission(current_user(request), 'manage_panels') or has_permission(current_user(request), 'manage_keys') %}
     <a href="/employees">
         <svg viewBox="0 0 24 24">
             <path d="M17 21a6 6 0 0 0-12 0"/>
@@ -294,6 +297,7 @@
     </a>
     {% endif %}
 
+    {% if has_permission(current_user(request), 'view_logs') %}
     <a href="/log">
         <svg viewBox="0 0 24 24">
             <path d="M8 3h8l2 3v15H6V6z"/>
@@ -304,8 +308,9 @@
             <small>История действий системы</small>
         </div>
     </a>
+    {% endif %}
 
-    {% if current_user(request).role == 'admin' %}
+    {% if has_permission(current_user(request), 'manage_settings') %}
     <a href="/settings">
         <svg viewBox="0 0 24 24">
             <circle cx="12" cy="12" r="3"/>

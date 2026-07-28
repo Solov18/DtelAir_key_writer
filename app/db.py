@@ -350,3 +350,7 @@ def init_db() -> None:
             "Выполните `alembic upgrade head`. "
             f"Отсутствуют таблицы: {', '.join(missing)}"
         )
+
+    from app.repositories.role_repository import ensure_system_roles
+
+    ensure_system_roles()

@@ -1,11 +1,13 @@
 import io
-from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, File, Form, Request, UploadFile
+from fastapi.concurrency import run_in_threadpool
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from openpyxl import Workbook
 
+from app.access_control import has_permission
 from app.repositories.panel_repository import (
     create_or_update_panel,
     delete_panel,
@@ -14,13 +16,19 @@ from app.repositories.panel_repository import (
     get_panel_filter_options,
     get_panel_page,
     get_panel_statistics,
-    get_panels_for_status_refresh,
+    normalize_panel_row,
+    seconds_since_last_check,
     set_panel_enabled,
     update_panel,
     update_panel_api_status,
 )
+from app.repositories.panel_monitor_repository import (
+    get_monitor_state,
+    request_monitor_cycle,
+)
 from app.services import import_panels_excel
 from app.services.audit import log_event
+from app.services.auth import get_current_user
 from app.services.panel_api import (
     PanelApiError,
     check_panel,
@@ -29,6 +37,7 @@ from app.services.panel_api import (
     reboot_panel,
 )
 from app.templates_config import templates
+from app.settings import settings
 
 
 router = APIRouter()
@@ -40,7 +49,7 @@ def _user_name(request: Request) -> str:
 
 
 def _is_admin(request: Request) -> bool:
-    return request.session.get("user", {}).get("role") == "admin"
+    return has_permission(get_current_user(request), "manage_panels")
 
 
 def _panels_redirect(**params) -> RedirectResponse:
@@ -59,6 +68,10 @@ def panels_page(
     page: int = 1,
     selected_panel_id: int = 0,
 ):
+    monitor_state = get_monitor_state()
+    checking_panel_ids = {
+        int(value) for value in monitor_state.get("active_panel_ids", [])
+    }
     panel_page = get_panel_page(
         query=q,
         status=status,
@@ -66,10 +79,18 @@ def panels_page(
         entrance=entrance,
         page=page,
         page_size=20,
+        stale_after_seconds=settings.panel_monitor_stale_seconds,
+        checking_panel_ids=checking_panel_ids,
     )
     selected_panel = get_panel_by_id(selected_panel_id) if selected_panel_id else None
     if not selected_panel and panel_page["items"]:
         selected_panel = panel_page["items"][0]
+    elif selected_panel:
+        selected_panel = normalize_panel_row(
+            selected_panel,
+            checking_panel_ids=checking_panel_ids,
+            stale_after_seconds=settings.panel_monitor_stale_seconds,
+        )
 
     filters = {
         "q": q,
@@ -98,13 +119,13 @@ def panels_page(
             "request": request,
             "panels": panel_page["items"],
             "panel_page": panel_page,
-            "statistics": get_panel_statistics(),
+            "statistics": get_panel_statistics(settings.panel_monitor_stale_seconds),
+            "monitor_state": monitor_state,
             "filter_options": get_panel_filter_options(),
             "filters": filters,
             "base_query": base_query,
             "row_query": row_query,
             "selected_panel": selected_panel,
-            "visible_panel_ids": [panel["id"] for panel in panel_page["items"] if panel["enabled"]],
             "api_configured": panel_api_configured(),
             "is_admin": _is_admin(request),
             "import_report": import_report,
@@ -168,42 +189,139 @@ def panels_edit(
     return _panels_redirect(message="Данные панели обновлены", selected_panel_id=panel_id)
 
 
-@router.post("/panels/status/refresh")
-async def panels_status_refresh(request: Request):
-    try:
-        payload = await request.json()
-        panel_ids = [int(value) for value in payload.get("panel_ids", [])][:100]
-    except (TypeError, ValueError):
-        return JSONResponse({"ok": False, "error": "Некорректный список панелей"}, status_code=400)
-
-    panels = get_panels_for_status_refresh(panel_ids)
-    if not panels:
-        return JSONResponse({"ok": False, "error": "Нет панелей для проверки"}, status_code=400)
-
-    with ThreadPoolExecutor(max_workers=min(12, len(panels))) as executor:
-        results = list(executor.map(check_panel, panels))
-
-    response_items = []
-    for panel, result in zip(panels, results):
-        update_panel_api_status(panel["id"], result)
-        response_items.append({"panel_id": panel["id"], **result})
-
-    online = sum(1 for item in results if item.get("status") == "online")
+@router.post("/panels/monitor/start")
+def panels_monitor_start(request: Request):
+    if not _is_admin(request):
+        return JSONResponse(
+            {"ok": False, "error": "Недостаточно прав для запуска мониторинга"},
+            status_code=403,
+        )
+    if not panel_api_configured():
+        return JSONResponse(
+            {"ok": False, "error": "Сначала настройте общие реквизиты API панелей"},
+            status_code=409,
+        )
+    state, created = request_monitor_cycle(_user_name(request))
     log_event(
         request=request,
-        action="panel_status_refresh",
+        action="panel_monitor_request",
         object_type="Панели",
-        object_name="Проверка текущей страницы",
-        details=f"Проверено: {len(results)}; в сети: {online}; требуют внимания: {len(results) - online}",
-        status="success" if online == len(results) else "warning",
+        object_name="Общий мониторинг",
+        details=(
+            "Поставлен в очередь общий цикл мониторинга"
+            if created
+            else "Используется уже запущенный общий цикл мониторинга"
+        ),
+        status="success",
     )
     return JSONResponse(
-        {
+        jsonable_encoder({
             "ok": True,
-            "items": response_items,
-            "statistics": get_panel_statistics(),
-            "message": f"Проверено панелей: {len(results)}",
-        }
+            "created": created,
+            "monitor": state,
+            "message": (
+                "Обновление мониторинга поставлено в очередь"
+                if created
+                else "Мониторинг уже выполняется"
+            ),
+        }),
+        status_code=202,
+    )
+
+
+@router.get("/panels/monitor/state")
+def panels_monitor_state(
+    q: str = "",
+    status: str = "",
+    address: str = "",
+    entrance: str = "",
+    page: int = 1,
+):
+    state = get_monitor_state()
+    checking_panel_ids = {
+        int(value) for value in state.get("active_panel_ids", [])
+    }
+    panel_page = get_panel_page(
+        query=q,
+        status=status,
+        address=address,
+        entrance=entrance,
+        page=page,
+        page_size=20,
+        stale_after_seconds=settings.panel_monitor_stale_seconds,
+        checking_panel_ids=checking_panel_ids,
+    )
+    return JSONResponse(
+        jsonable_encoder(
+            {
+                "ok": True,
+                "monitor": state,
+                "statistics": get_panel_statistics(settings.panel_monitor_stale_seconds),
+                "items": panel_page["items"],
+            }
+        )
+    )
+
+
+@router.post("/panels/{panel_id}/check")
+async def panel_check(request: Request, panel_id: int):
+    if not _is_admin(request):
+        return JSONResponse(
+            {"ok": False, "error": "Недостаточно прав для проверки панели"},
+            status_code=403,
+        )
+    panel = get_panel_by_id(panel_id)
+    if not panel:
+        return JSONResponse({"ok": False, "error": "Панель не найдена"}, status_code=404)
+    if not panel.get("enabled"):
+        return JSONResponse({"ok": False, "error": "Панель отключена в учёте"}, status_code=409)
+    monitor_state = get_monitor_state()
+    if monitor_state.get("status") in {"queued", "running"}:
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": (
+                    "Сейчас выполняется общий мониторинг. "
+                    "Дождитесь его завершения, чтобы не отправлять панели повторный запрос."
+                ),
+            },
+            status_code=409,
+        )
+    since_last_check = seconds_since_last_check(panel_id)
+    cooldown = max(1, int(settings.panel_manual_check_cooldown_seconds))
+    if since_last_check is not None and since_last_check < cooldown:
+        retry_after = max(1, round(cooldown - since_last_check))
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": f"Повторная проверка будет доступна через {retry_after} сек.",
+                "retry_after": retry_after,
+            },
+            status_code=429,
+        )
+    result = await run_in_threadpool(check_panel, panel)
+    update_panel_api_status(panel_id, result)
+    updated_panel = get_panel_by_id(panel_id)
+    log_event(
+        request=request,
+        action="panel_check",
+        object_type="Панель",
+        object_name=panel.get("name") or str(panel_id),
+        details=f"Ручная проверка панели ID {panel_id}",
+        status="success" if result.get("status") == "online" else "warning",
+        panel_id=panel_id,
+        address=panel.get("address", ""),
+        panel_name=panel.get("name", ""),
+        mac=panel.get("mac", ""),
+    )
+    return JSONResponse(
+        jsonable_encoder(
+            {
+                "ok": True,
+                "panel": updated_panel,
+                "statistics": get_panel_statistics(settings.panel_monitor_stale_seconds),
+            }
+        )
     )
 
 

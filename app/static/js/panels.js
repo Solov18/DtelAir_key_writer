@@ -1,50 +1,48 @@
 document.addEventListener("DOMContentLoaded", () => {
     const page = document.getElementById("panelsPage");
+    if (!page) return;
     const toast = document.getElementById("panelsToast");
-    let toastTimer;
+    const refreshButton = document.getElementById("refreshPanelsButton");
+    const monitorProgress = document.getElementById("panelMonitorProgress");
+    let toastTimer = 0;
+    let pollTimer = 0;
+    let stateRequestPending = false;
 
     function showToast(message, tone = "success") {
         if (!toast) return;
-        clearTimeout(toastTimer);
+        window.clearTimeout(toastTimer);
         toast.textContent = message;
         toast.className = `panels-toast is-visible is-${tone}`;
-        toastTimer = setTimeout(() => toast.classList.remove("is-visible"), 3200);
+        toastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 3600);
     }
 
     function openModal(modal) {
         if (!modal) return;
         modal.hidden = false;
         document.body.classList.add("modal-open");
-        const firstInput = modal.querySelector("input:not([type='hidden']), select, button");
-        if (firstInput) setTimeout(() => firstInput.focus(), 30);
+        window.setTimeout(() => modal.querySelector("input:not([type='hidden']), button")?.focus(), 30);
     }
 
     function closeModal(modal) {
         if (!modal) return;
         modal.hidden = true;
-        if (!document.querySelector(".panels-modal:not([hidden])")) {
-            document.body.classList.remove("modal-open");
-        }
+        if (!document.querySelector(".panels-modal:not([hidden])")) document.body.classList.remove("modal-open");
     }
 
     document.querySelectorAll("[data-open-modal]").forEach((button) => {
         button.addEventListener("click", () => openModal(document.getElementById(button.dataset.openModal)));
     });
-
     document.querySelectorAll("[data-close-modal]").forEach((button) => {
         button.addEventListener("click", () => closeModal(button.closest(".panels-modal")));
     });
 
     document.querySelectorAll(".panels-table tbody tr[data-panel-url]").forEach((row) => {
-        const openPanel = () => {
-            if (row.dataset.panelUrl) window.location.assign(row.dataset.panelUrl);
-        };
+        const openPanel = () => row.dataset.panelUrl && window.location.assign(row.dataset.panelUrl);
         row.addEventListener("click", (event) => {
-            if (event.target.closest("a, button, input, select, textarea")) return;
-            openPanel();
+            if (!event.target.closest("a, button, input, select, textarea")) openPanel();
         });
         row.addEventListener("keydown", (event) => {
-            if (event.key !== "Enter" && event.key !== " ") return;
+            if (!["Enter", " "].includes(event.key)) return;
             event.preventDefault();
             openPanel();
         });
@@ -52,12 +50,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const selectedRow = document.querySelector(".panels-table tbody tr.is-selected");
     const tableScroller = document.querySelector(".panels-table-scroll");
-    if (selectedRow && tableScroller) {
-        const rowTop = selectedRow.offsetTop;
-        const rowBottom = rowTop + selectedRow.offsetHeight;
-        if (rowBottom > tableScroller.clientHeight) {
-            tableScroller.scrollTop = Math.max(0, rowTop - tableScroller.clientHeight / 3);
-        }
+    if (selectedRow && tableScroller && selectedRow.offsetTop + selectedRow.offsetHeight > tableScroller.clientHeight) {
+        tableScroller.scrollTop = Math.max(0, selectedRow.offsetTop - tableScroller.clientHeight / 3);
     }
 
     const editModal = document.getElementById("panelEditModal");
@@ -72,69 +66,191 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
-    document.querySelectorAll("form[data-confirm]").forEach((form) => {
-        form.addEventListener("submit", (event) => {
-            if (!window.confirm(form.dataset.confirm || "Выполнить действие?")) {
-                event.preventDefault();
+    const formatNumber = (value, digits, suffix) => (
+        value === null || value === undefined || value === ""
+            ? "—"
+            : `${Number(value).toFixed(digits)}${suffix}`
+    );
+    const formatDate = (value) => {
+        if (!value) return "—";
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString("ru-RU");
+    };
+
+    function statusMarkup(panel) {
+        return `<span class="panel-status is-${panel.status_tone}"><i></i>${panel.status_name}</span>${
+            panel.is_stale ? '<small class="panel-stale-flag">Данные устарели</small>' : ""
+        }`;
+    }
+
+    function updateStatusElement(element, panel) {
+        if (!element) return;
+        element.className = `panel-status is-${panel.status_tone}`;
+        element.innerHTML = `<i></i>${panel.status_name}`;
+    }
+
+    function applyPanel(panel) {
+        const row = document.querySelector(`tr[data-panel-id="${panel.id}"]`);
+        if (row) {
+            const statusCell = row.querySelector('[data-panel-cell="status"]');
+            if (statusCell) statusCell.innerHTML = statusMarkup(panel);
+            const voltage = row.querySelector('[data-panel-cell="voltage"]');
+            if (voltage) {
+                voltage.textContent = formatNumber(panel.supply_voltage, 2, " В");
+                voltage.className = `panel-voltage is-${panel.voltage_tone}`;
+            }
+            const temperature = row.querySelector('[data-panel-cell="temperature"]');
+            if (temperature) temperature.textContent = formatNumber(panel.temperature, 1, " °C");
+            const uptime = row.querySelector('[data-panel-cell="uptime"]');
+            if (uptime) uptime.textContent = panel.uptime_text || "—";
+            const firmware = row.querySelector('[data-panel-cell="firmware"]');
+            if (firmware) firmware.textContent = panel.firmware_version || "—";
+        }
+
+        if (String(panel.id) !== String(page.dataset.selectedPanelId || "")) return;
+        updateStatusElement(document.querySelector('[data-inspector-field="status"]'), panel);
+        updateStatusElement(document.querySelector('[data-inspector-field="health_status"]'), panel);
+        const values = {
+            device_model: panel.device_model || "—",
+            firmware_version: panel.firmware_version || "—",
+            supply_voltage: formatNumber(panel.supply_voltage, 2, " В"),
+            temperature: formatNumber(panel.temperature, 1, " °C"),
+            uptime_text: panel.uptime_text || "—",
+            last_online_at: formatDate(panel.last_online_at),
+            last_checked_at: formatDate(panel.last_checked_at),
+        };
+        Object.entries(values).forEach(([field, value]) => {
+            const element = document.querySelector(`[data-inspector-field="${field}"]`);
+            if (element) element.textContent = value;
+        });
+        const power = document.querySelector('[data-inspector-field="supply_voltage"]');
+        if (power) power.className = `is-${panel.voltage_tone}`;
+        const error = document.querySelector('[data-inspector-field="last_error"]');
+        if (error) {
+            error.textContent = panel.last_error || "";
+            error.hidden = !panel.last_error;
+        }
+    }
+
+    function applyStatistics(statistics) {
+        ["total", "online", "offline", "errors", "disabled", "unchecked", "stale"].forEach((name) => {
+            const element = document.querySelector(`[data-stat="${name}"]`);
+            if (element) element.textContent = statistics[name] ?? 0;
+        });
+        const percent = document.querySelector('[data-stat-percent="online"]');
+        if (percent) percent.textContent = `${statistics.online_percent || 0}%`;
+    }
+
+    function applyMonitor(monitor) {
+        const running = ["queued", "running"].includes(monitor.status);
+        page.dataset.monitorStatus = monitor.status;
+        if (refreshButton) {
+            refreshButton.disabled = running || refreshButton.dataset.unavailable === "1";
+            refreshButton.classList.toggle("is-loading", running);
+        }
+        if (!monitorProgress) return;
+        const total = Number(monitor.total || 0);
+        const completed = Number(monitor.completed || 0);
+        const percentage = total ? Math.min(100, completed / total * 100) : 0;
+        const message = monitorProgress.querySelector("[data-monitor-message]");
+        const bar = monitorProgress.querySelector("[data-monitor-bar]");
+        const time = monitorProgress.querySelector("[data-monitor-time]");
+        if (bar) bar.style.width = `${percentage}%`;
+        if (message) {
+            if (monitor.status === "queued") message.textContent = "Обновление ожидает запуска";
+            else if (monitor.status === "running") message.textContent = `Проверено ${completed} из ${total}`;
+            else if (monitor.status === "failed") message.textContent = "Цикл завершился с ошибкой";
+            else message.textContent = "Мониторинг готов";
+        }
+        if (time && monitor.finished_at) time.textContent = `Последний полный цикл: ${formatDate(monitor.finished_at)}`;
+    }
+
+    function stateUrl() {
+        const params = new URLSearchParams(window.location.search);
+        params.delete("selected_panel_id");
+        return `/panels/monitor/state?${params.toString()}`;
+    }
+
+    async function pollState() {
+        if (stateRequestPending) return;
+        stateRequestPending = true;
+        window.clearTimeout(pollTimer);
+        try {
+            const response = await fetch(stateUrl(), {headers: {"Accept": "application/json"}});
+            const result = await response.json();
+            if (!response.ok || !result.ok) throw new Error(result.error || "Не удалось обновить состояние");
+            applyMonitor(result.monitor);
+            applyStatistics(result.statistics);
+            result.items.forEach(applyPanel);
+            const active = ["queued", "running"].includes(result.monitor.status);
+            pollTimer = window.setTimeout(pollState, active ? 1400 : 10000);
+        } catch (error) {
+            pollTimer = window.setTimeout(pollState, 10000);
+        } finally {
+            stateRequestPending = false;
+        }
+    }
+
+    if (refreshButton) {
+        refreshButton.dataset.unavailable = refreshButton.disabled && !["queued", "running"].includes(page.dataset.monitorStatus) ? "1" : "0";
+        refreshButton.addEventListener("click", async () => {
+            refreshButton.disabled = true;
+            try {
+                const response = await fetch("/panels/monitor/start", {method: "POST"});
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok || !result.ok) throw new Error(result.error || "Не удалось запустить мониторинг");
+                applyMonitor(result.monitor);
+                showToast(result.message || "Мониторинг запущен");
+                pollState();
+            } catch (error) {
+                showToast(error.message || "Ошибка запуска мониторинга", "error");
+                refreshButton.disabled = false;
             }
         });
-    });
+    }
 
-    async function refreshPanels(panelIds, button) {
-        if (!panelIds.length) {
-            showToast("Нет панелей для проверки", "warning");
-            return;
-        }
-        const originalText = button?.innerHTML;
-        if (button) {
-            button.disabled = true;
-            button.classList.add("is-loading");
-            button.innerHTML = "<svg class='refresh-icon' viewBox='0 0 24 24' aria-hidden='true'><path d='M20 11a8 8 0 1 0-2.3 5.7'/><path d='M20 5v6h-6'/></svg> Проверяем связь…";
-        }
+    async function checkOne(panelId, button) {
+        if (!panelId || !button || button.disabled) return;
+        const original = button.innerHTML;
+        button.disabled = true;
+        button.classList.add("is-loading");
+        if (button.id === "checkSelectedPanel") button.textContent = "Проверяем…";
+        const statusCell = document.querySelector(`tr[data-panel-id="${panelId}"] [data-panel-cell="status"]`);
+        if (statusCell) statusCell.innerHTML = '<span class="panel-status is-info"><i></i>Проверяется</span>';
         try {
-            const response = await fetch("/panels/status/refresh", {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({panel_ids: panelIds}),
-            });
+            const response = await fetch(`/panels/${panelId}/check`, {method: "POST"});
             const result = await response.json().catch(() => ({}));
-            if (!response.ok || !result.ok) throw new Error(result.error || "Не удалось проверить панели");
-            showToast(result.message || "Статусы обновлены");
-            setTimeout(() => window.location.reload(), 650);
+            if (!response.ok || !result.ok) throw new Error(result.error || "Проверка не выполнена");
+            applyPanel(result.panel);
+            applyStatistics(result.statistics);
+            showToast("Состояние панели обновлено");
         } catch (error) {
             showToast(error.message || "Ошибка проверки", "error");
-            if (button) {
-                button.disabled = false;
-                button.classList.remove("is-loading");
-                button.innerHTML = originalText;
-            }
+            pollState();
+        } finally {
+            button.disabled = false;
+            button.classList.remove("is-loading");
+            button.innerHTML = original;
         }
     }
 
-    const refreshButton = document.getElementById("refreshPanelsButton");
-    if (refreshButton && page) {
-        refreshButton.addEventListener("click", () => {
-            let panelIds = [];
-            try {
-                panelIds = JSON.parse(page.dataset.panelIds || "[]").map(Number).filter(Boolean);
-            } catch (_) {
-                panelIds = [];
-            }
-            refreshPanels(panelIds, refreshButton);
-        });
-    }
-
-    const checkSelectedButton = document.getElementById("checkSelectedPanel");
-    if (checkSelectedButton) {
-        checkSelectedButton.addEventListener("click", () => {
-            refreshPanels([Number(checkSelectedButton.dataset.panelId)], checkSelectedButton);
-        });
-    }
+    document.querySelectorAll("[data-check-panel]").forEach((button) => {
+        button.addEventListener("click", () => checkOne(Number(button.dataset.checkPanel), button));
+    });
+    const selectedCheck = document.getElementById("checkSelectedPanel");
+    if (selectedCheck) selectedCheck.addEventListener("click", () => checkOne(Number(selectedCheck.dataset.panelId), selectedCheck));
 
     const rebootButton = document.getElementById("rebootPanelButton");
     if (rebootButton) {
         rebootButton.addEventListener("click", async () => {
-            if (!window.confirm("Перезагрузить выбранную панель? Связь пропадёт на время запуска устройства.")) return;
+            const accepted = await window.showDangerConfirm({
+                title: "Перезагрузить панель?",
+                message: "Связь с выбранной панелью пропадёт на время запуска устройства.",
+                confirmText: "Перезагрузить",
+                cancelText: "Отмена",
+                source: rebootButton,
+            });
+            if (!accepted) return;
             rebootButton.disabled = true;
             const originalText = rebootButton.textContent;
             rebootButton.textContent = "Отправляем команду…";
@@ -152,18 +268,35 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    const cameraImage = document.getElementById("panelCameraImage");
-    if (cameraImage) {
-        cameraImage.addEventListener("error", () => {
-            const camera = cameraImage.closest(".panel-camera");
-            cameraImage.remove();
-            camera?.querySelector(".panel-live-badge")?.remove();
-            if (camera) {
-                const placeholder = document.createElement("div");
-                placeholder.className = "panel-camera-placeholder";
-                placeholder.innerHTML = "<b>Не удалось получить кадр</b><span>Проверьте связь и доступ API.</span>";
-                camera.appendChild(placeholder);
-            }
+    const snapshotButton = document.getElementById("loadPanelSnapshot");
+    if (snapshotButton) {
+        snapshotButton.addEventListener("click", () => {
+            const placeholder = document.getElementById("panelCameraPlaceholder");
+            if (!placeholder) return;
+            snapshotButton.disabled = true;
+            snapshotButton.textContent = "Загружаем…";
+            const image = new Image();
+            image.id = "panelCameraImage";
+            image.alt = `Камера панели ${snapshotButton.dataset.panelId}`;
+            image.addEventListener("load", () => {
+                placeholder.replaceWith(image);
+                const badge = document.createElement("span");
+                badge.className = "panel-live-badge";
+                badge.textContent = "КАДР";
+                image.closest(".panel-camera")?.appendChild(badge);
+            });
+            image.addEventListener("error", () => {
+                snapshotButton.disabled = false;
+                snapshotButton.textContent = "Повторить загрузку";
+                showToast("Не удалось получить кадр с панели", "error");
+            });
+            image.src = `/panels/${snapshotButton.dataset.panelId}/snapshot?t=${Date.now()}`;
         });
     }
+
+    if (refreshButton && ["queued", "running"].includes(page.dataset.monitorStatus)) {
+        refreshButton.disabled = true;
+        refreshButton.classList.add("is-loading");
+    }
+    pollState();
 });

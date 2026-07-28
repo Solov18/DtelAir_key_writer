@@ -45,7 +45,7 @@
             <h2>Архивная карточка</h2>
             <p class="subtitle">Сотрудник уволен {{ employee.dismissed_at or '' }}. Ключи освобождены, история сохранена.</p>
         </div>
-        <form method="post" action="/employees/{{ employee.id }}/restore" onsubmit="return confirm('Восстановить сотрудника?');">
+        <form method="post" action="/employees/{{ employee.id }}/restore" data-confirm="Восстановить сотрудника и вернуть его в активный реестр?" data-confirm-action="Восстановить">
             <button class="btn" type="submit">Восстановить</button>
         </form>
     </section>
@@ -241,7 +241,7 @@
             <h2>Увольнение сотрудника</h2>
             <p class="subtitle">Сотрудник перейдёт в архив. Все его активные ключи будут освобождены, история сохранится.</p>
         </div>
-        <form method="post" action="/employees/{{ employee.id }}/dismiss" data-confirm="Уволить сотрудника и освободить все активные ключи?">
+        <form method="post" action="/employees/{{ employee.id }}/dismiss" data-confirm="Сотрудник будет уволен, а все его активные ключи — освобождены." data-confirm-title="Уволить сотрудника?" data-confirm-action="Уволить и освободить ключи" data-confirm-variant="danger">
             <input name="comment" placeholder="Причина или комментарий" autocomplete="off">
             <button class="btn employee-danger-action" type="submit">Уволить сотрудника</button>
         </form>

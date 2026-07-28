@@ -1,6 +1,6 @@
 @import url("./base.css");
 @import url("./layout.css?v=3");
-@import url("./components.css");
+@import url("./components.css?v=2");
 @import url("./forms.css");
 @import url("./tables.css");
 @import url("./scroll.css");
@@ -15,5 +15,5 @@
 @import url("./pages/uk.css");
 
 @import url("./light-theme.css");
-@import url("./pages/users.css?v=4");
-@import url("./pages/settings.css?v=1");
+@import url("./pages/users.css?v=9");
+@import url("./pages/settings.css?v=3");

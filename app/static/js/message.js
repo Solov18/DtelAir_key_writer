@@ -172,8 +172,17 @@
         });
     });
 
-    writeForm.addEventListener("submit", (event) => {
+    let writeConfirmed = false;
+    writeForm.addEventListener("submit", async (event) => {
         updateWriteState();
+        if (writeConfirmed) {
+            writeConfirmed = false;
+            if (writeButton) {
+                writeButton.disabled = true;
+                writeButton.textContent = "Запись выполняется…";
+            }
+            return;
+        }
         if (writeButton?.disabled) {
             event.preventDefault();
             return;
@@ -184,15 +193,19 @@
         );
         const keyCount = Number(writeForm.dataset.keyCount || 0);
         const apartment = writeForm.dataset.apartment || "—";
-        const confirmation = window.confirm(
-            `Записать ключей: ${keyCount}\n` +
+        event.preventDefault();
+        const confirmation = await window.showDangerConfirm({
+            title: "Подтвердите запись ключей",
+            message: `Записать ключей: ${keyCount}\n` +
             `Панелей: ${checkedPanels.length}\n` +
             `Квартира: ${apartment}\n\n` +
-            "Продолжить фактическую запись?"
-        );
+            "После подтверждения начнётся фактическая запись.",
+            confirmText: "Записать ключи",
+            cancelText: "Вернуться к проверке",
+            source: writeButton,
+        });
 
         if (!confirmation) {
-            event.preventDefault();
             return;
         }
 
@@ -205,10 +218,8 @@
             selectedPanelsContainer?.appendChild(hiddenInput);
         });
 
-        if (writeButton) {
-            writeButton.disabled = true;
-            writeButton.textContent = "Запись выполняется…";
-        }
+        writeConfirmed = true;
+        writeForm.requestSubmit(writeButton || undefined);
     });
 
     updateWriteState();

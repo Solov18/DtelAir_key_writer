@@ -1,104 +1,231 @@
 {% extends 'base.html' %}
 
-{% block page_name %}Журнал{% endblock %}
+{% block page_name %}Журнал операций{% endblock %}
 
 {% block content %}
-<div class="hero-title">
-    <h1>Журнал операций</h1>
-    <p class="subtitle">История действий пользователей в системе</p>
-</div>
-
-<div class="panel log-panel">
-
-    <div class="panel-list-head">
+<div class="log-page">
+    <header class="hero-title log-hero">
         <div>
-            <h2>События</h2>
-            <p class="subtitle">
-                Найдено: <span id="logFound">{{ rows|length }}</span>
-            </p>
+            <span class="page-kicker">Аудит системы</span>
+            <h1>Журнал операций</h1>
+            <p class="subtitle">История действий пользователей, изменений реестров и системных событий.</p>
+        </div>
+        <div class="log-result-summary" aria-live="polite">
+            <span>Найдено</span>
+            <strong>{{ total }}</strong>
+            <small>записей</small>
+        </div>
+    </header>
+
+    <section class="panel log-filter-panel" aria-labelledby="logFiltersTitle">
+        <div class="log-filter-heading">
+            <div>
+                <span class="log-section-number">01</span>
+                <div>
+                    <h2 id="logFiltersTitle">Фильтры журнала</h2>
+                    <p>Все условия применяются одновременно и сохраняются в адресной строке.</p>
+                </div>
+            </div>
+            {% if filters.period != 'all' or filters.date_from or filters.date_to or filters.user_id or filters.action or filters.object_type or filters.status or filters.search %}
+            <span class="log-filters-active">Фильтры активны</span>
+            {% endif %}
         </div>
 
-        <div class="panel-search">
-            <input
-                type="text"
-                id="logSearch"
-                placeholder="Поиск по пользователю, действию, объекту..."
-                autocomplete="off"
-                data-smart-search="log"
-            >
+        <form id="logFilterForm" method="get" action="/log" class="log-filter-form">
+            <input type="hidden" name="period" id="logPeriod" value="{{ filters.period }}">
+
+            <fieldset class="log-period-fieldset">
+                <legend>Быстрый период</legend>
+                <div class="log-period-options" role="group" aria-label="Быстрый выбор периода">
+                    {% for value, label in [('today', 'Сегодня'), ('yesterday', 'Вчера'), ('7d', '7 дней'), ('30d', '30 дней'), ('all', 'Всё время')] %}
+                    <button
+                        type="button"
+                        class="log-period-button{% if filters.period == value %} is-active{% endif %}"
+                        data-log-period="{{ value }}"
+                        aria-pressed="{{ 'true' if filters.period == value else 'false' }}"
+                    >{{ label }}</button>
+                    {% endfor %}
+                </div>
+            </fieldset>
+
+            <div class="log-filter-grid">
+                <label class="log-field">
+                    <span>Дата от</span>
+                    <input type="date" name="date_from" value="{{ filters.date_from }}" data-log-custom-date>
+                </label>
+                <label class="log-field">
+                    <span>Дата до</span>
+                    <input type="date" name="date_to" value="{{ filters.date_to }}" data-log-custom-date>
+                </label>
+                <label class="log-field">
+                    <span>Пользователь</span>
+                    <select name="user_id">
+                        <option value="">Все пользователи</option>
+                        {% for user in users %}
+                        <option value="{{ user.id }}" {% if filters.user_id == user.id %}selected{% endif %}>
+                            {{ user.full_name }} · {{ user.login }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label class="log-field">
+                    <span>Действие</span>
+                    <select name="action">
+                        <option value="">Все действия</option>
+                        {% for item in actions %}
+                        <option value="{{ item.value }}" {% if filters.action == item.value %}selected{% endif %}>{{ item.label }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label class="log-field">
+                    <span>Тип объекта</span>
+                    <select name="object_type">
+                        <option value="">Все объекты</option>
+                        {% for value, label in object_types.items() %}
+                        <option value="{{ value }}" {% if filters.object_type == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label class="log-field">
+                    <span>Статус</span>
+                    <select name="status">
+                        <option value="">Все статусы</option>
+                        <option value="success" {% if filters.status == 'success' %}selected{% endif %}>Успешно</option>
+                        <option value="warning" {% if filters.status == 'warning' %}selected{% endif %}>Предупреждение</option>
+                        <option value="error" {% if filters.status == 'error' %}selected{% endif %}>Ошибка</option>
+                    </select>
+                </label>
+                <label class="log-field log-search-field">
+                    <span>Поиск по журналу</span>
+                    <div class="log-search-control">
+                        <span aria-hidden="true">⌕</span>
+                        <input
+                            type="search"
+                            name="search"
+                            value="{{ filters.search }}"
+                            placeholder="Пользователь, действие, объект или детали"
+                            autocomplete="off"
+                        >
+                    </div>
+                </label>
+                <label class="log-field">
+                    <span>Порядок</span>
+                    <select name="sort_order">
+                        <option value="desc" {% if filters.sort_order == 'desc' %}selected{% endif %}>Сначала новые</option>
+                        <option value="asc" {% if filters.sort_order == 'asc' %}selected{% endif %}>Сначала старые</option>
+                    </select>
+                </label>
+                <label class="log-field">
+                    <span>На странице</span>
+                    <select name="limit">
+                        {% for value in [25, 50, 100] %}
+                        <option value="{{ value }}" {% if filters.limit == value %}selected{% endif %}>{{ value }} записей</option>
+                        {% endfor %}
+                    </select>
+                </label>
+            </div>
+
+            <div class="log-filter-actions">
+                <button class="btn" type="submit">Применить фильтры →</button>
+                <a class="btn btn-ghost log-reset-button" href="/log" title="Очистить все выбранные фильтры">Сбросить всё</a>
+            </div>
+        </form>
+    </section>
+
+    <section class="panel log-panel" aria-labelledby="logEventsTitle">
+        <div class="log-table-heading">
+            <div>
+                <span class="log-section-number">02</span>
+                <div>
+                    <h2 id="logEventsTitle">События</h2>
+                    <p>
+                        {% if total %}
+                        Показаны {{ range_from }}–{{ range_to }} из {{ total }}
+                        {% else %}
+                        По выбранным условиям записей нет
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+            <span class="log-sort-note">{{ '↑ Сначала старые' if filters.sort_order == 'asc' else '↓ Сначала новые' }}</span>
         </div>
-    </div>
 
-    <div class="table-scroll log-scroll">
-        <table id="logTable">
-            <thead>
-            <tr>
-                <th>Дата</th>
-                <th>Пользователь</th>
-                <th>Действие</th>
-                <th>Объект</th>
-                <th>Детали</th>
-                <th>Статус</th>
-            </tr>
-            </thead>
+        <div class="table-scroll log-scroll">
+            <table id="logTable">
+                <thead>
+                <tr>
+                    <th>Дата</th>
+                    <th>Пользователь</th>
+                    <th>Действие</th>
+                    <th>Объект</th>
+                    <th>Детали</th>
+                    <th>Статус</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for r in rows %}
+                <tr>
+                    <td class="log-date-cell">
+                        <strong>{{ r.created_date or r.created_at }}</strong>
+                        {% if r.created_time %}<span>{{ r.created_time }}</span>{% endif %}
+                    </td>
+                    <td>
+                        <strong>{{ r.user_name }}</strong>
+                        <span class="log-cell-muted">{{ r.username or r.user_role_name }}</span>
+                    </td>
+                    <td><strong>{{ r.action_name }}</strong></td>
+                    <td>
+                        <strong>{{ r.object_name_view }}</strong>
+                        <span class="log-cell-muted">{{ r.object_type_view or 'Другое' }}</span>
+                    </td>
+                    <td class="log-details-cell">{{ r.details_view }}</td>
+                    <td>
+                        <span class="badge {% if r.status_tone == 'error' %}error{% elif r.status_tone == 'warning' %}dry-run{% else %}success{% endif %}">
+                            {{ r.status_name }}
+                        </span>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="log-empty-state">
+                        <span aria-hidden="true">⌕</span>
+                        <strong>Записи не найдены</strong>
+                        <p>Измените условия поиска или сбросьте все фильтры.</p>
+                        <a href="/log">Сбросить фильтры</a>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
 
-            <tbody>
-            {% for r in rows %}
-            <tr>
-                <td>{{ r.created_at }}</td>
+        {% if total %}
+        <nav class="log-pagination" aria-label="Страницы журнала">
+            <div>Страница {{ page }} из {{ page_count }}</div>
+            <div class="log-pagination-links">
+                {% if previous_url %}
+                <a href="{{ previous_url }}" aria-label="Предыдущая страница">←</a>
+                {% else %}
+                <span class="is-disabled" aria-hidden="true">←</span>
+                {% endif %}
 
-                <td>
-                    <b>{{ r.user_name }}</b><br>
-                    <span class="subtitle">{{ r.user_role_name }}</span>
-                </td>
+                {% set state = namespace(previous=0) %}
+                {% for item in page_numbers %}
+                    {% if state.previous and item.number - state.previous > 1 %}<span class="log-page-gap">…</span>{% endif %}
+                    <a href="{{ item.url }}" class="{% if item.number == page %}is-current{% endif %}" {% if item.number == page %}aria-current="page"{% endif %}>{{ item.number }}</a>
+                    {% set state.previous = item.number %}
+                {% endfor %}
 
-                <td>{{ r.action_name }}</td>
-
-                <td>
-                    <b>{{ r.object_name_view }}</b><br>
-                    <span class="subtitle">{{ r.object_type_view }}</span>
-                </td>
-
-                <td>{{ r.details_view }}</td>
-
-                <td>
-                    {% if r.status_tone == 'error' %}
-                        <span class="badge error">{{ r.status_name }}</span>
-                    {% elif r.status_tone == 'warning' %}
-                        <span class="badge dry-run">{{ r.status_name }}</span>
-                    {% else %}
-                        <span class="badge success">{{ r.status_name }}</span>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
+                {% if next_url %}
+                <a href="{{ next_url }}" aria-label="Следующая страница">→</a>
+                {% else %}
+                <span class="is-disabled" aria-hidden="true">→</span>
+                {% endif %}
+            </div>
+        </nav>
+        {% endif %}
+    </section>
 </div>
 
-<script>
-const logSearch = document.getElementById("logSearch");
-const logTable = document.getElementById("logTable");
-const logFound = document.getElementById("logFound");
-
-if (logSearch && logTable && logFound) {
-    const rows = Array.from(logTable.querySelectorAll("tbody tr"));
-
-    logSearch.addEventListener("input", function () {
-        const normalize = window.smartSearchNormalize || ((value) => String(value || "").toLowerCase());
-        const query = normalize(this.value);
-        let visible = 0;
-
-        rows.forEach((row) => {
-            const match = normalize(row.innerText).includes(query);
-            row.style.display = match ? "" : "none";
-
-            if (match) visible += 1;
-        });
-
-        logFound.textContent = visible;
-    });
-}
-</script>
+<script src="/static/js/log-filters.js?v=1"></script>
 {% endblock %}

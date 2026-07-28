@@ -1,110 +1,113 @@
 {% extends 'base.html' %}
 
-{% block page_name %}Пользователи и роли{% endblock %}
+{% block page_name %}Пользователи{% endblock %}
 
 {% block content %}
 <div class="users-page">
     <div class="users-hero">
         <div>
+            <a class="page-back-link" href="/settings">← Настройки</a>
             <span class="page-kicker">Безопасность и доступ</span>
             <h1>Пользователи</h1>
-            <p class="subtitle">Учётные записи, роли и доступ к операциям системы.</p>
+            <p class="subtitle">Учётные записи, роли, состояние доступа и смена пароля.</p>
         </div>
-        <a class="btn btn-ghost" href="/settings">Настройки и права</a>
+        <a class="btn btn-ghost" href="/settings/roles">Роли и права →</a>
     </div>
 
     {% if error %}<div class="users-error">{{ error }}</div>{% endif %}
 
-    <div class="users-stats">
-        <div><b>{{ stats.total }}</b><span>Всего</span></div>
-        <div><b>{{ stats.active }}</b><span>Активны</span></div>
-        <div><b>{{ stats.admins }}</b><span>Администраторы</span></div>
-        <div><b>{{ stats.operators }}</b><span>Операторы</span></div>
-        <div><b>{{ stats.viewers }}</b><span>Наблюдатели</span></div>
+    <div class="users-stats" role="group" aria-label="Фильтр пользователей">
+        <button type="button" class="user-filter is-active" data-user-filter="all" aria-pressed="true"><b>{{ stats.total }}</b><span>Все</span></button>
+        <button type="button" class="user-filter" data-user-filter="active" aria-pressed="false"><b>{{ stats.active }}</b><span>Активны</span></button>
+        <button type="button" class="user-filter" data-user-filter="admin" aria-pressed="false"><b>{{ stats.admins }}</b><span>Администраторы</span></button>
+        <button type="button" class="user-filter" data-user-filter="operator" aria-pressed="false"><b>{{ stats.operators }}</b><span>Операторы</span></button>
+        <button type="button" class="user-filter" data-user-filter="viewer" aria-pressed="false"><b>{{ stats.viewers }}</b><span>Наблюдатели</span></button>
     </div>
 
     <div class="users-layout">
         <aside class="panel user-create-card">
-            <div class="users-card-title"><span>+</span><div><h2>Новый пользователь</h2><p>Создайте отдельный вход и назначьте минимально нужную роль.</p></div></div>
+            <div class="users-card-title"><span>+</span><div><h2>Новый пользователь</h2><p>Создайте отдельную учётную запись и назначьте минимально необходимую роль.</p></div></div>
             <form method="post" action="/users/add">
                 <label>ФИО<input name="full_name" placeholder="Иванов Иван Иванович" autocomplete="name" required></label>
                 <label>Логин<input name="login" placeholder="ivanov" autocomplete="off" required></label>
                 <label>Временный пароль<input type="password" name="password" minlength="8" placeholder="Не менее 8 символов" autocomplete="new-password" required></label>
                 <label>Роль
-                    <select name="role">
-                        {% for code in role_order %}
-                        <option value="{{ code }}" {% if code == 'operator' %}selected{% endif %}>{{ roles[code].label }}</option>
+                    <select name="role_id" required>
+                        {% for role in roles %}
+                        <option value="{{ role.id }}" {% if role.code == 'operator' %}selected{% endif %}>{{ role.name }}</option>
                         {% endfor %}
                     </select>
                 </label>
                 <button type="submit" class="btn">Создать пользователя</button>
             </form>
-            <div class="user-role-help">
-                {% for code in role_order %}
-                <div><b>{{ roles[code].label }}</b><span>{{ roles[code].description }}</span></div>
-                {% endfor %}
-            </div>
         </aside>
 
         <section class="panel users-register">
             <div class="users-register-head">
                 <div><h2>Учётные записи</h2><p>{{ stats.active }} активных из {{ stats.total }}</p></div>
-                <a href="/logout" class="btn-small btn-ghost">Выйти из системы</a>
             </div>
             <div class="users-list">
                 {% for u in users %}
-                <article class="user-card {% if not u.active %}disabled{% endif %}">
+                {% set is_self = current_user(request) and u.id == current_user(request)["id"] %}
+                <article class="user-card {% if not u.active %}disabled{% endif %}" data-user-card data-active="{{ 1 if u.active else 0 }}" data-role="{{ u.role }}">
                     <div class="user-main">
-                        <div class="user-avatar">{{ u.full_name[:1] }}</div>
+                        <div class="user-avatar">{{ u.full_name[:1]|upper }}</div>
                         <div class="user-info">
-                            <div><b>{{ u.full_name }}</b>{% if current_user(request) and u.id == current_user(request)["id"] %}<span class="user-current">Вы</span>{% endif %}</div>
-                            <span>@{{ u.login }}</span>
+                            <div><b>{{ u.full_name }}</b>{% if is_self %}<span class="user-current">Вы</span>{% endif %}</div>
+                            <span>@{{ u.login }} · {{ u.role_name }}</span>
                             <small>Последний вход: {{ u.last_login or 'ещё не входил' }}</small>
                         </div>
-                        <span class="user-state {% if u.active %}is-active{% endif %}">{{ 'Доступен' if u.active else 'Отключён' }}</span>
+                        <span class="user-state {% if u.active %}is-active{% endif %}">{{ 'Активен' if u.active else 'Отключён' }}</span>
                     </div>
 
                     <div class="user-control-grid">
-                        {% if not current_user(request) or u.id != current_user(request)["id"] %}
-                        <form method="post" action="/users/role" class="user-role-form">
+                        <form method="post" action="/users/update" class="user-profile-form">
                             <input type="hidden" name="user_id" value="{{ u.id }}">
+                            <label>ФИО<input name="full_name" value="{{ u.full_name }}" required></label>
+                            <label>Логин<input name="login" value="{{ u.login }}" required autocomplete="off"></label>
                             <label>Роль
-                                <select name="role" {% if current_user(request) and u.id == current_user(request)["id"] %}title="Смена собственной роли может закрыть этот раздел"{% endif %}>
-                                    {% for code in role_order %}<option value="{{ code }}" {% if u.role == code %}selected{% endif %}>{{ roles[code].label }}</option>{% endfor %}
+                                <select name="role_id" {% if is_self %}disabled title="Собственную роль менять нельзя"{% endif %}>
+                                    {% for role in roles %}<option value="{{ role.id }}" {% if u.role_id == role.id %}selected{% endif %}>{{ role.name }}</option>{% endfor %}
                                 </select>
+                                {% if is_self %}<input type="hidden" name="role_id" value="{{ u.role_id }}">{% endif %}
                             </label>
-                            <button type="submit" class="btn-small btn-ghost">Сохранить роль</button>
+                            <button type="submit" class="btn-small btn-ghost">Сохранить профиль</button>
                         </form>
-                        {% else %}
-                        <div class="user-self-role"><small>Роль</small><b>{{ role_label(u.role) }}</b><span>Собственная роль защищена</span></div>
-                        {% endif %}
 
                         <form method="post" action="/users/password" class="user-password-form">
                             <input type="hidden" name="user_id" value="{{ u.id }}">
                             <label>Новый пароль<input type="password" name="password" minlength="8" placeholder="Не менее 8 символов" autocomplete="new-password" required></label>
-                            <button type="submit" class="btn-small btn-ghost">Сменить пароль</button>
+                            <button type="submit" class="btn-small btn-ghost" data-confirm="Сменить пароль пользователя {{ u.full_name }}?">Сменить пароль</button>
                         </form>
 
                         <div class="user-access-actions">
-                            {% if not current_user(request) or u.id != current_user(request)["id"] %}
+                            {% if not is_self %}
                             <form method="post" action="/users/active">
                                 <input type="hidden" name="user_id" value="{{ u.id }}">
                                 <input type="hidden" name="active" value="{{ 0 if u.active else 1 }}">
-                                <button type="submit" class="btn-small {% if u.active %}btn-ghost{% endif %}">{{ 'Приостановить' if u.active else 'Включить доступ' }}</button>
+                                <button type="submit" class="btn-small {% if u.active %}btn-ghost{% endif %}"
+                                        data-confirm="{{ 'Приостановить доступ пользователя?' if u.active else 'Активировать пользователя?' }}">
+                                    {{ 'Приостановить' if u.active else 'Включить доступ' }}
+                                </button>
                             </form>
-                            <form method="post" action="/users/delete" onsubmit="return confirm('Удалить учётную запись {{ u.full_name }}?')">
+                            <form method="post" action="/users/delete">
                                 <input type="hidden" name="user_id" value="{{ u.id }}">
-                                <button type="submit" class="danger-btn btn-small">Удалить</button>
+                                <button type="submit" class="danger-btn btn-small" data-confirm="Учётная запись {{ u.full_name }} будет удалена без возможности входа." data-confirm-title="Удалить пользователя?" data-confirm-action="Удалить">Удалить</button>
                             </form>
                             {% else %}
-                            <span>Текущая учётная запись защищена</span>
+                            <span>Текущая учётная запись защищена от отключения и удаления.</span>
                             {% endif %}
                         </div>
                     </div>
                 </article>
                 {% endfor %}
+                <div class="users-filter-empty" data-users-filter-empty hidden>В этой категории пока нет пользователей.</div>
             </div>
         </section>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/users-filter.js?v=1"></script>
 {% endblock %}

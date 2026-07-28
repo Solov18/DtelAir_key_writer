@@ -82,7 +82,7 @@
 
 .panels-stats {
     display: grid;
-    grid-template-columns: repeat(5, minmax(150px, 1fr));
+    grid-template-columns: repeat(7, minmax(125px, 1fr));
     gap: 12px;
 }
 
@@ -128,6 +128,8 @@
 .panel-stat.is-offline .panel-stat-icon { color: #f3ad32; border-color: rgba(243,173,50,.35); background: rgba(243,173,50,.08); }
 .panel-stat.is-error .panel-stat-icon { color: #ff5c70; border-color: rgba(255,92,112,.35); background: rgba(255,92,112,.08); }
 .panel-stat.is-disabled .panel-stat-icon { color: #8aa1b7; border-color: rgba(138,161,183,.3); background: rgba(138,161,183,.07); }
+.panel-stat.is-unchecked .panel-stat-icon { color: #7da5c3; border-color: rgba(125,165,195,.32); background: rgba(125,165,195,.08); }
+.panel-stat.is-stale .panel-stat-icon { color: #d497ff; border-color: rgba(194,113,255,.3); background: rgba(194,113,255,.08); }
 
 .panels-workspace {
     padding: 0;
@@ -162,6 +164,27 @@
 .panels-toolbar .btn:disabled { opacity: .48; cursor: not-allowed; transform: none; }
 .panels-toolbar .is-loading .refresh-icon { display: inline-block; animation: panels-spin .8s linear infinite; }
 @keyframes panels-spin { to { transform: rotate(360deg); } }
+
+.panel-monitor-progress {
+    display: grid;
+    gap: 4px;
+    width: min(285px, 34vw);
+}
+.panel-monitor-progress b { color: var(--text-strong); font-size: 11px; }
+.panel-monitor-progress > span {
+    height: 5px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(112, 164, 198, .16);
+}
+.panel-monitor-progress > span i {
+    display: block;
+    width: 0;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #0d91ef, #35d99a);
+    transition: width .25s ease;
+}
 
 .panels-filters {
     display: grid;
@@ -209,6 +232,80 @@
 .panels-filter-submit,
 .panels-filter-reset { min-height: 40px; padding: 0 15px; font-size: 12px; }
 
+.panels-combobox-field { position: relative; }
+.app-combobox { position: relative; min-width: 0; }
+.app-combobox__trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    height: 44px;
+    padding: 0 12px;
+    color: var(--field-text);
+    border: 1px solid var(--field-border);
+    border-radius: 9px;
+    outline: none;
+    background: var(--field-bg) !important;
+    box-shadow: none !important;
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+}
+.app-combobox__trigger:hover,
+.app-combobox__trigger:focus-visible,
+.app-combobox.is-open .app-combobox__trigger {
+    border-color: rgba(0, 174, 255, .78);
+    box-shadow: 0 0 0 3px rgba(0, 170, 255, .09);
+}
+.app-combobox__trigger svg {
+    width: 17px;
+    height: 17px;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    transition: transform .18s ease;
+}
+.app-combobox.is-open .app-combobox__trigger svg { transform: rotate(180deg); }
+.app-combobox__popup {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 40;
+    width: max(100%, 250px);
+    padding: 8px;
+    border: 1px solid rgba(0, 169, 255, .36);
+    border-radius: 11px;
+    background: #031424;
+    box-shadow: 0 18px 45px rgba(0, 0, 0, .42);
+}
+.app-combobox__popup[hidden] { display: none; }
+.app-combobox__search {
+    height: 38px !important;
+    margin-bottom: 7px;
+}
+.app-combobox__options { display: grid; max-height: 230px; overflow-y: auto; }
+.app-combobox__options button {
+    min-height: 36px;
+    padding: 7px 9px;
+    color: var(--text);
+    border: 0;
+    border-radius: 7px;
+    outline: none;
+    background: transparent !important;
+    box-shadow: none !important;
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+}
+.app-combobox__options button:hover,
+.app-combobox__options button:focus-visible,
+.app-combobox__options button.is-active { color: #fff; background: rgba(0, 151, 241, .17) !important; }
+.app-combobox__options button[aria-selected="true"] { color: #49c5ff; font-weight: 800; }
+
 .panels-main-grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 420px;
@@ -222,7 +319,7 @@
     overflow: auto;
     overscroll-behavior: contain;
 }
-.panels-table { width: 100%; min-width: 1120px; border-collapse: collapse; font-size: 13px; }
+.panels-table { width: 100%; min-width: 1280px; border-collapse: collapse; font-size: 13px; }
 .panels-table th {
     position: sticky;
     top: 0;
@@ -256,7 +353,21 @@
 .panel-address { color: var(--text-strong); font-size: 13px; }
 .panel-name { display: block; max-width: 150px; overflow: hidden; color: var(--muted); text-overflow: ellipsis; }
 .panel-mac { padding: 0; color: #c7dff1; background: transparent; font-family: Consolas, monospace; font-size: 12px; }
-.panel-voltage { color: #4ce3a1 !important; font-weight: 850; }
+.panel-voltage { font-weight: 850; }
+.panel-voltage.is-normal,
+.panel-power-row b.is-normal { color: #4ce3a1 !important; }
+.panel-voltage.is-alert,
+.panel-power-row b.is-alert { color: #ff6377 !important; }
+.panel-voltage.is-missing,
+.panel-power-row b.is-missing { color: var(--muted) !important; }
+.panel-stale-flag {
+    display: block;
+    margin-top: 4px;
+    color: #d497ff;
+    font-size: 9px;
+    font-weight: 800;
+    white-space: nowrap;
+}
 
 .panel-status {
     display: inline-flex;
@@ -276,6 +387,7 @@
 .panel-status.is-success { color: #39db91; border-color: rgba(57,219,145,.28); background: rgba(57,219,145,.07); }
 .panel-status.is-warning { color: #efb64b; border-color: rgba(239,182,75,.3); background: rgba(239,182,75,.08); }
 .panel-status.is-error { color: #ff6377; border-color: rgba(255,99,119,.3); background: rgba(255,99,119,.08); }
+.panel-status.is-info { color: #36bfff; border-color: rgba(54,191,255,.3); background: rgba(54,191,255,.08); }
 .panel-inspector .panel-status { min-height: 30px; padding: 0 10px; font-size: 12px; }
 
 .panel-row-actions { display: flex; align-items: center; gap: 5px; }
@@ -363,6 +475,7 @@
 .panel-camera-placeholder svg { width: 42px; height: 42px; fill: none; stroke: #3abaff; stroke-width: 1.5; }
 .panel-camera-placeholder b { color: var(--text-strong); font-size: 15px; }
 .panel-camera-placeholder span { font-size: 12px; }
+.panel-camera-placeholder .btn { width: auto; min-height: 34px; padding: 0 13px; font-size: 11px; }
 
 .panel-detail-list,
 .panel-health { padding: 18px 20px; border-bottom: 1px solid var(--panels-border); }
@@ -470,6 +583,17 @@ body.light-theme .panel-stat { background: rgba(255,255,255,.94); box-shadow: 0 
 body.light-theme .panels-workspace,
 body.light-theme .panel-inspector { background: rgba(255,255,255,.94); }
 body.light-theme .panels-filters { background: #f7fbff; }
+body.light-theme .app-combobox__popup {
+    border-color: #b8dcef;
+    background: #fff;
+    box-shadow: 0 18px 42px rgba(41, 78, 109, .2);
+}
+body.light-theme .app-combobox__options button:hover,
+body.light-theme .app-combobox__options button:focus-visible,
+body.light-theme .app-combobox__options button.is-active {
+    color: #0b5d91;
+    background: #e8f6ff !important;
+}
 body.light-theme .panels-table th { color: #557087; background: #eaf4fb; }
 body.light-theme .panels-table td { color: #162b3e; border-bottom-color: #e0edf6; }
 body.light-theme .panels-table tr:hover td { background: #f0f8ff; }
@@ -500,14 +624,14 @@ body.light-theme .panel-import-form input { color: #102033; border-color: #c8dfe
 body.light-theme .panel-modal-note { background: #eff8ff; }
 
 @media (max-width: 1500px) {
-    .panels-stats { grid-template-columns: repeat(5, minmax(130px, 1fr)); }
+    .panels-stats { grid-template-columns: repeat(4, minmax(130px, 1fr)); }
     .panel-stat { padding: 13px; }
     .panel-stat-icon { width: 40px; height: 40px; }
     .panel-stat b { font-size: 22px; }
     .panels-main-grid { grid-template-columns: minmax(0, 1fr) 380px; }
 }
 
-@media (max-width: 1260px) {
+@media (max-width: 1380px) {
     .panels-stats { grid-template-columns: repeat(3, 1fr); }
     .panels-filters { grid-template-columns: minmax(240px, 1.5fr) repeat(2, minmax(150px, 1fr)); }
     .panels-filter-submit,
@@ -526,6 +650,7 @@ body.light-theme .panel-modal-note { background: #eff8ff; }
     .panels-api-state { min-width: 0; }
     .panels-stats { grid-template-columns: repeat(2, 1fr); }
     .panels-toolbar-status { align-items: stretch; flex-direction: column; }
+    .panel-monitor-progress { width: 100%; }
     .panels-toolbar-actions { flex-wrap: wrap; }
     .panels-filters { grid-template-columns: 1fr 1fr; }
     .panels-search-field { grid-column: 1 / -1; }

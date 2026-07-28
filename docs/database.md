@@ -1,41 +1,10 @@
 # База данных PostgreSQL
 
-Документ описывает фактическую структуру, закреплённую начальной миграцией
-Alembic `20260724_01`. Типы дат и времени намеренно оставлены `TEXT`: текущее
-приложение хранит и обрабатывает их как ISO-подобные строки. Менять их на
-`timestamp` без отдельной миграции бизнес-логики нельзя.
-
-## Важные особенности исходной структуры
-
-При read-only аудите `data/app.db` обнаружены особенности, которые начальная
-миграция сохраняет без скрытого «исправления»:
-
-- `uk_group_panels` и `uk_group_keys` не имеют ни первичного ключа, ни внешних
-  ключей. Есть только уникальность пары ID. Ссылочная целостность этих таблиц
-  обеспечивается прикладным кодом.
-- `operation_log.key_id`, `employee_id`, `uk_group_id` и `panel_id` являются
-  историческими идентификаторами, но не внешними ключами. Поэтому журнал
-  сохраняется после удаления объекта, однако база не проверяет существование
-  указанного ID.
-- назначение сотруднику представлено одновременно в `key_assignments` и
-  `employee_keys`: первая таблица унифицирует все назначения, вторая хранит
-  специальную историю выдачи сотрудникам. Прикладной сервис синхронизирует обе.
-- в `keys` одновременно хранятся нормализованный `key_type_id` и устаревшее
-  текстовое поле `key_type`, а также `status` и совместимый флаг `is_used`.
-- `assignment_type` и статусы — текст без `CHECK`-ограничений. Допустимые
-  значения проверяет приложение.
-- в исходной SQLite, вопреки ожиданию о пустых остальных таблицах, найдены:
-  `key_types = 5`, `keys = 3`, `operation_log = 13`. По заданным правилам
-  скрипт переносит только `employees` и `users`; эти 21 запись не копируются.
-
-Это известный технический долг. Добавление отсутствующих FK, нормализация
-статусов и объединение таблиц назначений требуют отдельного согласованного
-изменения бизнес-логики.
+Документ описывает фактическую структуру SQLAlchemy и Alembic после ревизии
+`20260727_04`. Рабочий движок — PostgreSQL через `SQLAlchemy 2` и
+`psycopg`; URL подключения берётся из `DATABASE_URL`.
 
 ## Общая схема
-
-Сплошные стрелки — реальные внешние ключи PostgreSQL. Пунктирные — только
-логические ссылки без FK.
 
 ```mermaid
 flowchart LR
@@ -45,491 +14,448 @@ flowchart LR
     UK["uk_groups"] -->|SET NULL| KA
     E -->|RESTRICT| EK["employee_keys"]
     K -->|RESTRICT| EK
-    UK -->|CASCADE| ND["uk_notification_drafts"]
-    UK -->|CASCADE| UI["uk_integrations"]
 
-    UK -. "group_id без FK" .-> UKP["uk_group_panels"]
-    P["panels"] -. "panel_id без FK" .-> UKP
-    UK -. "group_id без FK" .-> UKK["uk_group_keys"]
-    K -. "key_id без FK" .-> UKK
+    UK -->|RESTRICT| UPL["uk_panel_links"]
+    P["panels"] -->|RESTRICT| UPL
+    UK -->|RESTRICT| UKI["uk_key_issues"]
+    K -->|RESTRICT| UKI
+    UKI -->|RESTRICT| UKP["uk_key_programmings"]
+    UPL -->|RESTRICT| UKP
+    UKP -->|RESTRICT| UCO["uk_crm_operations"]
 
-    K -. "исторический key_id" .-> OL["operation_log"]
-    E -. "исторический employee_id" .-> OL
-    UK -. "исторический uk_group_id" .-> OL
-    P -. "исторический panel_id" .-> OL
-    U["users"] -. "снимок логина и роли" .-> OL
+    R["roles"] -->|RESTRICT| U["users"]
+    R -->|CASCADE| RP["role_permissions"]
+    PM["permissions"] -->|CASCADE| RP
+
+    K -. "исторический ID" .-> OL["operation_log"]
+    E -. "исторический ID" .-> OL
+    UK -. "исторический ID" .-> OL
+    P -. "исторический ID" .-> OL
 ```
 
-## Основные и связующие таблицы
+Основные реестры: `key_types`, `keys`, `employees`, `users`, `roles`, `panels`,
+`uk_groups`. Связующие и операционные таблицы: `key_assignments`,
+`employee_keys`, `role_permissions`, `uk_panel_links`, `uk_key_issues`,
+`uk_key_programmings`, `uk_crm_operations`, `operation_log`.
 
-Основные реестры: `key_types`, `keys`, `employees`, `users`, `panels`,
-`uk_groups`. Операционные сущности: `key_assignments`, `employee_keys`,
-`operation_log`, `uk_notification_drafts`, `uk_integrations`. Связующие таблицы:
-`uk_group_panels`, `uk_group_keys`.
+`operation_log` намеренно не имеет внешних ключей: он хранит снимок данных и
+остаётся читаемым после архивирования или изменения исходного объекта.
 
-## Таблицы и колонки
+## Таблицы
 
 ### `key_types`
 
 Справочник типов физических ключей.
 
-| Колонка | Тип и ограничения | Назначение |
+| Колонка | Тип | Назначение |
 |---|---|---|
-| `id` | `INTEGER`, PK, autoincrement | Идентификатор типа. |
-| `name` | `TEXT NOT NULL` | Отображаемое имя типа. |
-| `color` | `TEXT NOT NULL`, default `#2A9DF4` | Цвет типа в интерфейсе. |
-| `note` | `TEXT`, default `''` | Комментарий. |
-| `enabled` | `INTEGER NOT NULL`, default `1` | `1` — доступен, `0` — архивирован. |
-| `created_at` | `TEXT NOT NULL`, default current time | Время создания. |
-| `updated_at` | `TEXT NOT NULL`, default current time | Время изменения. |
+| `id` | `INTEGER`, PK | ID типа. |
+| `name` | `TEXT NOT NULL` | Название типа. |
+| `color` | `TEXT NOT NULL` | Цвет в интерфейсе. |
+| `note` | `TEXT` | Комментарий. |
+| `enabled` | `INTEGER NOT NULL` | Активность типа. |
+| `created_at` | `TEXT NOT NULL` | Создание. |
+| `updated_at` | `TEXT NOT NULL` | Изменение. |
 
-Ограничения и индексы: PK `id`; функциональный уникальный индекс
-`uq_key_types_name_ci` на `lower(name)`. Он повторяет регистронезависимую
-уникальность SQLite `COLLATE NOCASE`.
+Индекс `uq_key_types_name_ci` уникален по `lower(name)`.
 
 ### `keys`
 
-Главный реестр ключей.
+Главный реестр физических ключей.
 
-| Колонка | Тип и ограничения | Назначение |
+| Колонка | Тип | Назначение |
 |---|---|---|
-| `id` | `INTEGER`, PK, autoincrement | Внутренний ID ключа. |
+| `id` | `INTEGER`, PK | Внутренний ID. |
 | `key_type_id` | `INTEGER NOT NULL`, FK | Тип ключа. |
-| `number` | `TEXT NOT NULL` | Печатный/учётный номер внутри типа. |
-| `hex_value` | `TEXT NOT NULL`, default `''` | HEX со считывателя. Прикладной код не сохраняет рабочий ключ без HEX. |
-| `key_type` | `TEXT`, default `''` | Денормализованное старое имя типа для совместимости. |
-| `status` | `TEXT NOT NULL`, default `free` | Текущее состояние ключа. |
-| `note` | `TEXT`, default `''` | Комментарий. |
-| `is_used` | `INTEGER NOT NULL`, default `0` | Старый совместимый признак использования. |
-| `created_at` | `TEXT NOT NULL`, default current time | Дата добавления. |
-| `updated_at` | `TEXT NOT NULL`, default current time | Дата изменения. |
-| `created_by` | `TEXT`, default `''` | Кто добавил ключ. |
+| `number` | `TEXT NOT NULL` | Учётный номер внутри типа. |
+| `hex_value` | `TEXT NOT NULL` | HEX со считывателя. |
+| `key_type` | `TEXT` | Старое текстовое имя типа для совместимости. |
+| `status` | `TEXT NOT NULL` | Текущее состояние ключа. |
+| `note` | `TEXT` | Комментарий. |
+| `is_used` | `INTEGER NOT NULL` | Совместимый признак использования. |
+| `created_at` | `TEXT NOT NULL` | Создание. |
+| `updated_at` | `TEXT NOT NULL` | Изменение. |
+| `created_by` | `TEXT` | Автор. |
 
-FK: `key_type_id -> key_types.id ON DELETE RESTRICT`.
-
-Индексы:
-
-- уникальный `idx_keys_type_number` на
-  `(key_type_id, lower(number))`;
-- `idx_keys_hex_lookup` на `lower(hex_value)`; он не уникальный, поэтому
-  проверка дубля HEX дополнительно выполняется приложением;
-- `idx_keys_status` на `(status, key_type_id)`.
+FK `key_type_id → key_types.id ON DELETE RESTRICT`. Уникальный индекс
+`idx_keys_type_number` действует на `(key_type_id, lower(number))`;
+`idx_keys_hex_lookup` ускоряет поиск по HEX, `idx_keys_status` — по статусу.
+Рабочий ключ без HEX прикладной код не создаёт и не назначает.
 
 ### `employees`
 
-Карточки сотрудников.
-
-| Колонка | Тип и ограничения | Назначение |
+| Колонка | Тип | Назначение |
 |---|---|---|
-| `id` | `INTEGER`, PK, autoincrement | ID сотрудника. |
+| `id` | `INTEGER`, PK | ID сотрудника. |
 | `full_name` | `TEXT NOT NULL` | ФИО. |
-| `note` | `TEXT`, default `''` | Комментарий. |
-| `enabled` | `INTEGER`, default `1` | `1` — работает, `0` — уволен/неактивен. |
-| `created_at` | `TEXT`, default current time | Создание карточки. |
-| `updated_at` | `TEXT`, default `''` | Последнее изменение. |
+| `note` | `TEXT` | Комментарий. |
+| `enabled` | `INTEGER` | Активен/уволен. |
+| `created_at` | `TEXT` | Создание. |
+| `updated_at` | `TEXT` | Изменение. |
 | `dismissed_at` | `TEXT NULL` | Дата увольнения. |
-| `position` | `TEXT`, default `''` | Должность. |
-| `department` | `TEXT`, default `''` | Подразделение. |
-| `phone` | `TEXT`, default `''` | Телефон. |
-| `email` | `TEXT`, default `''` | Email. |
-| `created_by` | `TEXT`, default `''` | Кто создал карточку. |
-
-PK: `id`. Других ограничений и индексов в фактической схеме нет.
+| `position` | `TEXT` | Должность. |
+| `department` | `TEXT` | Подразделение. |
+| `phone` | `TEXT` | Телефон. |
+| `email` | `TEXT` | Email. |
+| `created_by` | `TEXT` | Автор. |
 
 ### `users`
 
-Учётные записи операторов приложения.
-
-| Колонка | Тип и ограничения | Назначение |
+| Колонка | Тип | Назначение |
 |---|---|---|
-| `id` | `INTEGER`, PK, autoincrement | ID пользователя. |
-| `full_name` | `TEXT NOT NULL` | Отображаемое имя. |
+| `id` | `INTEGER`, PK | ID пользователя. |
+| `full_name` | `TEXT NOT NULL` | Имя. |
 | `login` | `TEXT NOT NULL UNIQUE` | Логин. |
 | `password_hash` | `TEXT NOT NULL` | Хеш пароля. |
-| `role` | `TEXT NOT NULL`, default `operator` | Роль: прикладной код поддерживает модель ролей. |
-| `active` | `INTEGER`, default `1` | Разрешён ли вход. |
-| `created_at` | `TEXT`, default current time | Дата создания. |
-| `last_login` | `TEXT`, default `''` | Последний вход. |
+| `role_id` | `INTEGER NOT NULL`, FK | Одна назначенная роль. |
+| `active` | `INTEGER` | Доступ разрешён. |
+| `created_at` | `TEXT` | Создание. |
+| `last_login` | `TEXT` | Последний вход. |
 
-PK: `id`; уникальное ограничение `uq_users_login`.
+FK `role_id → roles.id ON DELETE RESTRICT`: роль нельзя удалить, пока она
+назначена хотя бы одному пользователю. Прикладная логика дополнительно
+запрещает удалить, отключить или понизить последнего активного администратора.
+
+### `roles`
+
+Справочник системных и пользовательских ролей.
+
+| Колонка | Тип | Назначение |
+|---|---|---|
+| `id` | `INTEGER`, PK | ID роли. |
+| `code` | `TEXT NOT NULL UNIQUE` | Стабильный машинный код. |
+| `name` | `TEXT NOT NULL` | Отображаемое название. |
+| `description` | `TEXT NOT NULL` | Назначение роли. |
+| `is_system` | `BOOLEAN NOT NULL` | Признак системной роли. |
+| `created_at` | `TEXT NOT NULL` | Создание. |
+| `updated_at` | `TEXT NOT NULL` | Последнее изменение. |
+
+Индекс `uq_roles_name_ci` уникален по `lower(name)`. Системные роли
+`admin`, `operator`, `viewer` нельзя удалить. У роли `admin` нельзя снять
+критические разрешения `view`, `manage_users`, `manage_settings`.
+
+### `permissions`
+
+Фиксированный справочник разрешений. Колонки: `id INTEGER PK`,
+`code TEXT UNIQUE NOT NULL`, `name TEXT NOT NULL`, `description TEXT NOT NULL`.
+Созданы разрешения просмотра, записи и управления ключами, панелями, УК,
+сотрудниками, журналами, пользователями и системными настройками.
+
+### `role_permissions`
+
+Связующая таблица many-to-many между ролями и разрешениями. Составной
+первичный ключ: `(role_id, permission_id)`. Оба FK используют
+`ON DELETE CASCADE`, поэтому при удалении пользовательской роли удаляются
+только её связи с разрешениями, а сам справочник разрешений сохраняется.
 
 ### `panels`
 
-Реестр домофонных панелей и последний известный снимок их состояния.
-
-| Колонка | Тип и ограничения | Назначение |
+| Колонка | Тип | Назначение |
 |---|---|---|
-| `id` | `INTEGER`, PK, autoincrement | ID панели. |
+| `id` | `INTEGER`, PK | ID панели. |
 | `address` | `TEXT NOT NULL` | Адрес. |
-| `entrance` | `TEXT`, default `''` | Подъезд/вход. |
-| `name` | `TEXT NOT NULL` | Внутреннее имя панели. |
+| `entrance` | `TEXT` | Подъезд/вход. |
+| `name` | `TEXT NOT NULL` | Название. |
 | `mac` | `TEXT NOT NULL UNIQUE` | MAC-адрес. |
-| `tags` | `TEXT`, default `''` | Служебные метки. |
-| `enabled` | `INTEGER`, default `1` | Включена ли запись панели. |
-| `created_at` | `TEXT`, default current time | Дата добавления. |
-| `ip` | `TEXT`, default `''` | IP-адрес панели. |
-| `api_status` | `TEXT`, default `unknown` | Последний статус API. |
-| `last_checked_at` | `TIMESTAMP WITH TIME ZONE`, nullable | Время последней проверки. |
-| `last_online_at` | `TIMESTAMP WITH TIME ZONE`, nullable | Последнее успешное соединение. |
-| `response_time_ms` | `INTEGER NULL` | Время ответа, мс. |
-| `device_model` | `TEXT`, default `''` | Модель устройства. |
-| `firmware_version` | `TEXT`, default `''` | Версия прошивки. |
-| `temperature` | `DOUBLE PRECISION NULL` | Температура, если API её вернул. |
-| `uptime_seconds` | `INTEGER NULL` | Время работы в секундах. |
-| `sip_registered` | `INTEGER NULL` | Снимок SIP-регистрации. |
-| `reported_mac` | `TEXT`, default `''` | MAC, сообщённый самой панелью. |
-| `last_error` | `TEXT`, default `''` | Последняя ошибка проверки. |
-| `supply_voltage` | `DOUBLE PRECISION NULL` | Напряжение питания из `GET /v1/mcu/info`, `power.dc`. |
+| `tags` | `TEXT` | Теги. |
+| `enabled` | `INTEGER` | Включена в реестр. |
+| `created_at` | `TEXT` | Создание. |
+| `ip` | `TEXT` | IP-адрес. |
+| `api_status` | `TEXT` | Состояние API. |
+| `last_checked_at` | `TIMESTAMPTZ NULL` | Последняя проверка. |
+| `last_online_at` | `TIMESTAMPTZ NULL` | Последнее подтверждение связи. |
+| `response_time_ms` | `INTEGER NULL` | Отклик. |
+| `device_model` | `TEXT` | Модель. |
+| `firmware_version` | `TEXT` | Прошивка. |
+| `temperature` | `DOUBLE PRECISION NULL` | Температура. |
+| `uptime_seconds` | `INTEGER NULL` | Время работы. |
+| `sip_registered` | `INTEGER NULL` | SIP-регистрация. |
+| `reported_mac` | `TEXT` | MAC из ответа устройства. |
+| `last_error` | `TEXT` | Последняя ошибка. |
+| `supply_voltage` | `DOUBLE PRECISION NULL` | Напряжение `power.dc`. |
 
-PK `id`; unique `mac`; индексы `idx_panels_api_status(enabled, api_status)` и
+Индексы: `idx_panels_api_status(enabled, api_status)` и
 `idx_panels_address_entrance(address, entrance)`.
+
+### `panel_monitor_state`
+
+Одна служебная строка (`id = 1`) хранит состояние централизованного мониторинга
+панелей. Таблица позволяет всем процессам приложения и всем открытым браузерам
+видеть один общий цикл, не запуская повторные запросы к устройствам.
+
+| Колонка | Тип | Назначение |
+|---|---|---|
+| `id` | `INTEGER`, PK | Идентификатор единственной строки состояния. |
+| `status` | `TEXT NOT NULL` | `idle`, `queued`, `running`, `completed` или `failed`. |
+| `total` | `INTEGER NOT NULL` | Число панелей в текущем цикле. |
+| `completed` | `INTEGER NOT NULL` | Число уже обработанных панелей. |
+| `online` | `INTEGER NOT NULL` | Число успешных проверок текущего цикла. |
+| `failed` | `INTEGER NOT NULL` | Число неуспешных проверок текущего цикла. |
+| `active_panel_ids` | `JSONB NOT NULL` | ID панелей, которые прямо сейчас опрашиваются. |
+| `requested_at` | `TIMESTAMPTZ NULL` | Когда пользователь поставил цикл в очередь. |
+| `started_at` | `TIMESTAMPTZ NULL` | Начало обработки. |
+| `finished_at` | `TIMESTAMPTZ NULL` | Завершение обработки. |
+| `heartbeat_at` | `TIMESTAMPTZ NULL` | Последний признак работы фонового исполнителя. |
+| `requested_by` | `TEXT NOT NULL` | Пользователь, запросивший ручной общий цикл. |
+| `last_error` | `TEXT NOT NULL` | Безопасное описание ошибки цикла без секретов. |
+
+Ограничение `ck_panel_monitor_state_status` допускает только перечисленные
+состояния. Внешних ключей нет: прогресс краткоживущий, а результаты каждой
+панели сохраняются в `panels`. Межпроцессная PostgreSQL advisory lock гарантирует,
+что одновременно полный цикл выполняет только один процесс приложения.
 
 ### `uk_groups`
 
-Реестр управляющих компаний и данных о сотрудничестве.
+Карточка управляющей компании.
 
-| Колонка | Тип и ограничения | Назначение |
+| Колонка | Тип | Назначение |
 |---|---|---|
-| `id` | `INTEGER`, PK, autoincrement | ID УК. |
-| `name` | `TEXT NOT NULL UNIQUE` | Короткое название. |
-| `note` | `TEXT`, default `''` | Комментарий. |
-| `crm_login` | `TEXT`, default `''` | Служебный логин CRM, сохранён для совместимости. |
-| `crm_password` | `TEXT`, default `''` | Служебный пароль CRM, сохранён для совместимости. |
-| `legal_name` | `TEXT`, default `''` | Юридическое наименование. |
-| `contact_name` | `TEXT`, default `''` | Контактное лицо. |
-| `phone` | `TEXT`, default `''` | Телефон. |
-| `email` | `TEXT`, default `''` | Email. |
-| `legal_address` | `TEXT`, default `''` | Юридический адрес. |
-| `contract_number` | `TEXT`, default `''` | Номер договора. |
-| `created_by` | `TEXT`, default `''` | Кто создал запись. |
-| `updated_at` | `TEXT`, default `''` | Последнее изменение. |
-| `cooperation_status` | `TEXT NOT NULL`, default `potential` | Стадия сотрудничества. |
-| `account_manager` | `TEXT`, default `''` | Ответственный менеджер. |
-| `next_contact_at` | `TEXT`, default `''` | Дата следующего контакта. |
-| `cooperation_note` | `TEXT`, default `''` | Примечание по сотрудничеству. |
+| `id` | `INTEGER`, PK | ID УК. |
+| `name` | `TEXT NOT NULL UNIQUE` | Краткое название. |
+| `legal_name` | `TEXT` | Юридическое название. |
+| `contact_name` | `TEXT` | Контактное лицо. |
+| `phone` | `TEXT` | Телефон. |
+| `email` | `TEXT` | Email. |
+| `legal_address` | `TEXT` | Юридический адрес. |
+| `actual_address` | `TEXT` | Фактический адрес. |
+| `crm_login` | `TEXT` | Логин CRM. |
+| `crm_password` | `TEXT` | Пароль CRM в обычном тексте по принятому решению. |
+| `note` | `TEXT` | Комментарий. |
+| `created_by` | `TEXT` | Автор. |
+| `created_at` | `TIMESTAMPTZ NOT NULL` | Создание. |
+| `updated_at` | `TIMESTAMPTZ NOT NULL` | Изменение. |
+| `archived_at` | `TIMESTAMPTZ NULL` | Мягкое удаление. |
 
-PK `id`; unique `name`; дополнительный индекс `idx_uk_groups_name(name)`.
+Пароль не попадает в списочные запросы, URL, журнал или обычный HTML.
+Получить его можно отдельным POST-действием администратора; ответ запрещает
+кеширование. Пустой пароль в форме редактирования сохраняет прежнее значение.
 
-### `uk_group_panels`
+### `uk_panel_links`
 
-Логическая связь многие-ко-многим между УК и панелями.
+История принадлежности панели УК и индивидуальная квартира учётной записи.
 
-| Колонка | Тип и ограничения | Назначение |
+| Колонка | Тип | Назначение |
 |---|---|---|
-| `group_id` | `INTEGER NOT NULL` | Логическая ссылка на `uk_groups.id`. |
-| `panel_id` | `INTEGER NOT NULL` | Логическая ссылка на `panels.id`. |
+| `id` | `INTEGER`, PK | ID связи. |
+| `uk_group_id` | `INTEGER NOT NULL`, FK | УК. |
+| `panel_id` | `INTEGER NOT NULL`, FK | Панель. |
+| `apartment` | `TEXT NOT NULL` | Квартира CRM именно на этой панели. |
+| `comment` | `TEXT` | Комментарий. |
+| `active` | `BOOLEAN NOT NULL` | Текущая связь. |
+| `created_by` | `TEXT` | Автор. |
+| `created_at` | `TIMESTAMPTZ NOT NULL` | Создание. |
+| `updated_at` | `TIMESTAMPTZ NOT NULL` | Изменение. |
+| `detached_at` | `TIMESTAMPTZ NULL` | Открепление. |
 
-Уникальна пара `(group_id, panel_id)`. PK и FK отсутствуют. Связь удаляется
-прикладным кодом перед физическим удалением УК или панели.
+FK к `uk_groups` и `panels` используют `ON DELETE RESTRICT`. Частичные
+уникальные индексы запрещают две активные связи одной пары и принадлежность
+одной панели двум активным УК. Архивирование УК деактивирует связи, но не
+удаляет их.
 
-### `uk_group_keys`
+### `uk_key_issues`
 
-Логическая связь многие-ко-многим между УК и ключами.
+Факт выдачи одного существующего физического ключа одной УК.
 
-| Колонка | Тип и ограничения | Назначение |
+| Колонка | Тип | Назначение |
 |---|---|---|
-| `group_id` | `INTEGER NOT NULL` | Логическая ссылка на `uk_groups.id`. |
-| `key_id` | `INTEGER NOT NULL` | Логическая ссылка на `keys.id`. |
+| `id` | `INTEGER`, PK | ID выдачи. |
+| `uk_group_id` | `INTEGER NOT NULL`, FK | УК. |
+| `key_id` | `INTEGER NOT NULL`, FK | Физический ключ. |
+| `status` | `TEXT NOT NULL` | `pending`, `active`, `released`, `archived`. |
+| `comment` | `TEXT` | Комментарий. |
+| `issued_by` | `TEXT` | Оператор. |
+| `issued_at` | `TIMESTAMPTZ NOT NULL` | Выдача. |
+| `released_at` | `TIMESTAMPTZ NULL` | Освобождение. |
+| `created_at` | `TIMESTAMPTZ NOT NULL` | Создание. |
+| `updated_at` | `TIMESTAMPTZ NOT NULL` | Изменение. |
 
-Уникальна пара `(group_id, key_id)`. PK и FK отсутствуют.
+Оба FK используют `RESTRICT`. `CHECK` ограничивает статусы. Частичный
+уникальный индекс разрешает только одну выдачу `pending/active` для ключа.
+
+### `uk_key_programmings`
+
+Запись одного физического ключа на конкретную панель. Несколько строк одной
+выдачи образуют ключ-вездеход.
+
+| Колонка | Тип | Назначение |
+|---|---|---|
+| `id` | `INTEGER`, PK | ID программирования. |
+| `issue_id` | `INTEGER NOT NULL`, FK | Выдача ключа. |
+| `panel_link_id` | `INTEGER NOT NULL`, FK | Историческая связь УК с панелью. |
+| `apartment` | `TEXT NOT NULL` | Снимок квартиры для CRM-операции. |
+| `is_primary` | `BOOLEAN NOT NULL` | Основная панель. |
+| `active` | `BOOLEAN NOT NULL` | Актуальная учётная связь. |
+| `status` | `TEXT NOT NULL` | `pending`, `success`, `error`, `dry_run`, `unlinked`, `removed`. |
+| `last_error` | `TEXT` | Безопасный текст ошибки. |
+| `programmed_at` | `TIMESTAMPTZ NULL` | Успешная запись. |
+| `removed_at` | `TIMESTAMPTZ NULL` | Успешное удаление из CRM. |
+| `unlinked_at` | `TIMESTAMPTZ NULL` | Только учётная отвязка. |
+| `created_at` | `TIMESTAMPTZ NOT NULL` | Создание. |
+| `updated_at` | `TIMESTAMPTZ NOT NULL` | Изменение. |
+
+FK к выдаче и связи панели используют `RESTRICT`. Частичные уникальные
+индексы разрешают одну активную запись выдачи на панель и одну активную
+основную панель.
+
+### `uk_crm_operations`
+
+Неизменяемая история попыток записи и удаления ключа в CRM.
+
+| Колонка | Тип | Назначение |
+|---|---|---|
+| `id` | `INTEGER`, PK | ID попытки. |
+| `programming_id` | `INTEGER NOT NULL`, FK | Программирование. |
+| `operation` | `TEXT NOT NULL` | `add` или `remove`. |
+| `status` | `TEXT NOT NULL` | `pending`, `success`, `error`, `dry_run`. |
+| `idempotency_key` | `TEXT NOT NULL UNIQUE` | Идентификатор попытки. |
+| `attempt_number` | `INTEGER NOT NULL` | Номер попытки. |
+| `safe_response` | `TEXT` | Ответ без логина и пароля. |
+| `requested_by` | `TEXT` | Оператор. |
+| `started_at` | `TIMESTAMPTZ NOT NULL` | Начало. |
+| `completed_at` | `TIMESTAMPTZ NULL` | Завершение. |
+
+FK использует `ON DELETE RESTRICT`; два `CHECK` ограничивают операцию и
+статус. Индекс сортирует историю по программированию и времени.
 
 ### `key_assignments`
 
-Единая текущая и историческая таблица назначения ключа жильцу, сотруднику или
-УК.
+Общая проекция текущего и исторического назначения ключа.
 
-| Колонка | Тип и ограничения | Назначение |
+| Колонка | Тип | Назначение |
 |---|---|---|
-| `id` | `INTEGER`, PK, autoincrement | ID назначения. |
-| `key_id` | `INTEGER NOT NULL`, FK | Назначенный ключ. |
-| `assignment_type` | `TEXT NOT NULL` | `resident`, `employee` или `uk`. |
-| `address` | `TEXT`, default `''` | Адрес назначения жильцу. |
-| `apartment` | `TEXT`, default `''` | Квартира жильца. |
-| `employee_id` | `INTEGER NULL`, FK | Сотрудник для типа `employee`. |
-| `uk_group_id` | `INTEGER NULL`, FK | УК для типа `uk`. |
-| `assigned_at` | `TEXT NOT NULL`, default current time | Начало назначения. |
-| `assigned_by` | `TEXT`, default `''` | Оператор. |
-| `released_at` | `TEXT NULL` | Завершение назначения. |
-| `active` | `INTEGER NOT NULL`, default `1` | `1` — текущее, `0` — история. |
-| `note` | `TEXT`, default `''` | Комментарий. |
+| `id` | `INTEGER`, PK | ID назначения. |
+| `key_id` | `INTEGER NOT NULL`, FK | Ключ. |
+| `assignment_type` | `TEXT NOT NULL` | `resident`, `employee`, `uk`. |
+| `address` | `TEXT` | Адрес жильца/служебное описание. |
+| `apartment` | `TEXT` | Квартира. |
+| `employee_id` | `INTEGER NULL`, FK | Сотрудник. |
+| `uk_group_id` | `INTEGER NULL`, FK | УК. |
+| `assigned_at` | `TEXT NOT NULL` | Начало назначения. |
+| `assigned_by` | `TEXT` | Оператор. |
+| `released_at` | `TEXT NULL` | Завершение. |
+| `active` | `INTEGER NOT NULL` | Текущее назначение. |
+| `note` | `TEXT` | Комментарий. |
 
-FK:
-
-- `key_id -> keys.id ON DELETE RESTRICT`;
-- `employee_id -> employees.id ON DELETE SET NULL`;
-- `uk_group_id -> uk_groups.id ON DELETE SET NULL`.
-
-Индексы: уникальный частичный `idx_key_assignments_one_active(key_id) WHERE
-active = 1`; `idx_key_assignments_lookup(assignment_type, active,
-assigned_at)`; `idx_key_assignments_key_history(key_id, active, assigned_at)`.
+`key_id → keys RESTRICT`; `employee_id → employees SET NULL`;
+`uk_group_id → uk_groups SET NULL`. Частичный уникальный индекс обеспечивает
+одно активное назначение физического ключа.
 
 ### `employee_keys`
 
 Специализированная история выдачи нескольких ключей сотруднику.
 
-| Колонка | Тип и ограничения | Назначение |
+| Колонка | Тип | Назначение |
 |---|---|---|
-| `id` | `INTEGER`, PK, autoincrement | ID записи выдачи. |
+| `id` | `INTEGER`, PK | ID выдачи. |
 | `employee_id` | `INTEGER NOT NULL`, FK | Сотрудник. |
 | `key_id` | `INTEGER NOT NULL`, FK | Ключ. |
-| `status` | `TEXT NOT NULL`, default `active` | Состояние выдачи: активна или закрыта с причиной. |
-| `issued_at` | `TEXT NOT NULL`, default current time | Время выдачи. |
-| `closed_at` | `TEXT NULL` | Время закрытия. |
-| `close_reason` | `TEXT`, default `''` | Причина закрытия. |
-| `comment` | `TEXT`, default `''` | Комментарий. |
-| `created_at` | `TEXT NOT NULL`, default current time | Создание. |
-| `updated_at` | `TEXT NOT NULL`, default current time | Изменение. |
+| `status` | `TEXT NOT NULL` | Состояние выдачи. |
+| `issued_at` | `TEXT NOT NULL` | Выдача. |
+| `closed_at` | `TEXT NULL` | Закрытие. |
+| `close_reason` | `TEXT` | Причина. |
+| `comment` | `TEXT` | Комментарий. |
+| `created_at` | `TEXT NOT NULL` | Создание. |
+| `updated_at` | `TEXT NOT NULL` | Изменение. |
 
-FK: `employee_id -> employees.id ON DELETE RESTRICT`,
-`key_id -> keys.id ON DELETE RESTRICT`.
-
-Уникальна пара `(employee_id, key_id)`. Частичный уникальный индекс
-`idx_employee_keys_one_active_employee_per_key(key_id) WHERE status =
-'active'` запрещает одновременную активную выдачу одного ключа разным
-сотрудникам, но не ограничивает количество разных активных ключей у сотрудника.
-Индекс истории:
-`idx_employee_keys_employee_history(employee_id, status, issued_at)`.
+Оба FK используют `RESTRICT`; уникальна пара `(employee_id, key_id)`.
+Частичный индекс разрешает только одного активного сотрудника для ключа.
 
 ### `operation_log`
 
-Неизменяемый на уровне текущего приложения аудит действий и ответов внешних
-систем.
+Общий журнал интерфейса и внешних операций.
 
-| Колонка | Тип и ограничения | Назначение |
-|---|---|---|
-| `id` | `INTEGER`, PK, autoincrement | ID события. |
-| `mode` | `TEXT NOT NULL` | Режим/источник операции. |
-| `printed_number` | `TEXT`, default `''` | Печатный номер ключа. |
-| `hex_value` | `TEXT NOT NULL` | HEX на момент операции. |
-| `flat_num` | `TEXT`, default `''` | Старое поле квартиры. |
-| `mac` | `TEXT NOT NULL` | MAC панели на момент операции. |
-| `panel_name` | `TEXT`, default `''` | Имя панели. |
-| `status` | `TEXT NOT NULL` | Результат операции. |
-| `response` | `TEXT`, default `''` | Ответ CRM/панели. |
-| `created_at` | `TEXT`, default current time | Время события. |
-| `address` | `TEXT`, default `''` | Адрес. |
-| `apartment` | `TEXT`, default `''` | Квартира. |
-| `username` | `TEXT`, default `''` | Логин оператора. |
-| `user_full_name` | `TEXT`, default `''` | Имя оператора. |
-| `user_role` | `TEXT`, default `''` | Роль оператора. |
-| `action` | `TEXT`, default `''` | Нормализованное действие. |
-| `object_type` | `TEXT`, default `''` | Тип объекта. |
-| `object_name` | `TEXT`, default `''` | Читаемое имя объекта. |
-| `details` | `TEXT`, default `''` | Подробности. |
-| `ip_address` | `TEXT`, default `''` | IP клиента. |
-| `key_id` | `INTEGER NULL`, без FK | Исторический ID ключа. |
-| `key_type` | `TEXT`, default `''` | Тип ключа на момент события. |
-| `employee_id` | `INTEGER NULL`, без FK | Исторический ID сотрудника. |
-| `uk_group_id` | `INTEGER NULL`, без FK | Исторический ID УК. |
-| `comment` | `TEXT`, default `''` | Комментарий. |
-| `panel_id` | `INTEGER NULL`, без FK | Исторический ID панели. |
+| Колонка | Назначение |
+|---|---|
+| `id` | PK события. |
+| `mode`, `action`, `object_type`, `object_name` | Классификация. |
+| `printed_number`, `hex_value`, `key_type`, `key_id` | Снимок ключа. |
+| `flat_num`, `address`, `apartment` | Снимок назначения. |
+| `mac`, `panel_name`, `panel_id` | Снимок панели. |
+| `status`, `response`, `details`, `comment` | Результат без секретов. |
+| `username`, `user_full_name`, `user_role`, `ip_address` | Контекст оператора. |
+| `employee_id`, `uk_group_id` | Исторические ID объектов. |
+| `created_at` | Время события. |
 
-PK `id`; индекс `idx_operation_log_key_id(key_id)`. Внешних ключей нет.
-
-### `uk_notification_drafts`
-
-Черновики собственных уведомлений УК собственникам/жителям.
-
-| Колонка | Тип и ограничения | Назначение |
-|---|---|---|
-| `id` | `INTEGER`, PK, autoincrement | ID черновика. |
-| `group_id` | `INTEGER NOT NULL`, FK | УК-владелец. |
-| `title` | `TEXT NOT NULL` | Заголовок. |
-| `body` | `TEXT NOT NULL` | Текст. |
-| `category` | `TEXT NOT NULL`, default `announcement` | Категория. |
-| `channel` | `TEXT NOT NULL`, default `dtel` | Планируемый канал. |
-| `audience` | `TEXT NOT NULL`, default `all` | Целевая аудитория. |
-| `audience_details` | `TEXT`, default `''` | Уточнение аудитории. |
-| `created_by` | `TEXT`, default `''` | Автор. |
-| `created_at` | `TEXT NOT NULL`, default current time | Создание. |
-| `updated_at` | `TEXT NOT NULL`, default current time | Изменение. |
-
-FK `group_id -> uk_groups.id ON DELETE CASCADE`. Индекс
-`idx_uk_notification_drafts_group(group_id, created_at DESC)`.
-
-### `uk_integrations`
-
-Таблица присутствовала в фактической SQLite-схеме и поэтому сохранена, хотя
-текущая страница УК её не использует.
-
-| Колонка | Тип и ограничения | Назначение |
-|---|---|---|
-| `id` | `INTEGER`, PK, autoincrement | ID записи. |
-| `group_id` | `INTEGER NOT NULL`, FK | УК. |
-| `service_name` | `TEXT NOT NULL` | Имя внешнего сервиса. |
-| `integration_type` | `TEXT NOT NULL`, default `api` | Тип интеграции. |
-| `base_url` | `TEXT`, default `''` | URL сервиса. |
-| `login` | `TEXT`, default `''` | Логин. |
-| `auth_type` | `TEXT NOT NULL`, default `not_selected` | Тип авторизации. |
-| `status` | `TEXT NOT NULL`, default `planned` | Состояние. |
-| `enabled` | `INTEGER NOT NULL`, default `0` | Активность. |
-| `note` | `TEXT`, default `''` | Комментарий. |
-| `last_sync_at` | `TEXT`, default `''` | Последняя синхронизация. |
-| `last_error` | `TEXT`, default `''` | Последняя ошибка. |
-| `created_at` | `TEXT NOT NULL`, default current time | Создание. |
-| `updated_at` | `TEXT NOT NULL`, default current time | Изменение. |
-
-FK `group_id -> uk_groups.id ON DELETE CASCADE`. Регистронезависимо уникальна
-пара `(group_id, lower(service_name))`. Индекс
-`idx_uk_integrations_group(group_id, status, service_name)`.
+`id` — `INTEGER` PK; остальные ID в журнале не являются FK. Индекс
+`idx_operation_log_key_id` ускоряет историю ключа.
 
 ## Жизненный цикл ключа
 
-### Создание
+При создании проверяются тип, номер и обязательный HEX. Запись появляется в
+`keys` со статусом `free`. Назначение жильцу создаёт `key_assignments` типа
+`resident`; сотруднику — синхронные `key_assignments` и `employee_keys`.
 
-1. Оператор выбирает или создаёт `key_types`.
-2. Приложение получает номер и обязательный HEX. Подготовительный экран может
-   показывать незавершённую строку, но запись в `keys` создаётся после получения
-   HEX.
-3. Репозиторий проверяет активность типа, уникальность номера внутри типа и
-   прикладным запросом — конфликт HEX.
-4. Создаётся `keys` со статусом `free`, `is_used = 0`.
-5. Изменение выполняется в транзакции SQLAlchemy Session; при ошибке вся
-   транзакция откатывается.
+Для УК:
 
-### Назначение жильцу/квартире
+1. выбираются свободный ключ и активная `uk_panel_links`;
+2. создаются `uk_key_issues`, основная `uk_key_programmings` и общая проекция
+   `key_assignments`;
+3. квартира берётся из выбранной связи панели; переопределение требует
+   отдельного подтверждения;
+4. CRM-результат сохраняется в `uk_crm_operations`;
+5. при успехе выдача становится `active`, а ключ — `assigned_uk`;
+6. дополнительные панели создают отдельные программирования того же ключа;
+7. учётная отвязка не отправляет удаление в CRM;
+8. явное удаление из CRM затрагивает только выбранную панель;
+9. ключ становится `free`, только когда после успешных CRM-удалений не осталось
+   активных программирований.
 
-Создаётся активная строка `key_assignments` с
-`assignment_type = 'resident'`, заполненными `address` и `apartment`.
-`employee_id` и `uk_group_id` остаются `NULL`. Статус ключа становится
-`issued_resident`.
+Основной источник общего статуса — `keys.status`: `free`,
+`issued_resident`, `issued_employee`, `assigned_uk`, `blocked`, `lost`,
+`defective`, `archived`. Детальный статус записи УК хранится отдельно.
 
-### Назначение сотруднику
+## Удаление и порядок зависимостей
 
-Создаются синхронные записи:
+- Сотрудник увольняется мягко: `enabled = 0`, активные выдачи закрываются.
+- Тип ключа отключается через `enabled`; ключ архивируется статусом.
+- УК архивируется через `archived_at`. Её активные связи с панелями
+  деактивируются, CRM-реквизиты очищаются, но УК, панели, ключи, выдачи,
+  программирования и история физически не удаляются.
+- Панель с историей `uk_panel_links` физически удалить нельзя (`RESTRICT`).
+- Учётная связь ключа с одной панелью деактивируется; физический ключ и другие
+  программирования сохраняются.
+- `uk_crm_operations` и `operation_log` штатно не удаляются.
 
-- `key_assignments` с `assignment_type = 'employee'` и `employee_id`;
-- `employee_keys` со статусом `active`.
+Порядок создания: `uk_groups` и `panels` → `uk_panel_links`; `keys` →
+`uk_key_issues` → `uk_key_programmings` → `uk_crm_operations`. Физическое
+удаление возможно только в обратном порядке, но штатный интерфейс использует
+архивирование и деактивацию.
 
-Ключ получает `issued_employee`. У одного сотрудника может быть несколько
-активных ключей. Один физический ключ может иметь только одно активное
-назначение благодаря двум частичным уникальным индексам.
+`CASCADE` в новой модели УК не используется. `RESTRICT` защищает панели,
+ключи и историю; `SET NULL` сохранён только у общей исторической проекции
+`key_assignments`.
 
-### Назначение группе УК
-
-Создаётся `key_assignments` с `assignment_type = 'uk'` и `uk_group_id`, а также
-логическая строка `uk_group_keys`. Статус ключа — `assigned_uk`.
-
-### Определение статуса
-
-Основной источник — сохранённое поле `keys.status`, а не вычисление при каждом
-чтении:
-
-- `free` — свободен;
-- `issued_resident` — выдан жильцу;
-- `issued_employee` — выдан сотруднику;
-- `assigned_uk` — закреплён за УК;
-- `blocked` — заблокирован;
-- `lost` — утерян;
-- `defective` — брак;
-- `archived` — архив.
-
-Назначение обновляет статус и совместимый `is_used`. Освобождение закрывает
-активную строку `key_assignments` (`active = 0`, `released_at`), закрывает
-активную запись `employee_keys`, удаляет актуальную логическую связь с УК и
-возвращает ключ в `free`. Перевод в `blocked`, `lost`, `defective` или
-`archived` сначала освобождает текущее назначение.
-
-## Журнал операций
-
-HTTP-операции и ответы внешних систем передают снимок контекста в сервис
-аудита, который добавляет `operation_log`. В строке сохраняются не только ID,
-но и номер/HEX, адрес, панель и имя/роль оператора. Поэтому запись остаётся
-читаемой после изменения основной карточки. Текущий код журнал не обновляет и
-не удаляет. Отсутствие FK к объектам — фактическое свойство схемы, позволяющее
-сохранить аудит при физическом удалении, но допускающее несуществующие ID.
-
-## Физическое и мягкое удаление
-
-- `employees`: мягкое удаление — `enabled = 0`, `dismissed_at`; активные выдачи
-  закрываются. История сохраняется.
-- `key_types`: архивирование через `enabled = 0`.
-- `keys`: служебное архивирование через `status = 'archived'`; штатного
-  физического удаления в текущем интерфейсе нет.
-- `panels`: физическое удаление после ручного удаления строк
-  `uk_group_panels`.
-- `uk_groups`: физическое удаление; сначала освобождаются активные ключи и
-  вручную удаляются строки обеих связующих таблиц. Черновики уведомлений и
-  записи интеграций удаляются PostgreSQL через `CASCADE`; ссылки истории в
-  `key_assignments` становятся `NULL` через `SET NULL`.
-- `users`: физическое удаление, кроме защищённого последнего администратора на
-  уровне бизнес-логики.
-- `uk_notification_drafts`: физическое удаление.
-- `operation_log`: штатно не удаляется.
-
-## Порядок создания и удаления связанных записей
-
-Создание: `key_types` → `keys`; `employees`/`uk_groups` → назначение;
-`panels`/`uk_groups` → логические связующие строки. Для сотрудника
-`key_assignments` и `employee_keys` создаются в одной прикладной транзакции.
-
-Удаление выполняется в обратном порядке. `RESTRICT` не позволяет удалить тип с
-ключами, ключ с назначениями/историей сотрудника или сотрудника с
-`employee_keys`. Перед удалением панели/УК приложение обязано убрать строки
-связующих таблиц, поскольку FK там отсутствуют. `CASCADE` используется только
-для дочерних `uk_notification_drafts` и `uk_integrations`; `SET NULL` — для
-истории назначения при удалении сотрудника или УК.
-
-## Движение данных от HTTP до PostgreSQL
+## Движение данных
 
 ```mermaid
 flowchart LR
-    HTTP["HTTP-запрос FastAPI"] --> R["Router: проверка формы и прав"]
-    R --> S["Service: бизнес-правила и внешние API"]
+    HTTP["HTTP-запрос FastAPI"] --> R["Router: права и форма"]
+    R --> S["Service: бизнес-правила и DRY_RUN"]
+    S --> CRM["CRM-клиент при разрешённой операции"]
     S --> RP["Repository"]
-    RP --> DS["db(): SQLAlchemy 2 Session"]
-    DS --> P["psycopg 3"]
-    P --> PG["PostgreSQL"]
+    CRM --> RP
+    RP --> DB["db(): SQLAlchemy Session"]
+    DB --> PG["psycopg → PostgreSQL"]
     PG --> TX{"Успех?"}
     TX -->|да| C["COMMIT"]
     TX -->|нет| RB["ROLLBACK"]
 ```
 
-`DATABASE_URL` загружается `pydantic-settings` из `.env`. Приложение при
-старте проверяет соединение и наличие схемы, но не создаёт и не изменяет
-таблицы. Схемой управляет только Alembic.
-
-## Миграция данных из SQLite
-
-`scripts/migrate_sqlite_to_postgres.py`:
-
-- открывает SQLite как `mode=ro&immutable=1`;
-- проверяет SHA-256 до и после;
-- читает и переносит только `employees` и `users`;
-- сохраняет `id` и все остальные колонки;
-- не перезаписывает конфликтующие строки;
-- после вставки синхронизирует PostgreSQL sequences;
-- в одной транзакции сравнивает количество строк источника и приёмника;
-- поддерживает повторный запуск и `--verify-only`.
-
-Исходный `data/app.db` не удаляется и не изменяется.
+Учебный режим останавливает изменяющий HTTP-запрос до роутера. `DRY_RUN`
+останавливает CRM-вызов до создания HTTP-сессии; безопасный результат может
+сохраняться как `dry_run`.
 
 ## Резервное копирование и восстановление
 
-Перед миграциями и релизом рекомендуется логический дамп:
+Перед миграцией и регулярно в эксплуатации рекомендуется:
 
 ```bash
-PG_URL="${DATABASE_URL/postgresql+psycopg:/postgresql:}"
-pg_dump --format=custom --no-owner --file=dtel_YYYYMMDD.dump --dbname="$PG_URL"
+pg_dump --format=custom --file=key_writer.dump key_writer
+createdb key_writer_restore_test
+pg_restore --clean --if-exists --dbname=key_writer_restore_test key_writer.dump
 ```
 
-Для ежедневных резервных копий хранить несколько поколений дампов вне хоста
-PostgreSQL, шифровать их и регулярно проверять тестовое восстановление.
-Восстановление в пустую базу:
-
-```bash
-createdb dtel_restore
-pg_restore --clean --if-exists --no-owner --dbname=dtel_restore dtel_YYYYMMDD.dump
-```
-
-После восстановления выполнить:
-
-```bash
-alembic current
-python scripts/migrate_sqlite_to_postgres.py --verify-only
-python scripts/smoke_postgres_crud.py
-```
-
-Для больших объёмов и строгого RPO дополнительно применять физические base
-backup и архивирование WAL средствами PostgreSQL/провайдера. Пароли из `.env`,
-дампы и исходный `data/app.db` не должны попадать в Git.
+Восстановление сначала проверяется в отдельной БД: Alembic-ревизия, количество
+`employees`, `users`, `panels`, `keys`, целостность FK и выборочные карточки.
+Только после проверки допускается плановое восстановление рабочей базы.
+Исходный `data/app.db` миграция PostgreSQL не изменяет и не удаляет.
