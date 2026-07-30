@@ -9,6 +9,9 @@ from app.repositories.panel_monitor_repository import (
     get_monitor_state,
     request_monitor_cycle,
 )
+from app.repositories.system_settings_repository import (
+    save_monitor_runtime_settings,
+)
 from app.services.panel_monitor import run_monitor_cycle
 
 
@@ -38,6 +41,16 @@ class PanelMonitorTests(PostgreSQLTestCase):
     def test_full_cycle_limits_parallelism_skips_disabled_and_survives_error(self):
         panels = self._create_panels(24)
         panel_repository.set_panel_enabled(panels[-1]["id"], False)
+        save_monitor_runtime_settings(
+            {
+                "panel_monitor_enabled": True,
+                "panel_monitor_interval_seconds": 300,
+                "panel_monitor_concurrency": 4,
+                "panel_monitor_stale_seconds": 600,
+                "panel_manual_check_cooldown_seconds": 1,
+            },
+            updated_by="Тест",
+        )
         request_monitor_cycle("Тест")
         self.assertIsNotNone(begin_cycle_if_due(300))
 
@@ -66,7 +79,9 @@ class PanelMonitorTests(PostgreSQLTestCase):
                 with guard:
                     active -= 1
 
-        result = run_monitor_cycle(checker=checker, concurrency=4)
+        # No explicit concurrency is passed: the cycle must read the value
+        # saved in PostgreSQL immediately before it starts.
+        result = run_monitor_cycle(checker=checker)
         self.assertEqual(result["total"], 23)
         self.assertEqual(result["completed"], 23)
         self.assertEqual(result["online"], 22)

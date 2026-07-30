@@ -194,6 +194,21 @@ panel_monitor_state = Table(
 )
 
 
+system_settings = Table(
+    "system_settings",
+    metadata,
+    Column("key", Text, primary_key=True),
+    Column("value", Text, nullable=False),
+    Column(
+        "updated_at",
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    ),
+    Column("updated_by", Text, nullable=False, server_default=text("''")),
+)
+
+
 uk_groups = Table(
     "uk_groups",
     metadata,

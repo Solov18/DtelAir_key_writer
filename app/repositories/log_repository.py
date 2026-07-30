@@ -17,6 +17,8 @@ ACTION_NAMES = {
     "role_delete": "Удаление роли",
     "settings_training_mode": "Изменение режима работы",
     "settings_crm_check": "Проверка подключения CRM",
+    "settings_panel_api_check": "Проверка подключения API панелей",
+    "settings_monitor_update": "Изменение параметров мониторинга",
 
     "resident_manual": "Обычная запись",
     "resident": "Из сообщения",

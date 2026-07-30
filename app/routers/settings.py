@@ -1,9 +1,13 @@
-from urllib.parse import urlparse
+import os
+from urllib.parse import urlencode, urlparse
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy import text
+from sqlalchemy.engine import make_url
 
 from app.access_control import has_permission
+from app.db import get_engine
 from app.repositories.log_repository import get_last_operations
 from app.repositories.role_repository import (
     ADMIN_CRITICAL_PERMISSIONS,
@@ -16,9 +20,17 @@ from app.repositories.role_repository import (
     set_role_permissions,
     update_role,
 )
+from app.repositories.system_settings_repository import (
+    get_monitor_runtime_settings,
+    save_monitor_runtime_settings,
+)
 from app.services.audit import log_event
 from app.services.auth import get_current_user
 from app.services.crm import check_crm_connection, crm_auth_configured
+from app.services.panel_api import (
+    check_panel_api_connection,
+    panel_api_configured,
+)
 from app.settings import settings
 from app.templates_config import templates
 
@@ -43,14 +55,45 @@ def _settings_context(request: Request) -> dict:
         "request": request,
         "crm_ready": crm_auth_configured(),
         "dry_run": settings.dry_run,
-        "panel_api_ready": bool(
-            settings.panel_api_login and settings.panel_api_password
-        ),
+        "panel_api_ready": panel_api_configured(),
         "session_secret_ready": (
             settings.session_secret != "change-this-secret-key-later"
             and len(settings.session_secret) >= 32
         ),
     }
+
+
+def _database_summary() -> dict:
+    url = make_url(settings.database_url)
+    result = {
+        "host": url.host or "—",
+        "port": url.port or 5432,
+        "name": url.database or "—",
+        "user": url.username or "—",
+        "echo": bool(settings.database_echo),
+        "connect_timeout": int(settings.database_connect_timeout),
+        "connected": False,
+        "current_database": "—",
+        "test_database_ready": bool(
+            os.environ.get("TEST_DATABASE_URL", "").strip()
+        ),
+    }
+    try:
+        with get_engine().connect() as connection:
+            current = connection.execute(
+                text("SELECT current_database()")
+            ).scalar_one()
+        result["connected"] = True
+        result["current_database"] = str(current)
+    except Exception:
+        # The page must not echo a driver error because it can contain a URL.
+        pass
+    return result
+
+
+def _actor_name(request: Request) -> str:
+    user = request.session.get("user", {})
+    return str(user.get("full_name") or user.get("login") or "Система")
 
 
 @router.get("/settings", response_class=HTMLResponse)
@@ -105,13 +148,24 @@ def crm_settings_page(request: Request):
     context = _settings_context(request)
     context.update(
         {
+            "database": _database_summary(),
             "crm_base_url": settings.crm_base_url,
             "crm_timeout": settings.request_timeout,
             "crm_buyer_id_ready": bool(settings.crm_buyer_id.strip()),
             "crm_login_ready": bool(settings.crm_login.strip()),
             "crm_password_ready": bool(settings.crm_password),
             "crm_cookie_ready": bool(settings.crm_cookie.strip()),
-            "check_result": request.session.pop("crm_check_result", None),
+            "panel_api_login_ready": bool(settings.panel_api_login.strip()),
+            "panel_api_password_ready": bool(settings.panel_api_password),
+            "panel_api_timeout": settings.panel_api_timeout,
+            "monitor": get_monitor_runtime_settings(),
+            "session_https_only": bool(settings.session_https_only),
+            "check_results": request.session.pop(
+                "connection_check_results",
+                {},
+            ),
+            "runtime_notice": request.query_params.get("runtime_notice", ""),
+            "runtime_error": request.query_params.get("runtime_error", ""),
         }
     )
     return templates.TemplateResponse("settings_crm.html", context)
@@ -122,7 +176,7 @@ def crm_settings_check(request: Request):
     if not _can_manage(request):
         return RedirectResponse("/?notice=admin_only", status_code=303)
     result = check_crm_connection()
-    request.session["crm_check_result"] = result
+    request.session.setdefault("connection_check_results", {})["crm"] = result
     log_event(
         request=request,
         action="settings_crm_check",
@@ -136,6 +190,80 @@ def crm_settings_check(request: Request):
         ),
     )
     return RedirectResponse("/settings/crm", status_code=303)
+
+
+@router.post("/settings/panels/check")
+def panel_api_settings_check(request: Request):
+    if not _can_manage(request):
+        return RedirectResponse("/?notice=admin_only", status_code=303)
+    result = check_panel_api_connection()
+    request.session.setdefault("connection_check_results", {})["panels"] = result
+    log_event(
+        request=request,
+        action="settings_panel_api_check",
+        object_type="Настройки",
+        object_name="API панелей",
+        status="success" if result["ok"] else "error",
+        details=(
+            "Безопасная проверка API панелей выполнена успешно"
+            if result["ok"]
+            else "Безопасная проверка API панелей завершилась ошибкой"
+        ),
+    )
+    return RedirectResponse("/settings/crm#panel-api", status_code=303)
+
+
+@router.post("/settings/monitoring")
+def monitoring_settings_update(
+    request: Request,
+    panel_monitor_enabled: int = Form(0),
+    panel_monitor_interval_seconds: int = Form(...),
+    panel_monitor_concurrency: int = Form(...),
+    panel_monitor_stale_seconds: int = Form(...),
+    panel_manual_check_cooldown_seconds: int = Form(...),
+):
+    if not _can_manage(request):
+        return RedirectResponse("/?notice=admin_only", status_code=303)
+    previous = get_monitor_runtime_settings()
+    try:
+        current = save_monitor_runtime_settings(
+            {
+                "panel_monitor_enabled": panel_monitor_enabled,
+                "panel_monitor_interval_seconds": panel_monitor_interval_seconds,
+                "panel_monitor_concurrency": panel_monitor_concurrency,
+                "panel_monitor_stale_seconds": panel_monitor_stale_seconds,
+                "panel_manual_check_cooldown_seconds": (
+                    panel_manual_check_cooldown_seconds
+                ),
+            },
+            updated_by=_actor_name(request),
+        )
+    except (TypeError, ValueError) as error:
+        message = str(error)
+        return RedirectResponse(
+            f"/settings/crm?{urlencode({'runtime_error': message})}#monitoring",
+            status_code=303,
+        )
+    changes = [
+        key
+        for key, value in current.values().items()
+        if previous.values().get(key) != value
+    ]
+    log_event(
+        request=request,
+        action="settings_monitor_update",
+        object_type="Настройки",
+        object_name="Мониторинг панелей",
+        details=(
+            "Изменены параметры: " + ", ".join(changes)
+            if changes
+            else "Параметры сохранены без изменения значений"
+        ),
+    )
+    return RedirectResponse(
+        "/settings/crm?runtime_notice=saved#monitoring",
+        status_code=303,
+    )
 
 
 @router.get("/settings/roles", response_class=HTMLResponse)

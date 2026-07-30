@@ -16,10 +16,16 @@ from app.repositories.role_repository import (
     get_roles,
     set_role_permissions,
 )
+from app.repositories.system_settings_repository import (
+    get_monitor_runtime_settings,
+    validate_monitor_settings,
+)
 from app.repositories.user_repository import create_user
 from app.routers.settings import (
     crm_settings_check,
     crm_settings_page,
+    monitoring_settings_update,
+    panel_api_settings_check,
     roles_create,
     roles_page,
     security_log_page,
@@ -202,6 +208,129 @@ class SettingsAccessTests(PostgreSQLTestCase):
                 )
             }
         self.assertEqual(actions, {"role_create", "settings_crm_check"})
+
+    def test_runtime_monitoring_is_shared_validated_and_audited(self):
+        defaults = get_monitor_runtime_settings()
+        self.assertEqual(
+            defaults.panel_monitor_interval_seconds,
+            settings.panel_monitor_interval_seconds,
+        )
+
+        request = self._request("/settings/monitoring", method="POST")
+        response = monitoring_settings_update(
+            request,
+            panel_monitor_enabled=1,
+            panel_monitor_interval_seconds=120,
+            panel_monitor_concurrency=7,
+            panel_monitor_stale_seconds=360,
+            panel_manual_check_cooldown_seconds=15,
+        )
+        self.assertEqual(response.status_code, 303)
+        self.assertIn("runtime_notice=saved", response.headers["location"])
+
+        # Separate reads model separate workers: no process-local cache is used.
+        first_worker = get_monitor_runtime_settings()
+        second_worker = get_monitor_runtime_settings()
+        self.assertEqual(first_worker.values(), second_worker.values())
+        self.assertEqual(first_worker.panel_monitor_interval_seconds, 120)
+        self.assertEqual(first_worker.panel_monitor_concurrency, 7)
+        self.assertEqual(first_worker.updated_by, "Тестовый администратор")
+
+        with db() as conn:
+            row = conn.execute(
+                """
+                SELECT action, details
+                FROM operation_log
+                WHERE action = 'settings_monitor_update'
+                ORDER BY id DESC
+                LIMIT 1
+                """
+            ).fetchone()
+        self.assertIsNotNone(row)
+        self.assertNotIn("password", row["details"].lower())
+        self.assertNotIn("cookie", row["details"].lower())
+        self.assertNotIn(settings.session_secret, row["details"])
+
+    def test_runtime_monitoring_validation_and_stale_interval_rule(self):
+        valid = {
+            "panel_monitor_enabled": True,
+            "panel_monitor_interval_seconds": 60,
+            "panel_monitor_concurrency": 1,
+            "panel_monitor_stale_seconds": 60,
+            "panel_manual_check_cooldown_seconds": 1,
+        }
+        self.assertEqual(validate_monitor_settings(valid), valid)
+        for change in (
+            {"panel_monitor_interval_seconds": 59},
+            {"panel_monitor_concurrency": 0},
+            {"panel_monitor_concurrency": 51},
+            {"panel_monitor_stale_seconds": 59},
+            {"panel_manual_check_cooldown_seconds": 0},
+        ):
+            invalid = {**valid, **change}
+            with self.assertRaises(ValueError):
+                validate_monitor_settings(invalid)
+
+    def test_connection_page_never_exposes_secrets_or_editable_env_fields(self):
+        response = crm_settings_page(self._request("/settings/crm"))
+        html = response.body.decode("utf-8")
+        for secret in (
+            settings.database_url,
+            settings.crm_password,
+            settings.crm_cookie,
+            settings.panel_api_password,
+            settings.session_secret,
+        ):
+            if secret:
+                self.assertNotIn(secret, html)
+        for env_name in (
+            "DATABASE_URL",
+            "CRM_LOGIN",
+            "CRM_PASSWORD",
+            "CRM_COOKIE",
+            "PANEL_API_LOGIN",
+            "PANEL_API_PASSWORD",
+            "SESSION_SECRET",
+            "DRY_RUN",
+        ):
+            self.assertNotIn(f'name="{env_name}"', html)
+        self.assertIn('action="/settings/monitoring"', html)
+        self.assertIn("Требуется перезапуск", html)
+        self.assertIn("Применяется сразу", html)
+
+    def test_mocked_panel_api_check_and_non_admin_access(self):
+        request = self._request("/settings/panels/check", method="POST")
+        with patch(
+            "app.routers.settings.check_panel_api_connection",
+            return_value={"ok": True, "message": "Мок: API доступен"},
+        ) as check:
+            result = panel_api_settings_check(request)
+        self.assertEqual(result.status_code, 303)
+        check.assert_called_once_with()
+        self.assertEqual(
+            request.session["connection_check_results"]["panels"]["ok"],
+            True,
+        )
+
+        operator_id = int(
+            create_user(
+                "Тестовый оператор",
+                "settings-operator",
+                hash_password("strong-password"),
+                "operator",
+            )
+        )
+        operator_request = self._request("/settings/crm")
+        operator_request.session["user_id"] = operator_id
+        operator_request.session["user"] = {
+            "id": operator_id,
+            "login": "settings-operator",
+            "full_name": "Тестовый оператор",
+            "role": "operator",
+        }
+        denied = crm_settings_page(operator_request)
+        self.assertEqual(denied.status_code, 303)
+        self.assertIn("admin_only", denied.headers["location"])
 
     def test_last_administrator_cannot_disable_or_delete_self(self):
         request = self._request("/users/active", method="POST")

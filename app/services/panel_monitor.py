@@ -18,6 +18,9 @@ from app.repositories.panel_monitor_repository import (
     update_cycle_progress,
 )
 from app.repositories.panel_repository import get_enabled_panels, update_panel_api_status
+from app.repositories.system_settings_repository import (
+    get_monitor_runtime_settings,
+)
 from app.services.panel_api import check_panel, panel_api_configured
 from app.settings import settings
 
@@ -44,7 +47,10 @@ def _safe_check(panel: dict, checker) -> dict:
 def run_monitor_cycle(*, checker=check_panel, concurrency: int | None = None) -> dict:
     """Run one already-claimed cycle and persist progress after every result."""
 
-    panels = get_enabled_panels(settings.panel_manual_check_cooldown_seconds)
+    runtime = get_monitor_runtime_settings()
+    panels = get_enabled_panels(
+        runtime.panel_manual_check_cooldown_seconds
+    )
     total = len(panels)
     set_cycle_total(total)
     if not panels:
@@ -53,7 +59,7 @@ def run_monitor_cycle(*, checker=check_panel, concurrency: int | None = None) ->
 
     worker_limit = max(
         1,
-        min(int(concurrency or settings.panel_monitor_concurrency), 32, total),
+        min(int(concurrency or runtime.panel_monitor_concurrency), 50, total),
     )
     iterator = iter(panels)
     futures: dict[Future, dict] = {}
@@ -132,8 +138,6 @@ class PanelMonitorWorker:
         self._thread: threading.Thread | None = None
 
     def start(self) -> bool:
-        if not settings.panel_monitor_enabled:
-            return False
         if not panel_api_configured():
             logger.info("Panel monitor is disabled until panel API credentials are configured")
             return False
@@ -184,10 +188,16 @@ class PanelMonitorWorker:
 
     def _leader_loop(self) -> None:
         while not self._stop.is_set():
+            runtime = get_monitor_runtime_settings()
+            if not runtime.panel_monitor_enabled:
+                self._stop.wait(1)
+                continue
             recover_interrupted_cycle(
                 max(60, int(settings.panel_api_timeout) * 6),
             )
-            cycle = begin_cycle_if_due(settings.panel_monitor_interval_seconds)
+            cycle = begin_cycle_if_due(
+                runtime.panel_monitor_interval_seconds
+            )
             if cycle:
                 run_monitor_cycle()
             else:

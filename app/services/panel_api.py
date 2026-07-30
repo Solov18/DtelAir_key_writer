@@ -154,6 +154,49 @@ def check_panel(panel: dict) -> dict:
         session.close()
 
 
+def check_panel_api_connection() -> dict:
+    """Check configured credentials against one enabled panel without persisting data."""
+
+    if not panel_api_configured():
+        return {
+            "ok": False,
+            "message": "Логин или пароль API панелей не настроен",
+        }
+    from app.repositories.panel_repository import get_enabled_panels
+
+    panel = next(
+        (
+            item
+            for item in get_enabled_panels(0)
+            if str(item.get("ip") or "").strip()
+        ),
+        None,
+    )
+    if not panel:
+        return {
+            "ok": False,
+            "message": "Нет включённой панели с IP-адресом для безопасной проверки",
+        }
+    result = check_panel(panel)
+    if result.get("status") == "online":
+        return {
+            "ok": True,
+            "message": "API панели доступен, авторизация выполнена успешно",
+        }
+    safe_messages = {
+        "auth_error": "Панель отклонила текущие реквизиты API",
+        "offline": "Тестовая панель не ответила за отведённое время",
+        "not_configured": "Реквизиты API панелей не настроены",
+    }
+    return {
+        "ok": False,
+        "message": safe_messages.get(
+            str(result.get("status") or ""),
+            "Проверка API панели завершилась ошибкой",
+        ),
+    }
+
+
 def get_panel_snapshot(panel: dict) -> tuple[bytes, str]:
     response, content, _ = _request(
         panel,

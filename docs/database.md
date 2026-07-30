@@ -1,7 +1,7 @@
 # База данных PostgreSQL
 
 Документ описывает фактическую структуру SQLAlchemy и Alembic после ревизии
-`20260727_04`. Рабочий движок — PostgreSQL через `SQLAlchemy 2` и
+`20260730_06`. Рабочий движок — PostgreSQL через `SQLAlchemy 2` и
 `psycopg`; URL подключения берётся из `DATABASE_URL`.
 
 ## Общая схема
@@ -26,6 +26,7 @@ flowchart LR
     R["roles"] -->|RESTRICT| U["users"]
     R -->|CASCADE| RP["role_permissions"]
     PM["permissions"] -->|CASCADE| RP
+    SS["system_settings"]
 
     K -. "исторический ID" .-> OL["operation_log"]
     E -. "исторический ID" .-> OL
@@ -37,6 +38,7 @@ flowchart LR
 `uk_groups`. Связующие и операционные таблицы: `key_assignments`,
 `employee_keys`, `role_permissions`, `uk_panel_links`, `uk_key_issues`,
 `uk_key_programmings`, `uk_crm_operations`, `operation_log`.
+Служебные таблицы: `panel_monitor_state` и `system_settings`.
 
 `operation_log` намеренно не имеет внешних ключей: он хранит снимок данных и
 остаётся читаемым после архивирования или изменения исходного объекта.
@@ -203,6 +205,24 @@ FK `role_id → roles.id ON DELETE RESTRICT`: роль нельзя удалит
 состояния. Внешних ключей нет: прогресс краткоживущий, а результаты каждой
 панели сохраняются в `panels`. Межпроцессная PostgreSQL advisory lock гарантирует,
 что одновременно полный цикл выполняет только один процесс приложения.
+
+### `system_settings`
+
+Общие несекретные runtime-параметры приложения. В текущей версии таблица
+хранит только параметры мониторинга панелей; пароли, Cookie, токены,
+`DATABASE_URL` и `SESSION_SECRET` в неё не записываются.
+
+| Колонка | Тип | Назначение |
+|---|---|---|
+| `key` | `TEXT`, PK | Стабильный код параметра. |
+| `value` | `TEXT NOT NULL` | Нормализованное значение параметра. |
+| `updated_at` | `TIMESTAMPTZ NOT NULL` | Время последнего сохранения. |
+| `updated_by` | `TEXT NOT NULL` | ФИО или логин администратора. |
+
+Внешних ключей нет. Все worker-процессы читают значения из PostgreSQL перед
+новым циклом мониторинга. При отсутствии строки используется исходное значение
+из `.env`; после сохранения значение из таблицы имеет приоритет. Изменение
+записывается в `operation_log` без секретных данных.
 
 ### `uk_groups`
 

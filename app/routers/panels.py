@@ -26,6 +26,9 @@ from app.repositories.panel_monitor_repository import (
     get_monitor_state,
     request_monitor_cycle,
 )
+from app.repositories.system_settings_repository import (
+    get_monitor_runtime_settings,
+)
 from app.services import import_panels_excel
 from app.services.audit import log_event
 from app.services.auth import get_current_user
@@ -37,7 +40,6 @@ from app.services.panel_api import (
     reboot_panel,
 )
 from app.templates_config import templates
-from app.settings import settings
 
 
 router = APIRouter()
@@ -68,6 +70,7 @@ def panels_page(
     page: int = 1,
     selected_panel_id: int = 0,
 ):
+    runtime = get_monitor_runtime_settings()
     monitor_state = get_monitor_state()
     checking_panel_ids = {
         int(value) for value in monitor_state.get("active_panel_ids", [])
@@ -79,7 +82,7 @@ def panels_page(
         entrance=entrance,
         page=page,
         page_size=20,
-        stale_after_seconds=settings.panel_monitor_stale_seconds,
+        stale_after_seconds=runtime.panel_monitor_stale_seconds,
         checking_panel_ids=checking_panel_ids,
     )
     selected_panel = get_panel_by_id(selected_panel_id) if selected_panel_id else None
@@ -89,7 +92,7 @@ def panels_page(
         selected_panel = normalize_panel_row(
             selected_panel,
             checking_panel_ids=checking_panel_ids,
-            stale_after_seconds=settings.panel_monitor_stale_seconds,
+            stale_after_seconds=runtime.panel_monitor_stale_seconds,
         )
 
     filters = {
@@ -119,7 +122,9 @@ def panels_page(
             "request": request,
             "panels": panel_page["items"],
             "panel_page": panel_page,
-            "statistics": get_panel_statistics(settings.panel_monitor_stale_seconds),
+            "statistics": get_panel_statistics(
+                runtime.panel_monitor_stale_seconds
+            ),
             "monitor_state": monitor_state,
             "filter_options": get_panel_filter_options(),
             "filters": filters,
@@ -237,6 +242,7 @@ def panels_monitor_state(
     entrance: str = "",
     page: int = 1,
 ):
+    runtime = get_monitor_runtime_settings()
     state = get_monitor_state()
     checking_panel_ids = {
         int(value) for value in state.get("active_panel_ids", [])
@@ -248,7 +254,7 @@ def panels_monitor_state(
         entrance=entrance,
         page=page,
         page_size=20,
-        stale_after_seconds=settings.panel_monitor_stale_seconds,
+        stale_after_seconds=runtime.panel_monitor_stale_seconds,
         checking_panel_ids=checking_panel_ids,
     )
     return JSONResponse(
@@ -256,7 +262,9 @@ def panels_monitor_state(
             {
                 "ok": True,
                 "monitor": state,
-                "statistics": get_panel_statistics(settings.panel_monitor_stale_seconds),
+                "statistics": get_panel_statistics(
+                    runtime.panel_monitor_stale_seconds
+                ),
                 "items": panel_page["items"],
             }
         )
@@ -288,7 +296,8 @@ async def panel_check(request: Request, panel_id: int):
             status_code=409,
         )
     since_last_check = seconds_since_last_check(panel_id)
-    cooldown = max(1, int(settings.panel_manual_check_cooldown_seconds))
+    runtime = get_monitor_runtime_settings()
+    cooldown = runtime.panel_manual_check_cooldown_seconds
     if since_last_check is not None and since_last_check < cooldown:
         retry_after = max(1, round(cooldown - since_last_check))
         return JSONResponse(
@@ -319,7 +328,9 @@ async def panel_check(request: Request, panel_id: int):
             {
                 "ok": True,
                 "panel": updated_panel,
-                "statistics": get_panel_statistics(settings.panel_monitor_stale_seconds),
+                "statistics": get_panel_statistics(
+                    runtime.panel_monitor_stale_seconds
+                ),
             }
         )
     )

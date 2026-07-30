@@ -111,13 +111,34 @@ CRM_LOGIN=
 CRM_PASSWORD=
 CRM_BUYER_ID=
 DRY_RUN=false
+REQUEST_TIMEOUT=20
 
 PANEL_API_LOGIN=
 PANEL_API_PASSWORD=
 PANEL_API_TIMEOUT=3
+
+PANEL_MONITOR_ENABLED=true
+PANEL_MONITOR_INTERVAL_SECONDS=300
+PANEL_MONITOR_CONCURRENCY=12
+PANEL_MONITOR_STALE_SECONDS=600
+PANEL_MANUAL_CHECK_COOLDOWN_SECONDS=10
+
+SESSION_SECRET=replace-with-a-long-random-secret
+SESSION_HTTPS_ONLY=false
 ```
 
 `DRY_RUN=true` запрещает реальные изменения во внешних системах.
+
+Реквизиты PostgreSQL, CRM, API панелей, `DRY_RUN` и параметры сессии
+читаются из `.env` при запуске и меняются только с последующим перезапуском
+приложения. Секретные значения не выводятся на странице настроек.
+
+Пять параметров `PANEL_MONITOR_*` и
+`PANEL_MANUAL_CHECK_COOLDOWN_SECONDS` являются исходными значениями. После
+первого сохранения на странице «Настройки → Подключения и системные параметры»
+их актуальные значения хранятся в PostgreSQL в таблице `system_settings`.
+Каждый worker читает их перед новым циклом мониторинга, поэтому перезапуск не
+требуется и уже выполняющийся цикл не прерывается.
 
 ## Alembic
 
