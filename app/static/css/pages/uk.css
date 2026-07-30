@@ -830,91 +830,6 @@ body.light-theme .modal-backdrop {
     margin-bottom: 18px;
 }
 
-.uk-search-box {
-    position: relative;
-
-    width: min(470px, 100%);
-}
-
-.uk-search-box > svg {
-    position: absolute;
-
-    top: 50%;
-    left: 17px;
-
-    width: 20px;
-    height: 20px;
-
-    transform: translateY(-50%);
-
-    color: var(--blue);
-
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.8;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-
-    pointer-events: none;
-}
-
-.uk-search-box input {
-    width: 100%;
-    min-height: 48px;
-
-    padding: 0 48px 0 50px;
-
-    border-radius: 14px;
-}
-
-.uk-search-clear {
-    position: absolute;
-
-    top: 50%;
-    right: 10px;
-
-    width: 32px;
-    height: 32px;
-    min-height: 32px;
-
-    display: none;
-    align-items: center;
-    justify-content: center;
-
-    padding: 0;
-
-    transform: translateY(-50%);
-
-    color: var(--muted);
-
-    border: none;
-    border-radius: 9px;
-
-    background: transparent;
-    box-shadow: none;
-
-    font-size: 24px;
-    font-weight: 400;
-    line-height: 1;
-
-    cursor: pointer;
-}
-
-.uk-search-clear.visible {
-    display: flex;
-}
-
-.uk-search-clear:hover {
-    transform: translateY(-50%);
-
-    color: var(--text-strong);
-
-    background: rgba(0, 170, 255, .14);
-
-    box-shadow: none;
-}
-
-
 /* =========================================================
    ПРОКРУТКА КАРТОЧЕК УК
    ========================================================= */
@@ -1118,14 +1033,6 @@ body.light-theme .uk-cards-scroll {
 
 .uk-list-head h2 {
     margin-bottom: 5px;
-}
-
-.uk-search-box {
-    width: min(420px, 100%);
-}
-
-.uk-search-box input {
-    min-height: 44px;
 }
 
 .uk-cards {
@@ -2855,7 +2762,6 @@ a.uk-summary-card:hover {
 .uk-directory-note svg,
 .uk-row-actions svg,
 .uk-primary-action svg,
-.uk-search-field svg,
 .uk-inspector-integration-empty svg,
 .uk-inspector-empty svg {
     fill: none;
@@ -2961,84 +2867,9 @@ a.uk-summary-card:hover {
 }
 
 .uk-filterbar {
-    display: grid;
-    grid-template-columns: minmax(280px, 1.8fr) minmax(180px, .65fr) auto auto;
-    gap: 10px;
-    align-items: end;
     padding: 13px 14px;
     border-bottom: 1px solid var(--line-soft);
     background: rgba(0, 10, 20, .34);
-}
-
-.uk-search-field {
-    height: 44px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 0 13px;
-    border: 1px solid var(--field-border);
-    border-radius: 9px;
-    background: var(--field-bg);
-}
-
-.uk-search-field:focus-within {
-    border-color: var(--blue);
-    box-shadow: 0 0 0 3px rgba(0, 170, 255, .1);
-}
-
-.uk-search-field svg {
-    width: 19px;
-    height: 19px;
-    flex: 0 0 19px;
-    color: var(--blue);
-}
-
-.uk-search-field input {
-    width: 100%;
-    min-width: 0;
-    height: 40px;
-    padding: 0;
-    color: var(--field-text);
-    border: 0;
-    outline: none;
-    background: transparent;
-    box-shadow: none;
-    font-size: 13px;
-}
-
-.uk-filter-control {
-    display: grid;
-    gap: 5px;
-    margin: 0;
-}
-
-.uk-filter-control > span {
-    color: var(--muted);
-    font-size: 10px;
-    font-weight: 900;
-    letter-spacing: .04em;
-    text-transform: uppercase;
-}
-
-.uk-filter-control select {
-    width: 100%;
-    height: 44px;
-    min-height: 44px;
-    padding: 0 32px 0 11px;
-    border-radius: 9px;
-    font-size: 12px;
-}
-
-.uk-filter-submit {
-    height: 44px;
-    padding-inline: 16px;
-}
-
-.uk-filter-reset {
-    width: 44px;
-    height: 44px;
-    padding: 0;
-    font-size: 20px;
 }
 
 .uk-table-scroll {
@@ -3090,17 +2921,8 @@ a.uk-summary-card:hover {
 }
 
 .uk-directory-table tbody tr:hover td,
-.uk-directory-table tbody tr:focus td,
-.uk-directory-table tbody tr.is-selected td {
+.uk-directory-table tbody tr:focus td {
     background: rgba(0, 143, 255, .1);
-}
-
-.uk-directory-table tbody tr.is-selected td {
-    background: rgba(0, 150, 255, .14);
-}
-
-.uk-directory-table tbody tr.is-selected td:first-child {
-    box-shadow: inset 3px 0 0 var(--blue);
 }
 
 .uk-id-cell {
@@ -3757,16 +3579,11 @@ body.light-theme .uk-directory-table td {
 }
 
 body.light-theme .uk-directory-table tbody tr:hover td,
-body.light-theme .uk-directory-table tbody tr:focus td,
-body.light-theme .uk-directory-table tbody tr.is-selected td {
+body.light-theme .uk-directory-table tbody tr:focus td {
     background: #eaf6ff;
 }
 
 /* Current UK registry: panels, issued physical keys and per-panel CRM state. */
-.uk-filterbar.is-search-only {
-    grid-template-columns: minmax(280px, 1fr) auto auto;
-}
-
 .uk-count-badge.is-master {
     color: #49c9d9;
     border-color: rgba(73, 201, 217, .28);
@@ -4115,7 +3932,16 @@ body.light-theme .uk-directory-table tbody tr.is-selected td {
 }
 
 .uk-history-section .uk-section-head {
-    padding: 16px;
+    padding: 18px;
+}
+
+.uk-history-section .uk-section-head h2 {
+    font-size: 20px;
+}
+
+.uk-history-section .uk-section-head .subtitle {
+    font-size: 13px;
+    line-height: 1.45;
 }
 
 .uk-history-scroll {
@@ -4130,10 +3956,11 @@ body.light-theme .uk-directory-table tbody tr.is-selected td {
 
 .uk-history-scroll th,
 .uk-history-scroll td {
-    padding: 10px 12px;
+    padding: 12px 14px;
     border-top: 1px solid var(--line-soft);
     color: var(--text);
-    font-size: 10px;
+    font-size: var(--font-table);
+    line-height: 1.45;
     text-align: left;
     vertical-align: top;
 }
@@ -4141,6 +3968,7 @@ body.light-theme .uk-directory-table tbody tr.is-selected td {
 .uk-history-scroll th {
     color: var(--muted);
     background: rgba(0, 153, 255, .055);
+    font-size: var(--font-table-head);
     text-transform: uppercase;
 }
 
@@ -4149,6 +3977,8 @@ body.light-theme .uk-directory-table tbody tr.is-selected td {
     max-width: 520px;
     margin-top: 3px;
     color: var(--muted);
+    font-size: var(--font-small);
+    line-height: 1.4;
 }
 
 .uk-confirm-field {
@@ -4199,7 +4029,6 @@ body.light-theme .uk-detail-counter-card a {
 }
 
 @media (max-width: 760px) {
-    .uk-filterbar.is-search-only,
     .uk-linked-panel-card > form:first-of-type,
     .uk-master-add-form,
     .uk-programming-row {
@@ -4239,7 +4068,18 @@ body.light-theme .uk-row-actions button {
 }
 
 body.light-theme .uk-row-actions .uk-open-card-link {
-    color: #fff;
+    color: var(--color-link);
+    border-color: var(--border-default);
+    background: var(--button-secondary-bg);
+    box-shadow: none;
+}
+
+body.light-theme .uk-row-actions .uk-open-card-link:hover,
+body.light-theme .uk-row-actions .uk-open-card-link:focus-visible {
+    color: var(--color-heading);
+    border-color: var(--border-strong);
+    background: var(--button-secondary-hover);
+    box-shadow: none;
 }
 
 @media (max-width: 1500px) {
@@ -4287,14 +4127,6 @@ body.light-theme .uk-row-actions .uk-open-card-link {
     .uk-pagination {
         align-items: stretch;
         flex-direction: column;
-    }
-
-    .uk-filterbar {
-        grid-template-columns: 1fr;
-    }
-
-    .uk-filter-reset {
-        width: 100%;
     }
 
     .uk-profile-form {

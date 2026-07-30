@@ -39,6 +39,8 @@ ACTION_NAMES = {
     "panel_delete": "Удаление панели",
     "panel_import": "Импорт панелей",
     "panel_status_refresh": "Проверка состояния панелей",
+    "panel_check": "Проверка панели",
+    "panel_monitor_request": "Запуск мониторинга панелей",
     "panel_reboot": "Перезагрузка панели",
     "panel_enable": "Возврат панели в работу",
     "panel_disable": "Отключение панели в учёте",

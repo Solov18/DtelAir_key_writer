@@ -45,7 +45,8 @@ textarea {
 
 input::placeholder,
 textarea::placeholder {
-    color: var(--muted);
+    color: var(--color-placeholder);
+    opacity: 1;
 }
 
 input:hover,
@@ -55,5 +56,5 @@ input:focus,
 textarea:focus,
 select:focus {
     border-color: var(--blue);
-    box-shadow: 0 0 18px rgba(0, 170, 255, .18);
+    box-shadow: 0 0 0 3px var(--focus-ring);
 }

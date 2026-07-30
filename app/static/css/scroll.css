@@ -11,9 +11,32 @@
 .search-scroll,
 .uk-items-list,
 .uk-panel-list,
-.uk-cards-scroll {
+.uk-cards-scroll,
+.uk-history-scroll,
+.employee-inspector,
+.panel-inspector,
+.uk-inspector,
+.employee-profile-history-scroll,
+.employee-table-scroll,
+.employee-inspector-key-list,
+.employee-profile-key-list,
+.keys-modal-window,
+.panels-table-scroll,
+.manual-panel-list,
+.users-list,
+.security-table-wrap,
+.uk-table-scroll,
+.uk-resource-scroll,
+.uk-selector-list,
+.keys-history-mini-list,
+.keys-history-preview,
+.app-combobox__options,
+.smart-search-menu,
+.modal-card,
+.employee-modal-card,
+.uk-modal-card {
     scrollbar-width: thin;
-    scrollbar-color: rgba(0, 170, 255, .55) rgba(0, 10, 20, .45);
+    scrollbar-color: var(--scroll-thumb) var(--scroll-track);
 }
 
 /* Chrome, Edge, Safari */
@@ -31,9 +54,32 @@
 .search-scroll::-webkit-scrollbar,
 .uk-items-list::-webkit-scrollbar,
 .uk-panel-list::-webkit-scrollbar,
-.uk-cards-scroll::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+.uk-cards-scroll::-webkit-scrollbar,
+.uk-history-scroll::-webkit-scrollbar,
+.employee-inspector::-webkit-scrollbar,
+.panel-inspector::-webkit-scrollbar,
+.uk-inspector::-webkit-scrollbar,
+.employee-profile-history-scroll::-webkit-scrollbar,
+.employee-table-scroll::-webkit-scrollbar,
+.employee-inspector-key-list::-webkit-scrollbar,
+.employee-profile-key-list::-webkit-scrollbar,
+.keys-modal-window::-webkit-scrollbar,
+.panels-table-scroll::-webkit-scrollbar,
+.manual-panel-list::-webkit-scrollbar,
+.users-list::-webkit-scrollbar,
+.security-table-wrap::-webkit-scrollbar,
+.uk-table-scroll::-webkit-scrollbar,
+.uk-resource-scroll::-webkit-scrollbar,
+.uk-selector-list::-webkit-scrollbar,
+.keys-history-mini-list::-webkit-scrollbar,
+.keys-history-preview::-webkit-scrollbar,
+.app-combobox__options::-webkit-scrollbar,
+.smart-search-menu::-webkit-scrollbar,
+.modal-card::-webkit-scrollbar,
+.employee-modal-card::-webkit-scrollbar,
+.uk-modal-card::-webkit-scrollbar {
+    width: var(--scroll-size);
+    height: var(--scroll-size);
 }
 
 .custom-scroll::-webkit-scrollbar-track,
@@ -49,9 +95,32 @@
 .search-scroll::-webkit-scrollbar-track,
 .uk-items-list::-webkit-scrollbar-track,
 .uk-panel-list::-webkit-scrollbar-track,
-.uk-cards-scroll::-webkit-scrollbar-track {
-    background: rgba(0, 10, 20, .45);
-    border-radius: 10px;
+.uk-cards-scroll::-webkit-scrollbar-track,
+.uk-history-scroll::-webkit-scrollbar-track,
+.employee-inspector::-webkit-scrollbar-track,
+.panel-inspector::-webkit-scrollbar-track,
+.uk-inspector::-webkit-scrollbar-track,
+.employee-profile-history-scroll::-webkit-scrollbar-track,
+.employee-table-scroll::-webkit-scrollbar-track,
+.employee-inspector-key-list::-webkit-scrollbar-track,
+.employee-profile-key-list::-webkit-scrollbar-track,
+.keys-modal-window::-webkit-scrollbar-track,
+.panels-table-scroll::-webkit-scrollbar-track,
+.manual-panel-list::-webkit-scrollbar-track,
+.users-list::-webkit-scrollbar-track,
+.security-table-wrap::-webkit-scrollbar-track,
+.uk-table-scroll::-webkit-scrollbar-track,
+.uk-resource-scroll::-webkit-scrollbar-track,
+.uk-selector-list::-webkit-scrollbar-track,
+.keys-history-mini-list::-webkit-scrollbar-track,
+.keys-history-preview::-webkit-scrollbar-track,
+.app-combobox__options::-webkit-scrollbar-track,
+.smart-search-menu::-webkit-scrollbar-track,
+.modal-card::-webkit-scrollbar-track,
+.employee-modal-card::-webkit-scrollbar-track,
+.uk-modal-card::-webkit-scrollbar-track {
+    background: var(--scroll-track);
+    border-radius: var(--scroll-radius);
 }
 
 .custom-scroll::-webkit-scrollbar-thumb,
@@ -67,10 +136,33 @@
 .search-scroll::-webkit-scrollbar-thumb,
 .uk-items-list::-webkit-scrollbar-thumb,
 .uk-panel-list::-webkit-scrollbar-thumb,
-.uk-cards-scroll::-webkit-scrollbar-thumb {
-    background: rgba(0, 170, 255, .55);
-    border: 2px solid rgba(0, 10, 20, .45);
-    border-radius: 10px;
+.uk-cards-scroll::-webkit-scrollbar-thumb,
+.uk-history-scroll::-webkit-scrollbar-thumb,
+.employee-inspector::-webkit-scrollbar-thumb,
+.panel-inspector::-webkit-scrollbar-thumb,
+.uk-inspector::-webkit-scrollbar-thumb,
+.employee-profile-history-scroll::-webkit-scrollbar-thumb,
+.employee-table-scroll::-webkit-scrollbar-thumb,
+.employee-inspector-key-list::-webkit-scrollbar-thumb,
+.employee-profile-key-list::-webkit-scrollbar-thumb,
+.keys-modal-window::-webkit-scrollbar-thumb,
+.panels-table-scroll::-webkit-scrollbar-thumb,
+.manual-panel-list::-webkit-scrollbar-thumb,
+.users-list::-webkit-scrollbar-thumb,
+.security-table-wrap::-webkit-scrollbar-thumb,
+.uk-table-scroll::-webkit-scrollbar-thumb,
+.uk-resource-scroll::-webkit-scrollbar-thumb,
+.uk-selector-list::-webkit-scrollbar-thumb,
+.keys-history-mini-list::-webkit-scrollbar-thumb,
+.keys-history-preview::-webkit-scrollbar-thumb,
+.app-combobox__options::-webkit-scrollbar-thumb,
+.smart-search-menu::-webkit-scrollbar-thumb,
+.modal-card::-webkit-scrollbar-thumb,
+.employee-modal-card::-webkit-scrollbar-thumb,
+.uk-modal-card::-webkit-scrollbar-thumb {
+    background: var(--scroll-thumb);
+    border: 2px solid var(--scroll-track);
+    border-radius: var(--scroll-radius);
 }
 
 .custom-scroll::-webkit-scrollbar-thumb:hover,
@@ -86,8 +178,31 @@
 .search-scroll::-webkit-scrollbar-thumb:hover,
 .uk-items-list::-webkit-scrollbar-thumb:hover,
 .uk-panel-list::-webkit-scrollbar-thumb:hover,
-.uk-cards-scroll::-webkit-scrollbar-thumb:hover {
-    background: rgba(0, 184, 255, .80);
+.uk-cards-scroll::-webkit-scrollbar-thumb:hover,
+.uk-history-scroll::-webkit-scrollbar-thumb:hover,
+.employee-inspector::-webkit-scrollbar-thumb:hover,
+.panel-inspector::-webkit-scrollbar-thumb:hover,
+.uk-inspector::-webkit-scrollbar-thumb:hover,
+.employee-profile-history-scroll::-webkit-scrollbar-thumb:hover,
+.employee-table-scroll::-webkit-scrollbar-thumb:hover,
+.employee-inspector-key-list::-webkit-scrollbar-thumb:hover,
+.employee-profile-key-list::-webkit-scrollbar-thumb:hover,
+.keys-modal-window::-webkit-scrollbar-thumb:hover,
+.panels-table-scroll::-webkit-scrollbar-thumb:hover,
+.manual-panel-list::-webkit-scrollbar-thumb:hover,
+.users-list::-webkit-scrollbar-thumb:hover,
+.security-table-wrap::-webkit-scrollbar-thumb:hover,
+.uk-table-scroll::-webkit-scrollbar-thumb:hover,
+.uk-resource-scroll::-webkit-scrollbar-thumb:hover,
+.uk-selector-list::-webkit-scrollbar-thumb:hover,
+.keys-history-mini-list::-webkit-scrollbar-thumb:hover,
+.keys-history-preview::-webkit-scrollbar-thumb:hover,
+.app-combobox__options::-webkit-scrollbar-thumb:hover,
+.smart-search-menu::-webkit-scrollbar-thumb:hover,
+.modal-card::-webkit-scrollbar-thumb:hover,
+.employee-modal-card::-webkit-scrollbar-thumb:hover,
+.uk-modal-card::-webkit-scrollbar-thumb:hover {
+    background: var(--scroll-thumb-hover);
 }
 
 .custom-scroll::-webkit-scrollbar-corner,

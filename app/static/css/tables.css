@@ -5,10 +5,10 @@ table {
 
     border-radius: 14px;
 
-    background: var(--panel);
-    color: var(--text);
+    background: var(--surface-table);
+    color: var(--color-text);
 
-    border: 1px solid var(--line-soft);
+    border: 1px solid var(--border-default);
 }
 
 th,
@@ -16,25 +16,26 @@ td {
     padding: 9px 10px;
     text-align: left;
 
-    font-size: 13px;
+    font-size: var(--font-table);
 
-    border-bottom: 1px solid var(--soft);
+    border-bottom: 1px solid var(--border-soft);
 
     transition: 0.18s;
 }
 
 th {
-    color: #aee7ff;
-    background: rgba(0, 116, 220, 0.17);
+    color: var(--color-text-secondary);
+    background: var(--surface-table-head);
+    font-size: var(--font-table-head);
 }
 
 td {
-    color: var(--text);
+    color: var(--color-text);
 }
 
 tr:hover td {
-    background: var(--hover-bg);
-    color: var(--hover-text);
+    background: var(--surface-row-hover);
+    color: var(--color-heading);
 }
 
 .row-actions summary {

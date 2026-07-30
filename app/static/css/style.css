@@ -1,19 +1,19 @@
-@import url("./base.css");
+@import url("./base.css?v=3");
 @import url("./layout.css?v=3");
-@import url("./components.css?v=2");
+@import url("./components.css?v=6");
 @import url("./forms.css");
-@import url("./tables.css");
-@import url("./scroll.css");
-@import url("./smart-search.css");
+@import url("./tables.css?v=2");
+@import url("./scroll.css?v=2");
+@import url("./smart-search.css?v=2");
 
 @import url("./pages/home.css?v=3");
 @import url("./pages/message.css?v=2");
-@import url("./pages/manual_write.css?v=3");
-@import url("./pages/search.css?v=3");
-@import url("./pages/panels.css");
-@import url("./pages/employees.css");
-@import url("./pages/uk.css");
+@import url("./pages/manual_write.css?v=4");
+@import url("./pages/search.css?v=5");
+@import url("./pages/panels.css?v=2");
+@import url("./pages/employees.css?v=3");
+@import url("./pages/uk.css?v=4");
 
-@import url("./light-theme.css");
+@import url("./light-theme.css?v=2");
 @import url("./pages/users.css?v=9");
 @import url("./pages/settings.css?v=3");

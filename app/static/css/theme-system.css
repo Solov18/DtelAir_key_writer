@@ -1,0 +1,836 @@
+/*
+ * Final semantic theme layer.
+ * Loaded after every page stylesheet so component colors cannot fall back to
+ * dark-theme literals when the theme changes at runtime.
+ */
+
+body.light-theme {
+    --surface-page: #f4f8fc;
+    --surface-sidebar: #ffffff;
+    --surface-topbar: rgba(255, 255, 255, .97);
+    --surface-panel: rgba(255, 255, 255, .94);
+    --surface-panel-strong: #ffffff;
+    --surface-elevated: #ffffff;
+    --surface-input: #f8fbfe;
+    --surface-table: #ffffff;
+    --surface-table-head: #eaf4fb;
+    --surface-row: #ffffff;
+    --surface-row-alt: #f8fbfe;
+    --surface-row-hover: #eef7ff;
+    --surface-row-selected: #e1f3ff;
+    --surface-overlay: rgba(21, 40, 58, .34);
+
+    --color-heading: #102538;
+    --color-text: #20384b;
+    --color-text-secondary: #4d6578;
+    --color-text-muted: #60778a;
+    --color-placeholder: #5f7487;
+    --color-link: #086fae;
+    --color-icon: #167fbd;
+    --color-on-accent: #ffffff;
+
+    --border-strong: #8fbfdc;
+    --border-default: #c5d9e7;
+    --border-soft: #dce8f0;
+    --focus-color: #087fbd;
+    --focus-ring: rgba(8, 127, 189, .16);
+
+    --button-primary-start: #168fd3;
+    --button-primary-end: #0872b6;
+    --button-primary-hover-start: #219ddf;
+    --button-primary-hover-end: #096aa5;
+    --button-secondary-bg: #f5f9fc;
+    --button-secondary-hover: #eaf4fa;
+
+    --state-success-text: #167348;
+    --state-success-bg: #e9f8f0;
+    --state-success-border: #9cd8b8;
+    --state-warning-text: #8a5b00;
+    --state-warning-bg: #fff6df;
+    --state-warning-border: #e7c877;
+    --state-danger-text: #a63243;
+    --state-danger-bg: #fff0f2;
+    --state-danger-border: #e4a8b0;
+
+    --scroll-track: #e7eff5;
+    --scroll-thumb: #86b9d6;
+    --scroll-thumb-hover: #559dc6;
+    --scroll-size: 8px;
+    --scroll-radius: 10px;
+    --shadow-elevated: 0 18px 44px rgba(39, 72, 99, .18);
+
+    --bg-color: var(--surface-page);
+    --text: var(--color-text);
+    --text-strong: var(--color-heading);
+    --muted: var(--color-text-muted);
+    --panel: var(--surface-panel);
+    --panel-strong: var(--surface-panel-strong);
+    --line: var(--border-strong);
+    --line-soft: var(--border-default);
+    --soft: var(--border-soft);
+    --field-bg: var(--surface-input);
+    --field-text: var(--color-text);
+    --field-border: var(--border-default);
+    --control-bg: var(--surface-input);
+    --control-text: var(--color-text);
+    --control-placeholder: var(--color-placeholder);
+    --control-icon: var(--color-icon);
+    --control-border: var(--border-default);
+    --control-border-hover: var(--border-strong);
+    --control-border-focus: var(--focus-color);
+    --control-focus-ring: var(--focus-ring);
+    --control-popup: var(--surface-elevated);
+    --control-option-hover: var(--surface-row-hover);
+    --control-option-active: var(--surface-row-selected);
+    --control-disabled: #e2ebf1;
+    --hover-bg: var(--surface-row-hover);
+    --hover-text: var(--color-heading);
+    --green: var(--state-success-text);
+    --yellow: var(--state-warning-text);
+    --red: var(--state-danger-text);
+    --shadow-panel: 0 10px 28px rgba(35, 85, 120, .09);
+
+    color: var(--color-text);
+    color-scheme: light;
+    background:
+        linear-gradient(90deg, rgba(249, 252, 254, .99), rgba(249, 252, 254, .95) 55%, rgba(249, 252, 254, .82)),
+        url("/static/img/hero.png") right center / contain fixed no-repeat;
+    background-color: var(--surface-page);
+}
+
+body.light-theme::before {
+    background:
+        radial-gradient(circle at 82% 20%, rgba(24, 143, 204, .08), transparent 24%),
+        radial-gradient(circle at 86% 70%, rgba(24, 143, 204, .05), transparent 28%);
+}
+
+/* Navigation and application chrome */
+body.light-theme .sidebar,
+body.light-theme .sidebar-nav {
+    color: var(--color-text);
+    background: var(--surface-sidebar);
+    border-color: var(--border-soft);
+}
+
+body.light-theme .topbar {
+    color: var(--color-text);
+    background: var(--surface-topbar);
+    border-color: var(--border-soft);
+    box-shadow: 0 6px 24px rgba(39, 72, 99, .07);
+}
+
+body.light-theme .top-title,
+body.light-theme .top-info,
+body.light-theme .user-pill,
+body.light-theme .theme-toggle,
+body.light-theme .topbar-logout-button {
+    color: var(--color-heading);
+}
+
+body.light-theme .user-pill,
+body.light-theme .theme-toggle,
+body.light-theme .topbar-logout-button {
+    background: var(--surface-panel-strong);
+    border-color: var(--border-default);
+    box-shadow: 0 5px 16px rgba(39, 72, 99, .07);
+}
+
+body.light-theme .nav-item {
+    color: var(--color-text);
+}
+
+body.light-theme .nav-item:hover {
+    color: var(--color-link);
+    background: var(--surface-row-hover);
+    border-color: var(--border-default);
+}
+
+body.light-theme .nav-item.active {
+    color: var(--color-link);
+    background: var(--surface-row-selected);
+    border-color: var(--border-strong);
+}
+
+/* Typography */
+body.light-theme h1,
+body.light-theme h2,
+body.light-theme h3,
+body.light-theme h4,
+body.light-theme strong,
+body.light-theme b {
+    color: var(--color-heading);
+}
+
+body.light-theme p,
+body.light-theme .subtitle,
+body.light-theme small,
+body.light-theme .muted {
+    color: var(--color-text-muted);
+}
+
+body.light-theme a:not(.btn):not(.nav-item) {
+    color: var(--color-link);
+}
+
+body.light-theme label,
+body.light-theme legend,
+body.light-theme dt,
+body.light-theme .filter-label,
+body.light-theme .filter-bar__field > span,
+body.light-theme .filter-bar__group > span {
+    color: var(--color-text-secondary);
+}
+
+/* Surfaces used across registers, cards and inspectors */
+body.light-theme :where(
+    .panel,
+    .card,
+    .home-action,
+    .home-stat,
+    .home-status,
+    .quick-action,
+    .employee-summary-card,
+    .employee-register,
+    .employee-inspector,
+    .panels-workspace,
+    .panels-toolbar,
+    .panels-register,
+    .panel-inspector,
+    .keys-console-main,
+    .keys-side-card,
+    .uk-register,
+    .uk-inspector,
+    .uk-summary-card,
+    .user-card,
+    .log-filter-panel,
+    .log-panel,
+    .manual-steps,
+    .manual-key-card
+) {
+    color: var(--color-text);
+    background: var(--surface-panel);
+    border-color: var(--border-default);
+    box-shadow: var(--shadow-panel);
+}
+
+/* Static panels must not look clickable or jump because of legacy hover rules. */
+body.light-theme .panel:hover {
+    color: var(--color-text);
+    background: var(--surface-panel);
+    border-color: var(--border-default);
+    box-shadow: var(--shadow-panel);
+    transform: none;
+}
+
+body.light-theme :where(
+    .employee-filterbar,
+    .panels-filters,
+    .keys-console-filters,
+    .keys-console-toolbar,
+    .uk-filterbar,
+    .log-filter-heading,
+    .log-table-heading
+) {
+    background: var(--surface-row-alt);
+    border-color: var(--border-soft);
+}
+
+body.light-theme :where(
+    .employee-summary-card,
+    .uk-summary-card,
+    .users-stats > button,
+    .user-card,
+    .manual-panel-option
+):hover {
+    color: var(--color-text);
+    background: var(--surface-row-hover);
+    border-color: var(--border-strong);
+    box-shadow: 0 9px 24px rgba(39, 72, 99, .1);
+}
+
+/* Forms and native controls */
+body.light-theme input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+body.light-theme textarea,
+body.light-theme select {
+    color: var(--color-text);
+    background: var(--surface-input);
+    border-color: var(--border-default);
+    box-shadow: none;
+}
+
+/* Filter submit buttons stay primary even when they also use .btn-small. */
+body.light-theme :where(
+    .filter-bar .btn:not(.btn-ghost),
+    .keys-apply-filter,
+    .employee-filter-submit,
+    .panels-filter-submit,
+    .uk-filter-submit,
+    .log-filter-submit
+) {
+    color: var(--color-on-accent);
+    background: linear-gradient(180deg, var(--button-primary-start), var(--button-primary-end));
+    border-color: var(--button-primary-start);
+    box-shadow: 0 7px 16px rgba(8, 114, 182, .16);
+}
+
+body.light-theme :where(
+    .filter-bar .btn:not(.btn-ghost),
+    .keys-apply-filter,
+    .employee-filter-submit,
+    .panels-filter-submit,
+    .uk-filter-submit,
+    .log-filter-submit
+):hover {
+    color: var(--color-on-accent);
+    background: linear-gradient(180deg, var(--button-primary-hover-start), var(--button-primary-hover-end));
+    border-color: var(--button-primary-hover-start);
+}
+
+body.light-theme input::placeholder,
+body.light-theme textarea::placeholder,
+body.light-theme .app-combobox__search::placeholder {
+    color: var(--color-placeholder);
+    opacity: 1;
+}
+
+body.light-theme input:hover,
+body.light-theme textarea:hover,
+body.light-theme select:hover {
+    border-color: var(--border-strong);
+}
+
+body.light-theme input:focus,
+body.light-theme textarea:focus,
+body.light-theme select:focus {
+    border-color: var(--focus-color);
+    outline: 0;
+    box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+body.light-theme :where(input, textarea, select, button):disabled,
+body.light-theme [aria-disabled="true"] {
+    color: var(--color-text-muted);
+    background: var(--control-disabled);
+    border-color: var(--border-soft);
+    box-shadow: none;
+    opacity: .72;
+}
+
+/* Buttons and action icons */
+body.light-theme .btn:not(.btn-ghost):not(.danger-btn),
+body.light-theme input[type="submit"] {
+    color: var(--color-on-accent);
+    background: linear-gradient(180deg, var(--button-primary-start), var(--button-primary-end));
+    border-color: var(--button-primary-start);
+    box-shadow: 0 7px 16px rgba(8, 114, 182, .16);
+}
+
+body.light-theme .btn:not(.btn-ghost):not(.danger-btn):hover,
+body.light-theme input[type="submit"]:hover {
+    color: var(--color-on-accent);
+    background: linear-gradient(180deg, var(--button-primary-hover-start), var(--button-primary-hover-end));
+}
+
+body.light-theme :where(
+    .btn-ghost,
+    .btn-small,
+    .row-actions-button,
+    .employee-row-actions button,
+    .panel-row-actions button,
+    .uk-row-actions button,
+    .keys-row-actions button,
+    .app-dialog__close
+) {
+    color: var(--color-link);
+    background: var(--button-secondary-bg);
+    border-color: var(--border-default);
+    box-shadow: none;
+}
+
+body.light-theme :where(
+    .btn-ghost,
+    .btn-small,
+    .row-actions-button,
+    .employee-row-actions button,
+    .panel-row-actions button,
+    .uk-row-actions button,
+    .keys-row-actions button,
+    .app-dialog__close
+):hover {
+    color: var(--color-heading);
+    background: var(--button-secondary-hover);
+    border-color: var(--border-strong);
+    box-shadow: none;
+}
+
+body.light-theme :where(.danger-btn, .small-danger, .uk-link-danger, .key-action-button.is-danger) {
+    color: var(--state-danger-text);
+    background: var(--state-danger-bg);
+    border-color: var(--state-danger-border);
+    box-shadow: none;
+}
+
+body.light-theme :where(button, .btn, a, input, select, textarea):focus-visible {
+    outline: 2px solid var(--focus-color);
+    outline-offset: 2px;
+}
+
+/* Combobox and dropdown portals */
+body.light-theme .app-combobox__trigger {
+    color: var(--color-text) !important;
+    background: var(--surface-input) !important;
+    border-color: var(--border-default);
+}
+
+body.light-theme .app-combobox__trigger:hover,
+body.light-theme .app-combobox__trigger:focus,
+body.light-theme .app-combobox__trigger:focus-visible,
+body.light-theme .app-combobox.is-open .app-combobox__trigger {
+    color: var(--color-text) !important;
+    background: var(--surface-input) !important;
+    border-color: var(--focus-color);
+}
+
+body.light-theme .app-combobox__trigger [data-combobox-label],
+body.light-theme .app-combobox__trigger svg {
+    color: inherit;
+}
+
+body.light-theme .app-combobox__trigger:disabled,
+body.light-theme .app-combobox.is-disabled .app-combobox__trigger {
+    color: var(--color-text-muted) !important;
+    background: var(--control-disabled) !important;
+    border-color: var(--border-soft);
+    opacity: .78;
+}
+
+body.light-theme .app-combobox__popup {
+    color: var(--color-text);
+    background: var(--surface-elevated);
+    border-color: var(--border-default);
+    box-shadow: var(--shadow-elevated);
+}
+
+body.light-theme .app-combobox__search {
+    color: var(--color-text);
+    background: var(--surface-input);
+    border-color: var(--border-default);
+}
+
+body.light-theme .app-combobox__options button {
+    color: var(--color-text) !important;
+    background: transparent !important;
+}
+
+body.light-theme .app-combobox__options button:hover,
+body.light-theme .app-combobox__options button:focus-visible,
+body.light-theme .app-combobox__options button.is-active {
+    color: var(--color-heading) !important;
+    background: var(--surface-row-hover) !important;
+}
+
+body.light-theme .app-combobox__options button[aria-selected="true"] {
+    color: var(--color-link) !important;
+    background: var(--surface-row-selected) !important;
+}
+
+body.light-theme .app-combobox__options button small {
+    color: var(--color-text-muted);
+}
+
+/* Neutral icon actions in register tables */
+body.light-theme .employee-row-actions a,
+body.light-theme .employee-row-actions button,
+body.light-theme .uk-row-actions > a:not(.uk-open-card-link),
+body.light-theme .uk-row-actions > button {
+    color: var(--color-icon);
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+}
+
+body.light-theme .employee-row-actions a:hover,
+body.light-theme .employee-row-actions a:focus-visible,
+body.light-theme .employee-row-actions button:hover,
+body.light-theme .employee-row-actions button:focus-visible,
+body.light-theme .uk-row-actions > a:not(.uk-open-card-link):hover,
+body.light-theme .uk-row-actions > a:not(.uk-open-card-link):focus-visible,
+body.light-theme .uk-row-actions > button:hover,
+body.light-theme .uk-row-actions > button:focus-visible {
+    color: var(--color-link);
+    background: var(--button-secondary-hover);
+    border-color: var(--border-strong);
+    box-shadow: none;
+    transform: none;
+}
+
+body.light-theme .uk-row-actions .uk-open-card-link {
+    min-height: 32px;
+    color: var(--color-link);
+    background: var(--button-secondary-bg);
+    border-color: var(--border-default);
+    box-shadow: none;
+}
+
+body.light-theme .uk-row-actions .uk-open-card-link:hover,
+body.light-theme .uk-row-actions .uk-open-card-link:focus-visible {
+    color: var(--color-heading);
+    background: var(--button-secondary-hover);
+    border-color: var(--border-strong);
+    box-shadow: none;
+    transform: none;
+}
+
+/* Segmented period selector in the operation log */
+body.light-theme .log-period-button {
+    min-width: 72px;
+    height: 36px;
+    min-height: 36px;
+    color: var(--color-text-secondary);
+    background: var(--button-secondary-bg);
+    border-color: var(--border-default);
+    box-shadow: none;
+}
+
+body.light-theme .log-period-button:hover,
+body.light-theme .log-period-button:focus-visible {
+    color: var(--color-heading);
+    background: var(--button-secondary-hover);
+    border-color: var(--border-strong);
+    box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+body.light-theme .log-period-button.is-active,
+body.light-theme .log-period-button.is-active:hover,
+body.light-theme .log-period-button.is-active:focus-visible {
+    color: var(--color-on-accent);
+    background: linear-gradient(180deg, var(--button-primary-start), var(--button-primary-end));
+    border-color: var(--button-primary-start);
+    box-shadow: 0 6px 16px rgba(8, 114, 182, .18);
+}
+
+/* Readable audit history on the UK detail page */
+body.light-theme .uk-history-section .uk-section-head h2 {
+    font-size: 20px;
+}
+
+body.light-theme .uk-history-section .uk-section-head .subtitle {
+    color: var(--color-text-secondary);
+    font-size: 13px;
+}
+
+body.light-theme .uk-history-scroll th {
+    color: var(--color-text-secondary);
+    background: var(--surface-table-head);
+    font-size: var(--font-table-head);
+    line-height: 1.35;
+}
+
+body.light-theme .uk-history-scroll td {
+    color: var(--color-text);
+    font-size: var(--font-table);
+    line-height: 1.45;
+}
+
+body.light-theme .uk-history-scroll td small {
+    color: var(--color-text-muted);
+    font-size: var(--font-small);
+    line-height: 1.4;
+}
+
+/* Tables and selected rows */
+body.light-theme table,
+body.light-theme .table-scroll {
+    color: var(--color-text);
+    background: var(--surface-table);
+    border-color: var(--border-default);
+}
+
+body.light-theme th {
+    color: var(--color-text-secondary);
+    background: var(--surface-table-head);
+    border-color: var(--border-default);
+}
+
+body.light-theme td {
+    color: var(--color-text);
+    background: var(--surface-row);
+    border-color: var(--border-soft);
+}
+
+body.light-theme tbody tr:nth-child(even):not(.data-row--selected) td {
+    background: var(--surface-row-alt);
+}
+
+body.light-theme tbody tr:hover:not(.data-row--selected) td {
+    color: var(--color-heading);
+    background: var(--surface-row-hover);
+}
+
+body.light-theme tbody tr.data-row--selected td,
+body.light-theme tbody tr.data-row--selected:hover td,
+body.light-theme tbody tr.is-selected td,
+body.light-theme tbody tr.is-selected:hover td {
+    color: var(--color-heading);
+    background: var(--surface-row-selected);
+}
+
+body.light-theme tbody tr.data-row--selected td:first-child,
+body.light-theme tbody tr.is-selected td:first-child {
+    box-shadow: inset 3px 0 0 var(--focus-color);
+}
+
+/* Status badges */
+body.light-theme .badge.success,
+body.light-theme .key-status.is-success,
+body.light-theme .panel-status.is-success,
+body.light-theme .employee-status.is-active,
+body.light-theme .user-state.is-active {
+    color: var(--state-success-text);
+    background: var(--state-success-bg);
+    border-color: var(--state-success-border);
+}
+
+body.light-theme .badge.dry-run,
+body.light-theme .badge.warning,
+body.light-theme .key-status.is-warning,
+body.light-theme .panel-status.is-warning {
+    color: var(--state-warning-text);
+    background: var(--state-warning-bg);
+    border-color: var(--state-warning-border);
+}
+
+body.light-theme .badge.error,
+body.light-theme .key-status.is-danger,
+body.light-theme .panel-status.is-danger,
+body.light-theme .panel-status.is-error,
+body.light-theme .employee-status.is-dismissed {
+    color: var(--state-danger-text);
+    background: var(--state-danger-bg);
+    border-color: var(--state-danger-border);
+}
+
+body.light-theme .key-status.is-info,
+body.light-theme .panel-status.is-info {
+    color: var(--color-link);
+    background: var(--surface-row-selected);
+    border-color: var(--border-strong);
+}
+
+/* Modal windows and confirmations */
+body.light-theme :where(.modal-backdrop, .employee-modal, .uk-modal, .app-dialog) {
+    background: var(--surface-overlay);
+}
+
+body.light-theme :where(.modal-window, .modal-card, .employee-modal-card, .uk-modal-card, .app-dialog__panel) {
+    color: var(--color-text);
+    background: var(--surface-panel-strong);
+    border-color: var(--border-default);
+    box-shadow: var(--shadow-elevated);
+}
+
+body.light-theme :where(.modal-head, .modal-card > header, .employee-modal-card > header, .uk-modal-card > header) {
+    background: var(--surface-row-alt);
+    border-color: var(--border-soft);
+}
+
+body.light-theme :where(.panel-modal-note, .uk-modal-tip, .employee-modal-note) {
+    color: var(--color-text-secondary);
+    background: var(--surface-row-alt);
+    border-color: var(--border-default);
+}
+
+body.light-theme .app-dialog__panel.is-danger {
+    border-color: var(--state-danger-border);
+}
+
+body.light-theme .app-dialog__panel.is-danger .app-dialog__icon {
+    color: var(--state-danger-text);
+    background: var(--state-danger-bg);
+    border-color: var(--state-danger-border);
+}
+
+/* Scrollbars, including portalled popups and open modals */
+body.light-theme :is(
+    .custom-scroll,
+    .table-scroll,
+    .modal-scroll,
+    .modal-window,
+    .modal-card,
+    .employee-modal-card,
+    .uk-modal-card,
+    .log-scroll,
+    .search-scroll,
+    .app-combobox__options,
+    .smart-search-menu,
+    .employee-inspector,
+    .panel-inspector,
+    .uk-inspector,
+    .employee-profile-history-scroll,
+    .employee-table-scroll,
+    .employee-inspector-key-list,
+    .employee-profile-key-list,
+    .keys-modal-window,
+    .panels-table-scroll,
+    .manual-panel-list,
+    .users-list,
+    .security-table-wrap,
+    .uk-table-scroll,
+    .uk-resource-scroll,
+    .uk-selector-list,
+    .keys-history-mini-list,
+    .keys-history-preview,
+    .uk-history-scroll
+) {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scroll-thumb) var(--scroll-track);
+}
+
+body.light-theme :is(
+    .custom-scroll,
+    .table-scroll,
+    .modal-scroll,
+    .modal-window,
+    .modal-card,
+    .employee-modal-card,
+    .uk-modal-card,
+    .log-scroll,
+    .search-scroll,
+    .app-combobox__options,
+    .smart-search-menu,
+    .employee-inspector,
+    .panel-inspector,
+    .uk-inspector,
+    .employee-profile-history-scroll,
+    .employee-table-scroll,
+    .employee-inspector-key-list,
+    .employee-profile-key-list,
+    .keys-modal-window,
+    .panels-table-scroll,
+    .manual-panel-list,
+    .users-list,
+    .security-table-wrap,
+    .uk-table-scroll,
+    .uk-resource-scroll,
+    .uk-selector-list,
+    .keys-history-mini-list,
+    .keys-history-preview,
+    .uk-history-scroll
+)::-webkit-scrollbar {
+    width: var(--scroll-size);
+    height: var(--scroll-size);
+}
+
+body.light-theme :is(
+    .custom-scroll,
+    .table-scroll,
+    .modal-scroll,
+    .modal-window,
+    .modal-card,
+    .employee-modal-card,
+    .uk-modal-card,
+    .log-scroll,
+    .search-scroll,
+    .app-combobox__options,
+    .smart-search-menu,
+    .employee-inspector,
+    .panel-inspector,
+    .uk-inspector,
+    .employee-profile-history-scroll,
+    .employee-table-scroll,
+    .employee-inspector-key-list,
+    .employee-profile-key-list,
+    .keys-modal-window,
+    .panels-table-scroll,
+    .manual-panel-list,
+    .users-list,
+    .security-table-wrap,
+    .uk-table-scroll,
+    .uk-resource-scroll,
+    .uk-selector-list,
+    .keys-history-mini-list,
+    .keys-history-preview,
+    .uk-history-scroll
+)::-webkit-scrollbar-track {
+    background: var(--scroll-track);
+    border-radius: var(--scroll-radius);
+}
+
+body.light-theme :is(
+    .custom-scroll,
+    .table-scroll,
+    .modal-scroll,
+    .modal-window,
+    .modal-card,
+    .employee-modal-card,
+    .uk-modal-card,
+    .log-scroll,
+    .search-scroll,
+    .app-combobox__options,
+    .smart-search-menu,
+    .employee-inspector,
+    .panel-inspector,
+    .uk-inspector,
+    .employee-profile-history-scroll,
+    .employee-table-scroll,
+    .employee-inspector-key-list,
+    .employee-profile-key-list,
+    .keys-modal-window,
+    .panels-table-scroll,
+    .manual-panel-list,
+    .users-list,
+    .security-table-wrap,
+    .uk-table-scroll,
+    .uk-resource-scroll,
+    .uk-selector-list,
+    .keys-history-mini-list,
+    .keys-history-preview,
+    .uk-history-scroll
+)::-webkit-scrollbar-thumb {
+    background: var(--scroll-thumb);
+    border-color: var(--scroll-track);
+    border-radius: var(--scroll-radius);
+}
+
+body.light-theme :is(
+    .custom-scroll,
+    .table-scroll,
+    .modal-scroll,
+    .modal-window,
+    .modal-card,
+    .employee-modal-card,
+    .uk-modal-card,
+    .log-scroll,
+    .search-scroll,
+    .app-combobox__options,
+    .smart-search-menu,
+    .employee-inspector,
+    .panel-inspector,
+    .uk-inspector,
+    .employee-profile-history-scroll,
+    .employee-table-scroll,
+    .employee-inspector-key-list,
+    .employee-profile-key-list,
+    .keys-modal-window,
+    .panels-table-scroll,
+    .manual-panel-list,
+    .users-list,
+    .security-table-wrap,
+    .uk-table-scroll,
+    .uk-resource-scroll,
+    .uk-selector-list,
+    .keys-history-mini-list,
+    .keys-history-preview,
+    .uk-history-scroll
+)::-webkit-scrollbar-thumb:hover {
+    background: var(--scroll-thumb-hover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body.light-theme *,
+    body.light-theme *::before,
+    body.light-theme *::after {
+        transition-duration: .01ms !important;
+        animation-duration: .01ms !important;
+    }
+}

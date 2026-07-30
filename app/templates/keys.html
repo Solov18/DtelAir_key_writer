@@ -83,13 +83,13 @@
                 </a>
             </div>
 
-            <form method="get" action="/keys" class="keys-console-filters">
-                <div class="keys-console-search">
+            <form method="get" action="/keys" class="filter-bar keys-console-filters">
+                <div class="filter-bar__search keys-console-search">
                     <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg>
                     <input name="q" value="{{ filters.q }}" placeholder="Поиск по номеру, HEX, адресу, сотруднику..." aria-label="Поиск ключей" data-smart-search="keys" autocomplete="off">
                 </div>
-                <label class="keys-console-select">
-                    <span>Тип ключа</span>
+                <label class="filter-bar__field keys-console-select">
+                    <span class="filter-label">Тип ключа</span>
                     <select name="key_type_id">
                         <option value="0">Все типы</option>
                         {% for key_type in key_types %}
@@ -97,8 +97,8 @@
                         {% endfor %}
                     </select>
                 </label>
-                <label class="keys-console-select">
-                    <span>Статус</span>
+                <label class="filter-bar__field keys-console-select">
+                    <span class="filter-label">Статус</span>
                     <select name="status">
                         <option value="">Все статусы</option>
                         {% for value, label in key_statuses.items() %}
@@ -137,7 +137,7 @@
                     </tr></thead>
                     <tbody>
                     {% for key in keys %}
-                    <tr class="{% if selected_key and selected_key.id == key.id %}is-selected{% endif %}" data-select-url="/keys?{{ row_query }}&selected_key_id={{ key.id }}">
+                    <tr class="data-row data-row--clickable {% if selected_key and selected_key.id == key.id %}is-selected data-row--selected{% endif %}" data-select-url="/keys?{{ row_query }}&selected_key_id={{ key.id }}">
                         <td class="keys-row-index">{{ row_offset + loop.index }}</td>
                         <td><span class="key-type-chip"><i style="--key-type-color: {{ key.type_color }}"></i>{{ key.type_name }}</span></td>
                         <td><a class="keys-number-link" href="/keys/{{ key.id }}">{{ key.number }}</a></td>

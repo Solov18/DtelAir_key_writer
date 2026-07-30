@@ -22,7 +22,7 @@
             <h2>Проверить другой диапазон</h2>
             <p class="subtitle">Границы можно уточнить, если у типа несколько независимых серий номеров.</p>
         </div>
-        <form method="get" action="/keys/missing">
+        <form method="get" action="/keys/missing" class="filter-bar keys-missing-filterbar">
             <select name="key_type_id" required>
                 {% for key_type in active_key_types %}
                 <option value="{{ key_type.id }}" {% if key_type.id == result.key_type.id %}selected{% endif %}>{{ key_type.name }}</option>

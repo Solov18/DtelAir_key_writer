@@ -182,11 +182,6 @@
     font-weight: 800;
 }
 
-.keys-filter-form input,
-.keys-filter-form select {
-    min-height: 42px;
-}
-
 .keys-filter-submit {
     min-width: 100px;
 }
@@ -1120,59 +1115,13 @@ body.light-theme .keys-scan-table tr.is-error input { background: #fff1f3; }
 }
 
 .keys-console-filters {
-    display: grid;
-    grid-template-columns: minmax(250px, 1.7fr) minmax(135px, .75fr) minmax(135px, .75fr) auto auto auto;
-    gap: 10px;
-    align-items: end;
     padding: 14px;
     border-bottom: 1px solid var(--line-soft);
     background: rgba(0, 19, 34, .18);
 }
 
-.keys-console-search {
-    position: relative;
-    min-width: 0;
-}
-
-.keys-console-search svg {
-    position: absolute;
-    z-index: 1;
-    top: 50%;
-    right: 13px;
-    width: 18px;
-    height: 18px;
-    fill: none;
-    stroke: var(--muted);
-    stroke-width: 1.8;
-    transform: translateY(-50%);
-}
-
-.keys-console-search input,
-.keys-console-select select,
-.keys-advanced-filters input,
-.keys-advanced-filters select {
-    width: 100%;
-    min-height: 40px;
-    margin: 0;
-    font-size: 11px;
-}
-
-.keys-console-search input {
-    padding-right: 40px;
-}
-
-.keys-console-select > span,
-.keys-advanced-filters label > span {
-    display: block;
-    margin-bottom: 5px;
-    color: var(--muted);
-    font-size: 10px;
-    font-weight: 800;
-}
-
 .keys-free-toggle {
     display: inline-flex;
-    min-height: 40px;
     align-items: center;
     gap: 8px;
     color: var(--text);
@@ -1219,12 +1168,6 @@ body.light-theme .keys-scan-table tr.is-error input { background: #fff1f3; }
 .keys-free-toggle input:checked + i::after {
     transform: translateX(15px);
     background: #fff;
-}
-
-.keys-apply-filter,
-.keys-reset-filter {
-    min-height: 40px;
-    align-self: end;
 }
 
 .keys-reset-filter {
@@ -1303,14 +1246,6 @@ body.light-theme .keys-scan-table tr.is-error input { background: #fff1f3; }
 
 .keys-console-table tbody tr:hover td {
     background: rgba(0, 139, 220, .09);
-}
-
-.keys-console-table tbody tr.is-selected td {
-    background: linear-gradient(90deg, rgba(0, 132, 217, .16), rgba(0, 102, 174, .08));
-}
-
-.keys-console-table tbody tr.is-selected td:first-child {
-    box-shadow: inset 3px 0 0 var(--blue);
 }
 
 .keys-row-index {
@@ -1675,10 +1610,6 @@ body.light-theme .keys-console-table th {
     background: #eaf4fb;
 }
 
-body.light-theme .keys-console-table tbody tr.is-selected td {
-    background: linear-gradient(90deg, #e7f5ff, #f3faff);
-}
-
 body.light-theme .keys-console-table tbody tr:hover td {
     background: #edf7ff;
 }
@@ -1705,13 +1636,6 @@ body.light-theme .keys-free-toggle i {
         grid-template-columns: minmax(0, 1fr) 290px;
     }
 
-    .keys-console-filters {
-        grid-template-columns: minmax(230px, 1.4fr) repeat(2, minmax(130px, .7fr)) auto auto;
-    }
-
-    .keys-reset-filter {
-        grid-column: auto;
-    }
 }
 
 @media (max-width: 1350px) {
@@ -1723,9 +1647,6 @@ body.light-theme .keys-free-toggle i {
         grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
-    .keys-console-filters {
-        grid-template-columns: minmax(250px, 1.5fr) repeat(2, minmax(140px, 1fr)) auto auto;
-    }
 }
 
 @media (max-width: 860px) {
@@ -1733,12 +1654,10 @@ body.light-theme .keys-free-toggle i {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    .keys-console-filters,
     .keys-console-sidebar {
         grid-template-columns: 1fr 1fr;
     }
 
-    .keys-console-search,
     .keys-advanced-filters,
     .keys-history-preview {
         grid-column: 1 / -1;
@@ -1751,13 +1670,11 @@ body.light-theme .keys-free-toggle i {
 
 @media (max-width: 560px) {
     .keys-console-stats,
-    .keys-console-filters,
     .keys-console-sidebar,
     .keys-advanced-filters > div {
         grid-template-columns: 1fr;
     }
 
-    .keys-console-search,
     .keys-advanced-filters,
     .keys-history-preview {
         grid-column: 1;
@@ -1792,24 +1709,8 @@ body.light-theme .keys-free-toggle i {
     font-size: 14px;
 }
 
-.keys-console-search input,
-.keys-console-select select,
-.keys-advanced-filters input,
-.keys-advanced-filters select {
-    min-height: 44px;
-    font-size: 14px;
-}
-
-.keys-console-select > span,
 .keys-advanced-filters label > span,
-.keys-free-toggle,
 .keys-advanced-filters summary {
-    font-size: 13px;
-}
-
-.keys-apply-filter,
-.keys-reset-filter {
-    min-height: 44px;
     font-size: 13px;
 }
 
@@ -2807,7 +2708,7 @@ body.light-theme .key-action-button {
     display: grid;
     grid-template-columns: minmax(180px, 1.2fr) minmax(130px, .8fr) minmax(130px, .8fr) auto;
     gap: 10px;
-    align-items: center;
+    align-items: end;
 }
 
 .keys-gap-summary {

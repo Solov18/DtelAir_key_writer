@@ -34,7 +34,8 @@
         <form id="logFilterForm" method="get" action="/log" class="log-filter-form">
             <input type="hidden" name="period" id="logPeriod" value="{{ filters.period }}">
 
-            <fieldset class="log-period-fieldset">
+            <div class="filter-bar log-filter-row log-filter-row--primary">
+            <fieldset class="filter-bar__group log-period-fieldset">
                 <legend>Быстрый период</legend>
                 <div class="log-period-options" role="group" aria-label="Быстрый выбор периода">
                     {% for value, label in [('today', 'Сегодня'), ('yesterday', 'Вчера'), ('7d', '7 дней'), ('30d', '30 дней'), ('all', 'Всё время')] %}
@@ -48,16 +49,15 @@
                 </div>
             </fieldset>
 
-            <div class="log-filter-grid">
-                <label class="log-field">
+                <label class="filter-bar__field log-field">
                     <span>Дата от</span>
                     <input type="date" name="date_from" value="{{ filters.date_from }}" data-log-custom-date>
                 </label>
-                <label class="log-field">
+                <label class="filter-bar__field log-field">
                     <span>Дата до</span>
                     <input type="date" name="date_to" value="{{ filters.date_to }}" data-log-custom-date>
                 </label>
-                <label class="log-field">
+                <label class="filter-bar__field log-field">
                     <span>Пользователь</span>
                     <select name="user_id">
                         <option value="">Все пользователи</option>
@@ -68,7 +68,7 @@
                         {% endfor %}
                     </select>
                 </label>
-                <label class="log-field">
+                <label class="filter-bar__field log-field">
                     <span>Действие</span>
                     <select name="action">
                         <option value="">Все действия</option>
@@ -77,7 +77,7 @@
                         {% endfor %}
                     </select>
                 </label>
-                <label class="log-field">
+                <label class="filter-bar__field log-field">
                     <span>Тип объекта</span>
                     <select name="object_type">
                         <option value="">Все объекты</option>
@@ -86,7 +86,7 @@
                         {% endfor %}
                     </select>
                 </label>
-                <label class="log-field">
+                <label class="filter-bar__field log-field">
                     <span>Статус</span>
                     <select name="status">
                         <option value="">Все статусы</option>
@@ -95,10 +95,16 @@
                         <option value="error" {% if filters.status == 'error' %}selected{% endif %}>Ошибка</option>
                     </select>
                 </label>
-                <label class="log-field log-search-field">
+            </div>
+
+            <div class="filter-bar log-filter-row log-filter-row--secondary">
+                <label class="filter-bar__field log-field log-search-field">
                     <span>Поиск по журналу</span>
-                    <div class="log-search-control">
-                        <span aria-hidden="true">⌕</span>
+                    <div class="filter-bar__search log-search-control">
+                        <svg class="filter-search-icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <circle cx="11" cy="11" r="7"/>
+                            <path d="m16.5 16.5 4.5 4.5"/>
+                        </svg>
                         <input
                             type="search"
                             name="search"
@@ -108,14 +114,14 @@
                         >
                     </div>
                 </label>
-                <label class="log-field">
+                <label class="filter-bar__field log-field">
                     <span>Порядок</span>
                     <select name="sort_order">
                         <option value="desc" {% if filters.sort_order == 'desc' %}selected{% endif %}>Сначала новые</option>
                         <option value="asc" {% if filters.sort_order == 'asc' %}selected{% endif %}>Сначала старые</option>
                     </select>
                 </label>
-                <label class="log-field">
+                <label class="filter-bar__field log-field">
                     <span>На странице</span>
                     <select name="limit">
                         {% for value in [25, 50, 100] %}
@@ -123,11 +129,10 @@
                         {% endfor %}
                     </select>
                 </label>
-            </div>
-
-            <div class="log-filter-actions">
+                <div class="filter-bar__actions log-filter-actions">
                 <button class="btn" type="submit">Применить фильтры →</button>
                 <a class="btn btn-ghost log-reset-button" href="/log" title="Очистить все выбранные фильтры">Сбросить всё</a>
+                </div>
             </div>
         </form>
     </section>

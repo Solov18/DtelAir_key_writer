@@ -17,8 +17,8 @@
         </div>
     </div>
 
-    <form method="get" action="/search" class="panel universal-search-form">
-        <div class="universal-search-field">
+    <form method="get" action="/search" class="panel filter-bar universal-search-form">
+        <div class="filter-bar__search universal-search-field{% if result %} has-clear{% endif %}">
             <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg>
             <input
                 name="q"

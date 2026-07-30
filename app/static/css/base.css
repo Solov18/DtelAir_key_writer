@@ -26,9 +26,112 @@
     --field-bg: rgba(0, 10, 20, 0.72);
     --field-text: #ffffff;
     --field-border: rgba(0, 170, 255, 0.34);
+    --control-height: 44px;
+    --control-radius: 10px;
+    --control-padding-x: 13px;
+    --control-font-size: 12px;
+    --control-border-width: 1px;
+    --filter-gap: 10px;
+    --filter-label-height: 14px;
+    --search-icon-size: 18px;
+    --search-icon-offset: 13px;
+    --search-text-offset: 43px;
+    --control-bg: var(--field-bg);
+    --control-text: var(--field-text);
+    --control-placeholder: #7894ab;
+    --control-icon: #55c5ff;
+    --control-border: var(--field-border);
+    --control-border-hover: rgba(0, 174, 255, .68);
+    --control-border-focus: #16aaff;
+    --control-focus-ring: rgba(0, 170, 255, .12);
+    --control-popup: #031424;
+    --control-option-hover: rgba(0, 151, 241, .17);
+    --control-option-active: rgba(0, 151, 241, .25);
+    --control-disabled: rgba(116, 143, 164, .45);
 
-    --hover-bg: rgba(0, 170, 255, 0.08);
-    --hover-text: #ffffff;
+    /* Semantic theme tokens. Components should consume these instead of
+       embedding theme-specific colors. */
+    --surface-page: #02111a;
+    --surface-sidebar: #020d16;
+    --surface-topbar: rgba(0, 10, 20, .94);
+    --surface-panel: rgba(6, 20, 34, .74);
+    --surface-panel-strong: rgba(0, 10, 20, .88);
+    --surface-elevated: #031424;
+    --surface-input: rgba(0, 10, 20, .78);
+    --surface-table: rgba(3, 18, 31, .82);
+    --surface-table-head: rgba(0, 116, 220, .17);
+    --surface-row: rgba(2, 17, 29, .42);
+    --surface-row-alt: rgba(4, 24, 40, .5);
+    --surface-row-hover: rgba(0, 145, 255, .09);
+    --surface-row-selected: rgba(0, 145, 255, .16);
+    --surface-overlay: rgba(0, 7, 14, .78);
+
+    --color-heading: #ffffff;
+    --color-text: #f5fbff;
+    --color-text-secondary: #c2d4e3;
+    --color-text-muted: #91a9bc;
+    --color-placeholder: #7894ab;
+    --color-link: #49bdff;
+    --color-icon: #55c5ff;
+    --color-on-accent: #ffffff;
+
+    --border-strong: rgba(0, 170, 255, .38);
+    --border-default: rgba(0, 170, 255, .27);
+    --border-soft: rgba(0, 170, 255, .17);
+    --focus-color: #16aaff;
+    --focus-ring: rgba(0, 170, 255, .16);
+
+    --button-primary-start: #25aaff;
+    --button-primary-end: #067ce6;
+    --button-primary-hover-start: #40b8ff;
+    --button-primary-hover-end: #0b8bf3;
+    --button-secondary-bg: rgba(4, 24, 40, .78);
+    --button-secondary-hover: rgba(0, 145, 255, .12);
+
+    --state-success-text: #42db91;
+    --state-success-bg: rgba(44, 255, 154, .08);
+    --state-success-border: rgba(44, 255, 154, .35);
+    --state-warning-text: #ffc45b;
+    --state-warning-bg: rgba(255, 166, 0, .09);
+    --state-warning-border: rgba(255, 182, 41, .4);
+    --state-danger-text: #ff7186;
+    --state-danger-bg: rgba(255, 74, 95, .09);
+    --state-danger-border: rgba(255, 74, 95, .4);
+
+    --scroll-track: rgba(0, 10, 20, .45);
+    --scroll-thumb: rgba(0, 170, 255, .58);
+    --scroll-thumb-hover: rgba(0, 184, 255, .82);
+    --scroll-size: 8px;
+    --scroll-radius: 10px;
+    --font-table: 13px;
+    --font-table-head: 12px;
+    --font-small: 12px;
+    --shadow-elevated: 0 18px 45px rgba(0, 0, 0, .42);
+
+    /* Compatibility aliases used by existing page CSS. */
+    --bg-color: var(--surface-page);
+    --text: var(--color-text);
+    --text-strong: var(--color-heading);
+    --muted: var(--color-text-muted);
+    --panel: var(--surface-panel);
+    --panel-strong: var(--surface-panel-strong);
+    --line: var(--border-strong);
+    --line-soft: var(--border-default);
+    --soft: var(--border-soft);
+    --field-bg: var(--surface-input);
+    --field-text: var(--color-text);
+    --field-border: var(--border-default);
+    --control-bg: var(--surface-input);
+    --control-text: var(--color-text);
+    --control-placeholder: var(--color-placeholder);
+    --control-icon: var(--color-icon);
+    --control-border: var(--border-default);
+    --control-border-hover: var(--border-strong);
+    --control-border-focus: var(--focus-color);
+    --control-focus-ring: var(--focus-ring);
+    --control-popup: var(--surface-elevated);
+    --hover-bg: var(--surface-row-hover);
+    --hover-text: var(--color-heading);
 
     --shadow-panel:
     inset 0 0 24px rgba(0,170,255,.05),
@@ -57,6 +160,7 @@ body {
         ),
         url("/static/img/hero.png") right center / contain fixed no-repeat;
     background-color: var(--bg-color);
+    color-scheme: dark;
 }
 
 body::before {

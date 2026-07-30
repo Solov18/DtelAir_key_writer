@@ -1,49 +1,7 @@
-/* ===============================
-   LIGHT THEME
-   =============================== */
-
-body.light-theme {
-    --bg-color: #f5f9fd;
-
-    --text: #102033;
-    --text-strong: #071827;
-    --muted: #63778c;
-
-    --panel: #ffffff;
-    --panel-strong: #ffffff;
-
-    --line: #c9dff2;
-    --line-soft: #ddebf7;
-    --soft: #e8f1f8;
-
-    --field-bg: #ffffff;
-    --field-text: #102033;
-    --field-border: #cbddeb;
-
-    --hover-bg: #f2f8ff;
-    --hover-text: #071827;
-
-    --shadow-panel: 0 10px 28px rgba(35, 85, 140, 0.08);
-
-    color: var(--text);
-
-    background:
-        linear-gradient(
-            90deg,
-            rgba(250, 253, 255, 0.98) 0%,
-            rgba(250, 253, 255, 0.94) 48%,
-            rgba(250, 253, 255, 0.78) 100%
-        ),
-        url("/static/img/hero.png") right center / contain fixed no-repeat;
-
-    background-color: var(--bg-color);
-}
-
-body.light-theme::before {
-    background:
-        radial-gradient(circle at 82% 20%, rgba(0, 140, 255, 0.10), transparent 24%),
-        radial-gradient(circle at 86% 70%, rgba(0, 170, 255, 0.07), transparent 28%);
-}
+/*
+ * The semantic light palette and the final component states live in
+ * theme-system.css. This file keeps the older component-specific layouts only.
+ */
 
 /* ===============================
    SIDEBAR
@@ -281,20 +239,18 @@ body.light-theme input[type="file"]::file-selector-button {
    BUTTONS
    =============================== */
 
-body.light-theme .btn,
-body.light-theme button,
+body.light-theme .btn:not(.btn-ghost):not(.danger-btn),
 body.light-theme input[type="submit"] {
-    color: #ffffff;
-    background: linear-gradient(180deg, #189bff, #0077e6);
-    border-color: #62bdff;
+    color: var(--color-on-accent);
+    background: linear-gradient(180deg, var(--button-primary-start), var(--button-primary-end));
+    border-color: var(--button-primary-start);
     box-shadow: 0 8px 18px rgba(0, 120, 220, 0.18);
 }
 
-body.light-theme .btn:hover,
-body.light-theme button:hover,
+body.light-theme .btn:not(.btn-ghost):not(.danger-btn):hover,
 body.light-theme input[type="submit"]:hover {
-    color: #ffffff;
-    background: linear-gradient(180deg, #35b4ff, #0b84f5);
+    color: var(--color-on-accent);
+    background: linear-gradient(180deg, var(--button-primary-hover-start), var(--button-primary-hover-end));
 }
 
 body.light-theme .btn-ghost {
@@ -305,7 +261,7 @@ body.light-theme .btn-ghost {
 }
 
 body.light-theme .danger-btn {
-    color: #ffffff;
+    color: var(--color-on-accent);
     background: linear-gradient(180deg, #ff4a5f, #d8233b);
 }
 
@@ -470,41 +426,6 @@ body.light-theme .badge.dry-run {
     color: #b48100;
     background: #fff8dc;
     border-color: #f1d36b;
-}
-
-/* ===============================
-   SCROLL
-   =============================== */
-
-body.light-theme .table-scroll,
-body.light-theme .custom-scroll,
-body.light-theme .employee-panel-list,
-body.light-theme .employees-cards-grid,
-body.light-theme .employee-panel-list-grid,
-body.light-theme .preview-panel-list,
-body.light-theme .uk-panel-list {
-    border-color: #d7e9f7;
-    scrollbar-color: #5cb8ff #eef6fc;
-}
-
-body.light-theme .custom-scroll::-webkit-scrollbar-track,
-body.light-theme .table-scroll::-webkit-scrollbar-track,
-body.light-theme .employee-panel-list::-webkit-scrollbar-track,
-body.light-theme .employees-cards-grid::-webkit-scrollbar-track,
-body.light-theme .employee-panel-list-grid::-webkit-scrollbar-track,
-body.light-theme .preview-panel-list::-webkit-scrollbar-track,
-body.light-theme .uk-panel-list::-webkit-scrollbar-track {
-    background: #eef6fc;
-}
-
-body.light-theme .custom-scroll::-webkit-scrollbar-thumb,
-body.light-theme .table-scroll::-webkit-scrollbar-thumb,
-body.light-theme .employee-panel-list::-webkit-scrollbar-thumb,
-body.light-theme .employees-cards-grid::-webkit-scrollbar-thumb,
-body.light-theme .employee-panel-list-grid::-webkit-scrollbar-thumb,
-body.light-theme .preview-panel-list::-webkit-scrollbar-thumb,
-body.light-theme .uk-panel-list::-webkit-scrollbar-thumb {
-    background: #5cb8ff;
 }
 
 /* ===============================
@@ -725,74 +646,6 @@ body.light-theme .modal-window {
 
 body.light-theme .modal-head {
     border-color: #d7e9f7;
-}
-body.light-theme .custom-scroll,
-body.light-theme .table-scroll,
-body.light-theme .employee-picker,
-body.light-theme .employee-panel-list,
-body.light-theme .employees-cards,
-body.light-theme .employees-cards-grid,
-body.light-theme .employee-panel-list-grid,
-body.light-theme .modal-window,
-body.light-theme .preview-panel-list,
-body.light-theme .log-scroll,
-body.light-theme .search-scroll,
-body.light-theme .uk-items-list,
-body.light-theme .uk-panel-list,
-body.light-theme .uk-cards-scroll {
-    scrollbar-color: #5cb8ff #eef6fc;
-}
-
-body.light-theme .custom-scroll::-webkit-scrollbar-track,
-body.light-theme .table-scroll::-webkit-scrollbar-track,
-body.light-theme .employee-picker::-webkit-scrollbar-track,
-body.light-theme .employee-panel-list::-webkit-scrollbar-track,
-body.light-theme .employees-cards::-webkit-scrollbar-track,
-body.light-theme .employees-cards-grid::-webkit-scrollbar-track,
-body.light-theme .employee-panel-list-grid::-webkit-scrollbar-track,
-body.light-theme .modal-window::-webkit-scrollbar-track,
-body.light-theme .preview-panel-list::-webkit-scrollbar-track,
-body.light-theme .log-scroll::-webkit-scrollbar-track,
-body.light-theme .search-scroll::-webkit-scrollbar-track,
-body.light-theme .uk-items-list::-webkit-scrollbar-track,
-body.light-theme .uk-panel-list::-webkit-scrollbar-track,
-body.light-theme .uk-cards-scroll::-webkit-scrollbar-track {
-    background: #eef6fc;
-}
-
-body.light-theme .custom-scroll::-webkit-scrollbar-thumb,
-body.light-theme .table-scroll::-webkit-scrollbar-thumb,
-body.light-theme .employee-picker::-webkit-scrollbar-thumb,
-body.light-theme .employee-panel-list::-webkit-scrollbar-thumb,
-body.light-theme .employees-cards::-webkit-scrollbar-thumb,
-body.light-theme .employees-cards-grid::-webkit-scrollbar-thumb,
-body.light-theme .employee-panel-list-grid::-webkit-scrollbar-thumb,
-body.light-theme .modal-window::-webkit-scrollbar-thumb,
-body.light-theme .preview-panel-list::-webkit-scrollbar-thumb,
-body.light-theme .log-scroll::-webkit-scrollbar-thumb,
-body.light-theme .search-scroll::-webkit-scrollbar-thumb,
-body.light-theme .uk-items-list::-webkit-scrollbar-thumb,
-body.light-theme .uk-panel-list::-webkit-scrollbar-thumb,
-body.light-theme .uk-cards-scroll::-webkit-scrollbar-thumb {
-    background: #5cb8ff;
-    border-color: #eef6fc;
-}
-
-body.light-theme .custom-scroll::-webkit-scrollbar-thumb:hover,
-body.light-theme .table-scroll::-webkit-scrollbar-thumb:hover,
-body.light-theme .employee-picker::-webkit-scrollbar-thumb:hover,
-body.light-theme .employee-panel-list::-webkit-scrollbar-thumb:hover,
-body.light-theme .employees-cards::-webkit-scrollbar-thumb:hover,
-body.light-theme .employees-cards-grid::-webkit-scrollbar-thumb:hover,
-body.light-theme .employee-panel-list-grid::-webkit-scrollbar-thumb:hover,
-body.light-theme .modal-window::-webkit-scrollbar-thumb:hover,
-body.light-theme .preview-panel-list::-webkit-scrollbar-thumb:hover,
-body.light-theme .log-scroll::-webkit-scrollbar-thumb:hover,
-body.light-theme .search-scroll::-webkit-scrollbar-thumb:hover,
-body.light-theme .uk-items-list::-webkit-scrollbar-thumb:hover,
-body.light-theme .uk-panel-list::-webkit-scrollbar-thumb:hover,
-body.light-theme .uk-cards-scroll::-webkit-scrollbar-thumb:hover {
-    background: #2293ff;
 }
 /* ==================================================
    PANELS PAGE
@@ -1129,19 +982,19 @@ body.light-theme .panels-search-empty {
 ================================================== */
 
 body.light-theme .panels-table-scroll {
-    scrollbar-color: #5cb8ff #eef6fc;
+    scrollbar-color: var(--scroll-thumb) var(--scroll-track);
 }
 
 body.light-theme .panels-table-scroll::-webkit-scrollbar-track {
-    background: #eef6fc;
+    background: var(--scroll-track);
 }
 
 body.light-theme .panels-table-scroll::-webkit-scrollbar-thumb {
-    border-color: #eef6fc;
+    border-color: var(--scroll-track);
 
-    background: #5cb8ff;
+    background: var(--scroll-thumb);
 }
 
 body.light-theme .panels-table-scroll::-webkit-scrollbar-thumb:hover {
-    background: #2293ff;
+    background: var(--scroll-thumb-hover);
 }

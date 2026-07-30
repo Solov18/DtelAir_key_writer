@@ -61,8 +61,8 @@
                 <span class="uk-register-found">Найдено: <b>{{ group_page.total }}</b></span>
             </div>
 
-            <form class="uk-filterbar is-search-only" method="get" action="/uk">
-                <label class="uk-search-field">
+            <form class="filter-bar uk-filterbar is-search-only" method="get" action="/uk">
+                <label class="filter-bar__search uk-search-field">
                     <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4.5 4.5"/></svg>
                     <input
                         type="search"
@@ -94,7 +94,7 @@
                     <tbody>
                     {% for group in groups %}
                     <tr
-                        class="{% if selected_group and selected_group.id == group.id %}is-selected{% endif %}"
+                        class="data-row data-row--clickable {% if selected_group and selected_group.id == group.id %}is-selected data-row--selected{% endif %}"
                         tabindex="0"
                         data-uk-row
                         data-href="/uk?{% if row_query %}{{ row_query }}&{% endif %}selected_group_id={{ group.id }}"
@@ -189,7 +189,7 @@
 </div>
 
 <div class="uk-modal" id="ukAddModal" aria-hidden="true">
-    <div class="uk-modal-card panel" role="dialog" aria-modal="true" aria-labelledby="ukAddTitle">
+    <div class="uk-modal-card panel modal-scroll" role="dialog" aria-modal="true" aria-labelledby="ukAddTitle">
         <header><div><span class="page-eyebrow">Новая запись</span><h2 id="ukAddTitle">Добавить управляющую компанию</h2></div><button type="button" data-close-uk-modal>×</button></header>
         <form method="post" action="/uk/group" class="uk-profile-form">
             <label>Краткое название<input name="name" required autocomplete="off"></label>
@@ -211,7 +211,7 @@
 
 {% if selected_group %}
 <div class="uk-modal" id="ukEditModal" aria-hidden="true">
-    <div class="uk-modal-card panel" role="dialog" aria-modal="true" aria-labelledby="ukEditTitle">
+    <div class="uk-modal-card panel modal-scroll" role="dialog" aria-modal="true" aria-labelledby="ukEditTitle">
         <header><div><span class="page-eyebrow">УК №{{ selected_group.id }}</span><h2 id="ukEditTitle">Редактировать УК</h2></div><button type="button" data-close-uk-modal>×</button></header>
         <form method="post" action="/uk/{{ selected_group.id }}/update" class="uk-profile-form">
             <label>Краткое название<input name="name" value="{{ selected_group.name }}" required></label>

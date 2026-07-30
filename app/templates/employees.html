@@ -74,8 +74,8 @@
                 </span>
             </div>
 
-            <form class="employee-filterbar" method="get" action="{{ list_path }}">
-                <label class="employee-search-field">
+            <form class="filter-bar employee-filterbar" method="get" action="{{ list_path }}">
+                <label class="filter-bar__search employee-search-field">
                     <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4.5 4.5"/></svg>
                     <input
                         type="search"
@@ -88,8 +88,8 @@
                 </label>
 
                 {% if current_view == 'active' %}
-                <label class="employee-filter-control">
-                    <span>Ключи</span>
+                <label class="filter-bar__field employee-filter-control">
+                    <span class="filter-label">Ключи</span>
                     <select name="key_status">
                         <option value="">Все</option>
                         <option value="with_keys" {% if filters.key_status == 'with_keys' %}selected{% endif %}>Есть ключи</option>
@@ -98,8 +98,8 @@
                 </label>
                 {% endif %}
 
-                <label class="employee-filter-control">
-                    <span>Подразделение</span>
+                <label class="filter-bar__field employee-filter-control">
+                    <span class="filter-label">Подразделение</span>
                     <select name="department">
                         <option value="">Все</option>
                         {% for item in filter_options.departments %}
@@ -108,8 +108,8 @@
                     </select>
                 </label>
 
-                <label class="employee-filter-control">
-                    <span>Должность</span>
+                <label class="filter-bar__field employee-filter-control">
+                    <span class="filter-label">Должность</span>
                     <select name="position">
                         <option value="">Все</option>
                         {% for item in filter_options.positions %}
@@ -140,7 +140,7 @@
                     <tbody>
                         {% for employee in employees %}
                         <tr
-                            class="{% if selected_employee and selected_employee.id == employee.id %}is-selected{% endif %}"
+                            class="data-row data-row--clickable {% if selected_employee and selected_employee.id == employee.id %}is-selected data-row--selected{% endif %}"
                             tabindex="0"
                             data-employee-row
                             data-href="{{ list_path }}?{% if row_query %}{{ row_query }}&{% endif %}selected_employee_id={{ employee.id }}"
@@ -327,7 +327,7 @@
 
 {% if current_view == 'active' %}
 <div class="employee-modal" id="employeeAddModal" aria-hidden="true">
-    <div class="employee-modal-card panel" role="dialog" aria-modal="true" aria-labelledby="employeeAddTitle">
+    <div class="employee-modal-card panel modal-scroll" role="dialog" aria-modal="true" aria-labelledby="employeeAddTitle">
         <header>
             <div>
                 <span class="page-eyebrow">Новая карточка</span>
@@ -352,7 +352,7 @@
 
 {% if selected_employee %}
 <div class="employee-modal" id="employeeEditModal" aria-hidden="true">
-    <div class="employee-modal-card panel" role="dialog" aria-modal="true" aria-labelledby="employeeEditTitle">
+    <div class="employee-modal-card panel modal-scroll" role="dialog" aria-modal="true" aria-labelledby="employeeEditTitle">
         <header>
             <div>
                 <span class="page-eyebrow">Карточка №{{ selected_employee.id }}</span>
