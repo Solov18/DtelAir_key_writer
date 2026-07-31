@@ -1,5 +1,4 @@
 const themeToggle = document.getElementById("themeToggle");
-const themeIcon = document.querySelector(".theme-icon");
 const themeText = document.querySelector(".theme-text");
 
 function applyTheme(theme) {
@@ -12,10 +11,6 @@ function applyTheme(theme) {
     }
 
     document.documentElement.style.colorScheme = isLight ? "light" : "dark";
-
-    if (themeIcon) {
-        themeIcon.textContent = isLight ? "🌙" : "☀️";
-    }
 
     if (themeText) {
         themeText.textContent = isLight ? "Тёмная" : "Светлая";

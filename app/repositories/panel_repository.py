@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from app.db import db
 from app.search_utils import normalize_search_text
+from app.services.panel_health import supply_voltage_tone
 
 
 PANEL_STATUS_LABELS = {
@@ -47,13 +48,7 @@ def format_uptime(seconds) -> str:
 
 
 def _voltage_tone(value) -> str:
-    if value in (None, ""):
-        return "missing"
-    try:
-        voltage = float(value)
-    except (TypeError, ValueError):
-        return "missing"
-    return "normal" if 12.8 <= voltage <= 13.5 else "alert"
+    return supply_voltage_tone(value)
 
 
 def _is_stale(value, stale_after_seconds: int) -> bool:

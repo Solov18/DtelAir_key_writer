@@ -54,6 +54,14 @@
     --surface-page: #02111a;
     --surface-sidebar: #020d16;
     --surface-topbar: rgba(0, 10, 20, .94);
+    --topbar-background: rgba(0, 12, 24, .94);
+    --topbar-border: rgba(0, 170, 255, .24);
+    --topbar-text: #f5fbff;
+    --topbar-muted: #a8bfd1;
+    --topbar-item-background: rgba(3, 22, 39, .76);
+    --topbar-item-border: rgba(0, 170, 255, .30);
+    --topbar-hover: rgba(0, 145, 255, .12);
+    --topbar-glow: rgba(0, 170, 255, .14);
     --surface-panel: rgba(6, 20, 34, .74);
     --surface-panel-strong: rgba(0, 10, 20, .88);
     --surface-elevated: #031424;

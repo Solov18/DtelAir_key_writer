@@ -103,6 +103,26 @@ class PresentationTests(unittest.TestCase):
             if name.endswith(".html"):
                 templates.env.get_template(name)
 
+    def test_topbar_uses_shared_compact_navigation_layout(self):
+        base = Path("app/templates/base.html").read_text(encoding="utf-8")
+        layout = Path("app/static/css/layout.css").read_text(encoding="utf-8")
+        components = Path("app/static/css/components.css").read_text(encoding="utf-8")
+        theme = Path("app/static/css/theme-system.css").read_text(encoding="utf-8")
+
+        self.assertIn('{% block page_name %}', base)
+        self.assertIn('class="topbar-section-divider"', base)
+        self.assertIn('class="top-info topbar-item"', base)
+        self.assertIn('class="user-pill topbar-item"', base)
+        self.assertIn('class="theme-toggle topbar-item"', base)
+        self.assertIn('class="topbar-logout topbar-item"', base)
+        self.assertNotIn('class="training-toggle', base)
+        self.assertNotIn("role_label(", base)
+        self.assertIn("height: 72px", layout)
+        self.assertIn("@media (max-width: 900px)", layout)
+        self.assertIn(".theme-text,", layout)
+        self.assertIn("min-height: 44px", components)
+        self.assertIn("--topbar-item-background:", theme)
+
 
 if __name__ == "__main__":
     unittest.main()

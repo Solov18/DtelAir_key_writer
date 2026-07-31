@@ -8,6 +8,14 @@ body.light-theme {
     --surface-page: #f4f8fc;
     --surface-sidebar: #ffffff;
     --surface-topbar: rgba(255, 255, 255, .97);
+    --topbar-background: rgba(255, 255, 255, .97);
+    --topbar-border: #d5e4ee;
+    --topbar-text: #102538;
+    --topbar-muted: #577085;
+    --topbar-item-background: #f8fbfd;
+    --topbar-item-border: #c8dce9;
+    --topbar-hover: #edf7fd;
+    --topbar-glow: rgba(33, 117, 170, .08);
     --surface-panel: rgba(255, 255, 255, .94);
     --surface-panel-strong: #ffffff;
     --surface-elevated: #ffffff;
@@ -114,8 +122,8 @@ body.light-theme .sidebar-nav {
 
 body.light-theme .topbar {
     color: var(--color-text);
-    background: var(--surface-topbar);
-    border-color: var(--border-soft);
+    background: var(--topbar-background);
+    border-color: var(--topbar-border);
     box-shadow: 0 6px 24px rgba(39, 72, 99, .07);
 }
 
@@ -123,16 +131,24 @@ body.light-theme .top-title,
 body.light-theme .top-info,
 body.light-theme .user-pill,
 body.light-theme .theme-toggle,
-body.light-theme .topbar-logout-button {
+body.light-theme .topbar-logout {
     color: var(--color-heading);
 }
 
+body.light-theme .top-info,
 body.light-theme .user-pill,
 body.light-theme .theme-toggle,
-body.light-theme .topbar-logout-button {
-    background: var(--surface-panel-strong);
-    border-color: var(--border-default);
-    box-shadow: 0 5px 16px rgba(39, 72, 99, .07);
+body.light-theme .topbar-logout {
+    background: var(--topbar-item-background);
+    border-color: var(--topbar-item-border);
+    box-shadow: 0 4px 14px rgba(39, 72, 99, .055);
+}
+
+body.light-theme .topbar-logout:hover,
+body.light-theme .topbar-logout:focus-visible {
+    color: #ad3145;
+    border-color: #d8a6ae;
+    background: #fff2f4;
 }
 
 body.light-theme .nav-item {
