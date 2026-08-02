@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from app.db import db
-from app.services.panel_health import SUPPLY_VOLTAGE_MAX, SUPPLY_VOLTAGE_MIN
+from app.panel_health import SUPPLY_VOLTAGE_MAX, SUPPLY_VOLTAGE_MIN
 
 
 def get_dashboard_snapshot() -> dict:

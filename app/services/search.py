@@ -1,6 +1,9 @@
+import re
+import unicodedata
+
 from app.db import db
 from app.repositories.log_repository import normalize_operation_row
-from app.repositories.key_repository import get_keys_page
+from app.repositories.key_repository import get_key, get_keys_page
 from app.repositories.panel_repository import normalize_panel_row
 from app.search_utils import (
     matches_search,
@@ -8,7 +11,319 @@ from app.search_utils import (
     rank_search_candidates,
     search_score,
 )
-from app.services.keys import find_keys, normalize_hex_value
+from app.services.keys import find_keys
+
+
+_APARTMENT_QUERY_RE = re.compile(
+    r"(?<![\w])кв(?:артира)?\.?\s*(?:№|#)?\s*"
+    r"(?P<apartment>\d+[а-яa-z]?(?:/\d+)?)\b",
+    re.IGNORECASE,
+)
+_ADDRESS_NOISE_RE = re.compile(
+    r"\b(?:улица|ул|дом|д|город|г|адрес|россия|сочи|адлер)\b\.?",
+    re.IGNORECASE,
+)
+
+
+_TECHNICAL_IDENTIFIER_RE = re.compile(
+    r"^(?:"
+    r"[0-9A-Fa-f]{6,16}"
+    r"|(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}"
+    r"|(?:\d{1,3}\.){3}\d{1,3}"
+    r")$"
+)
+
+
+def _is_technical_identifier_query(query: str) -> bool:
+    """Return True for a key HEX, MAC, IP or another long identifier.
+
+    Fuzzy similarity is useful for names and addresses, but it creates false
+    positives for identifiers (for example, a key HEX can look similar to an
+    IP address).  Such values must only match as normalized substrings.
+    """
+
+    compact = re.sub(r"\s+", "", str(query or "").strip())
+    return bool(_TECHNICAL_IDENTIFIER_RE.fullmatch(compact))
+
+
+def _contains_normalized_query(query: str, *values) -> bool:
+    normalized_query = normalize_search_text(query)
+    return bool(normalized_query) and any(
+        normalized_query in normalize_search_text(value)
+        for value in values
+        if value not in (None, "")
+    )
+
+
+def _canonical_apartment(value: object) -> str:
+    normalized = unicodedata.normalize("NFKC", str(value or "")).casefold()
+    normalized = re.sub(r"[\s._-]+", "", normalized)
+    match = re.fullmatch(r"0*(\d+)([а-яa-z]?)(?:/0*(\d+))?", normalized)
+    if not match:
+        return normalized
+    main = str(int(match.group(1) or "0"))
+    suffix = match.group(2) or ""
+    fraction = match.group(3)
+    return f"{main}{suffix}{f'/{int(fraction)}' if fraction else ''}"
+
+
+def _canonical_address(value: object) -> str:
+    normalized = unicodedata.normalize("NFKC", str(value or "")).casefold()
+    normalized = normalized.replace("ё", "е")
+    normalized = re.sub(r"\\+", "/", normalized)
+    normalized = re.sub(r"/\s+|\s+/", "/", normalized)
+    normalized = re.sub(r"[_.,;:()\[\]{}№#'\"«»–—-]+", " ", normalized)
+    normalized = _ADDRESS_NOISE_RE.sub(" ", normalized)
+    return re.sub(r"\s+", " ", normalized).strip()
+
+
+def _parse_location_query(query: str) -> dict:
+    apartment_match = _APARTMENT_QUERY_RE.search(query or "")
+    apartment = (
+        _canonical_apartment(apartment_match.group("apartment"))
+        if apartment_match
+        else ""
+    )
+    address_source = query or ""
+    if apartment_match:
+        address_source = (
+            address_source[: apartment_match.start()]
+            + " "
+            + address_source[apartment_match.end() :]
+        )
+    address_source = re.sub(r"\s+", " ", address_source).strip(" ,.;")
+    address = _canonical_address(address_source)
+    looks_like_address = bool(
+        address
+        and re.search(r"[а-яa-z]", address, re.IGNORECASE)
+        and re.search(r"\d", address)
+    )
+    return {
+        "apartment": apartment,
+        "address_source": address_source,
+        "address": address,
+        "has_apartment": bool(apartment_match),
+        "looks_like_address": looks_like_address,
+    }
+
+
+def _address_sql_terms(canonical_address: str) -> list[str]:
+    tokens = canonical_address.split()
+    street_tokens = [token for token in tokens if re.search(r"[а-яa-z]", token, re.I)]
+    house_tokens = [token for token in tokens if re.search(r"\d", token)]
+    terms: list[str] = []
+    if street_tokens:
+        terms.append(max(street_tokens, key=len))
+    if house_tokens:
+        terms.append(house_tokens[-1])
+    return terms
+
+
+def _set_result_counts(result: dict) -> dict:
+    result["result_counts"] = {
+        "keys": len(result["inventory_results"]),
+        "employees": len(result["employee_results"]),
+        "panels": len(result["panel_results"]),
+        "uk": len(result["uk_results"]),
+        "operations": len(result["operation_results"]),
+    }
+    return result
+
+
+def _search_exact_location(result: dict, parsed: dict) -> dict | None:
+    """Search address/apartment fields without matching technical identifiers."""
+    requested_address = parsed["address"]
+    requested_apartment = parsed["apartment"]
+
+    with db() as conn:
+        panel_rows = [
+            normalize_panel_row(row)
+            for row in conn.execute(
+                """
+                SELECT *
+                FROM panels
+                ORDER BY enabled DESC, LOWER(address), address, id
+                """
+            )
+        ]
+        exact_house_panels = [
+            row
+            for row in panel_rows
+            if requested_address
+            and _canonical_address(row.get("address")) == requested_address
+        ]
+
+        if not parsed["has_apartment"]:
+            if not parsed["looks_like_address"] or not exact_house_panels:
+                return None
+            assignment_rows = [
+                dict(row)
+                for row in conn.execute(
+                    """
+                    SELECT key_id, address, apartment
+                    FROM key_assignments
+                    WHERE active = 1
+                    """
+                )
+                if _canonical_address(row["address"]) == requested_address
+            ]
+        else:
+            assignment_rows = [
+                dict(row)
+                for row in conn.execute(
+                    """
+                    SELECT key_id, address, apartment
+                    FROM key_assignments
+                    WHERE active = 1
+                      AND LOWER(BTRIM(COALESCE(apartment, ''))) = ?
+                    """,
+                    (requested_apartment,),
+                )
+                if _canonical_apartment(row["apartment"]) == requested_apartment
+                and (
+                    not requested_address
+                    or _canonical_address(row["address"]) == requested_address
+                )
+            ]
+
+        assignment_key_ids = sorted(
+            {
+                int(row["key_id"])
+                for row in assignment_rows
+                if row.get("key_id") is not None
+            }
+        )
+        operation_conditions: list[str] = []
+        operation_params: list[object] = []
+        location_conditions: list[str] = []
+        location_params: list[object] = []
+        if parsed["has_apartment"]:
+            location_conditions.append(
+                "(LOWER(BTRIM(COALESCE(apartment, ''))) = ? "
+                "OR LOWER(BTRIM(COALESCE(flat_num, ''))) = ?)"
+            )
+            location_params.extend((requested_apartment, requested_apartment))
+        if requested_address:
+            for address_term in _address_sql_terms(requested_address):
+                location_conditions.append("LOWER(COALESCE(address, '')) LIKE ?")
+                location_params.append(f"%{address_term}%")
+        if location_conditions:
+            operation_conditions.append(f"({' AND '.join(location_conditions)})")
+            operation_params.extend(location_params)
+        if assignment_key_ids:
+            placeholders = ", ".join("?" for _ in assignment_key_ids)
+            operation_conditions.append(f"key_id IN ({placeholders})")
+            operation_params.extend(assignment_key_ids)
+
+        operation_candidates = [
+            normalize_operation_row(dict(row))
+            for row in conn.execute(
+                f"""
+                SELECT *
+                FROM operation_log
+                WHERE {' OR '.join(operation_conditions) if operation_conditions else 'FALSE'}
+                ORDER BY id DESC
+                LIMIT 5000
+                """,
+                operation_params,
+            )
+        ]
+        exact_location_operations = [
+            row
+            for row in operation_candidates
+            if (
+                not parsed["has_apartment"]
+                or _canonical_apartment(row.get("apartment") or row.get("flat_num"))
+                == requested_apartment
+            )
+            and (
+                not requested_address
+                or _canonical_address(row.get("address")) == requested_address
+            )
+        ]
+
+    key_ids = {
+        int(row["key_id"])
+        for row in assignment_rows
+        if row.get("key_id") is not None
+    }
+    key_ids.update(
+        int(row["key_id"])
+        for row in exact_location_operations
+        if row.get("key_id") is not None
+    )
+    inventory_results = [get_key(key_id) for key_id in sorted(key_ids, reverse=True)]
+    result["inventory_results"] = [item for item in inventory_results if item]
+    result["key"] = (
+        result["inventory_results"][0]
+        if len(result["inventory_results"]) == 1
+        else None
+    )
+
+    linked_addresses = {
+        _canonical_address(row.get("address"))
+        for row in [*assignment_rows, *exact_location_operations]
+        if _canonical_address(row.get("address"))
+    }
+    apartment_found = bool(assignment_rows or exact_location_operations)
+    if parsed["has_apartment"]:
+        result["panel_results"] = [
+            row
+            for row in panel_rows
+            if apartment_found
+            and _canonical_address(row.get("address")) in linked_addresses
+        ][:20]
+    else:
+        result["panel_results"] = exact_house_panels[:20]
+
+    operation_results = []
+    for row in operation_candidates:
+        matches_key = row.get("key_id") is not None and int(row["key_id"]) in key_ids
+        matches_location = (
+            (not requested_address or _canonical_address(row.get("address")) == requested_address)
+            and (
+                not parsed["has_apartment"]
+                or _canonical_apartment(row.get("apartment") or row.get("flat_num"))
+                == requested_apartment
+            )
+        )
+        if matches_key or matches_location:
+            operation_results.append(row)
+        if len(operation_results) >= 50:
+            break
+    result["operation_results"] = operation_results
+    result["address_results"] = operation_results
+    result["history"] = operation_results if result["key"] else []
+    result["last_operation"] = result["history"][0] if result["history"] else None
+
+    house_found = bool(exact_house_panels) or any(
+        _canonical_address(row.get("address")) == requested_address
+        for row in assignment_rows
+    )
+    result["structured_query"] = {
+        **parsed,
+        "house_found": house_found,
+        "apartment_found": apartment_found,
+        "matched_address": (
+            exact_house_panels[0].get("address")
+            if exact_house_panels
+            else next(
+                (row.get("address") for row in assignment_rows if row.get("address")),
+                parsed["address_source"],
+            )
+        ),
+    }
+    if parsed["has_apartment"] and not apartment_found:
+        if parsed["address_source"]:
+            result["no_results_message"] = (
+                f"По адресу {parsed['address_source']} квартира "
+                f"{requested_apartment} ничего не найдено"
+            )
+        else:
+            result["no_results_message"] = (
+                f"По квартире {requested_apartment} ничего не найдено"
+            )
+    return _set_result_counts(result)
 
 
 def get_search_suggestions(
@@ -96,22 +411,48 @@ def get_search_suggestions(
                 LIMIT 1000
                 """
             ).fetchall()
-            candidates.extend(
-                {
-                    "value": row["address"] or row["name"],
-                    "label": " · ".join(
-                        value
-                        for value in (row["address"], row["entrance"])
-                        if value
-                    ),
-                    "meta": f"Панель ID {row['id']} · {row['mac']}",
-                    "search_text": " ".join(
-                        str(row[field] or "")
-                        for field in ("id", "address", "entrance", "name", "mac", "ip")
-                    ),
-                }
-                for row in panel_rows
-            )
+            panel_groups: dict[str, dict] = {}
+            for row in panel_rows:
+                value = str(row["address"] or row["name"] or "").strip()
+                group_key = normalize_search_text(value)
+                if not group_key:
+                    continue
+                group = panel_groups.setdefault(
+                    group_key,
+                    {
+                        "value": value,
+                        "label": value,
+                        "entrances": [],
+                        "search_parts": [],
+                        "count": 0,
+                    },
+                )
+                group["count"] += 1
+                entrance = str(row["entrance"] or "").strip()
+                if entrance and entrance not in group["entrances"]:
+                    group["entrances"].append(entrance)
+                group["search_parts"].extend(
+                    str(row[field] or "")
+                    for field in ("id", "address", "entrance", "name", "mac", "ip")
+                )
+
+            for group in panel_groups.values():
+                count = int(group["count"])
+                entrances = ", ".join(group["entrances"][:4])
+                if len(group["entrances"]) > 4:
+                    entrances += f" и ещё {len(group['entrances']) - 4}"
+                panel_word = "панель" if count == 1 else "панели" if 2 <= count <= 4 else "панелей"
+                meta = f"{count} {panel_word}"
+                if entrances:
+                    meta += f" · {entrances}"
+                candidates.append(
+                    {
+                        "value": group["value"],
+                        "label": group["label"],
+                        "meta": meta,
+                        "search_text": " ".join(group["search_parts"]),
+                    }
+                )
 
         if scope in {"universal", "keys"}:
             key_rows = conn.execute(
@@ -145,7 +486,10 @@ def get_search_suggestions(
             ).fetchall()
             candidates.extend(
                 {
-                    "value": row["number"],
+                    # A suggestion selected by HEX must keep searching by the
+                    # same unambiguous identifier.  Using the printed number
+                    # here used to turn e.g. F0291360 into the broad query 20.
+                    "value": row["hex_value"],
                     "label": f"Ключ №{row['number']}",
                     "meta": f"{row['type_name']} · HEX {row['hex_value']}",
                     "search_text": " ".join(
@@ -260,12 +604,40 @@ def get_search_suggestions(
                 if row["object_name"] or row["printed_number"] or row["address"]
             )
 
+    if _is_technical_identifier_query(query):
+        candidates = [
+            item
+            for item in candidates
+            if _contains_normalized_query(
+                query,
+                item.get("value"),
+                item.get("label"),
+                item.get("search_text"),
+            )
+        ]
+
+    # When a panel address has a direct normalized match, do not mix it with
+    # weak fuzzy suggestions from unrelated streets.  Fuzzy candidates remain
+    # available for misspelled queries where no direct match exists.
+    if scope == "panels":
+        direct_panel_candidates = [
+            item
+            for item in candidates
+            if _contains_normalized_query(
+                query,
+                item.get("value"),
+                item.get("label"),
+                item.get("search_text"),
+            )
+        ]
+        if direct_panel_candidates:
+            candidates = direct_panel_candidates
+
     return rank_search_candidates(query, candidates, limit=limit)
 
 
 def universal_search(query: str):
     query = (query or "").strip()
-    hex_value = normalize_hex_value(query)
     normalized_query = normalize_search_text(query)
 
     result = {
@@ -292,6 +664,12 @@ def universal_search(query: str):
         return result
     if not normalized_query:
         return result
+
+    parsed_location = _parse_location_query(query)
+    if parsed_location["has_apartment"] or parsed_location["looks_like_address"]:
+        location_result = _search_exact_location(result, parsed_location)
+        if location_result is not None:
+            return location_result
 
     key_matches = find_keys(query)
     key = key_matches[0] if len(key_matches) == 1 else None
@@ -490,15 +868,7 @@ def universal_search(query: str):
             limit=30,
         )
 
-    result["result_counts"] = {
-        "keys": len(result["inventory_results"]),
-        "employees": len(result["employee_results"]),
-        "panels": len(result["panel_results"]),
-        "uk": len(result["uk_results"]),
-        "operations": len(result["operation_results"]),
-    }
-
-    return result
+    return _set_result_counts(result)
 
 
 def _rank_records(
@@ -509,9 +879,13 @@ def _rank_records(
     limit: int,
 ) -> list[dict]:
     ranked: list[tuple[float, dict]] = []
+    strict_identifier = _is_technical_identifier_query(query)
     for row in rows:
         values = [str(row.get(field) or "") for field in fields]
-        if not matches_search(query, *values, threshold=0.53):
+        if strict_identifier:
+            if not _contains_normalized_query(query, *values):
+                continue
+        elif not matches_search(query, *values, threshold=0.53):
             continue
         score = max((search_score(query, value) for value in values), default=0)
         ranked.append((score, row))

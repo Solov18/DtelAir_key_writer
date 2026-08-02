@@ -145,17 +145,17 @@
                         <td><span class="key-status is-{{ key.status_tone }}">{{ key.status_name }}</span></td>
                         <td>
                             <span class="keys-assignment-main">
-                                {% if key.assignment_type == 'resident' %}{{ key.assignment_address or 'Жилец' }}
-                                {% elif key.assignment_type == 'employee' %}{{ key.employee_name or 'Сотрудник' }}
-                                {% elif key.assignment_type == 'uk' %}{{ key.uk_name or 'УК' }}
-                                {% else %}—{% endif %}
+                                {% if key.assignment_type %}{{ key.assignment_address or key.assignment_text }}{% else %}—{% endif %}
                             </span>
+                            {% if key.assignment_type %}<small>{{ key.assignment_type_name }}{% if key.assignment_note %} · {{ key.assignment_note }}{% endif %}</small>{% endif %}
                         </td>
                         <td>
                             <span class="keys-assignment-detail">
-                                {% if key.assignment_type == 'resident' and key.assignment_apartment %}кв. {{ key.assignment_apartment }}
-                                {% elif key.assignment_type == 'employee' %}Сотрудник
-                                {% elif key.assignment_type == 'uk' %}Управляющая компания
+                                {% if key.assignment_apartment %}кв. {{ key.assignment_apartment }}
+                                {% elif key.employee_name %}{{ key.employee_name }}
+                                {% elif key.uk_name %}{{ key.uk_name }}
+                                {% elif key.assignment_note %}{{ key.assignment_note }}
+                                {% elif key.assignment_type %}{{ key.assignment_type_name }}
                                 {% else %}—{% endif %}
                             </span>
                         </td>
@@ -185,9 +185,23 @@
                 <span>Показано {{ row_offset + (1 if keys else 0) }}–{{ row_offset + (keys|length) }} из {{ key_page.total }}</span>
                 {% if key_page.pages > 1 %}
                 <nav class="keys-pagination" aria-label="Страницы реестра">
-                    {% if key_page.page > 1 %}<a class="keys-page-button" href="?{{ base_query }}&page={{ key_page.page - 1 }}{% if selected_key %}&selected_key_id={{ selected_key.id }}{% endif %}" aria-label="Предыдущая страница">←</a>{% endif %}
-                    <span class="is-current">{{ key_page.page }}</span>
-                    {% if key_page.page < key_page.pages %}<span>из {{ key_page.pages }}</span><a class="keys-page-button" href="?{{ base_query }}&page={{ key_page.page + 1 }}{% if selected_key %}&selected_key_id={{ selected_key.id }}{% endif %}" aria-label="Следующая страница">→</a>{% endif %}
+                    {% if key_page.page > 1 %}
+                    <a class="keys-page-button" href="?{{ base_query }}{% if base_query %}&{% endif %}page=1" aria-label="Первая страница" title="Первая страница">«</a>
+                    <a class="keys-page-button" href="?{{ base_query }}{% if base_query %}&{% endif %}page={{ key_page.page - 1 }}" aria-label="Предыдущая страница" title="Предыдущая страница">‹</a>
+                    {% endif %}
+                    {% if key_page.page > 3 %}<span class="keys-page-gap" aria-hidden="true">…</span>{% endif %}
+                    {% for number in range([1, key_page.page - 2]|max, [key_page.pages, key_page.page + 2]|min + 1) %}
+                        {% if number == key_page.page %}
+                        <span class="is-current" aria-current="page">{{ number }}</span>
+                        {% else %}
+                        <a class="keys-page-button" href="?{{ base_query }}{% if base_query %}&{% endif %}page={{ number }}">{{ number }}</a>
+                        {% endif %}
+                    {% endfor %}
+                    {% if key_page.page < key_page.pages - 2 %}<span class="keys-page-gap" aria-hidden="true">…</span>{% endif %}
+                    {% if key_page.page < key_page.pages %}
+                    <a class="keys-page-button" href="?{{ base_query }}{% if base_query %}&{% endif %}page={{ key_page.page + 1 }}" aria-label="Следующая страница" title="Следующая страница">›</a>
+                    <a class="keys-page-button" href="?{{ base_query }}{% if base_query %}&{% endif %}page={{ key_page.pages }}" aria-label="Последняя страница" title="Последняя страница">»</a>
+                    {% endif %}
                 </nav>
                 {% endif %}
             </footer>
@@ -251,14 +265,14 @@
     </div>
 </div>
 
-<div class="modal-backdrop" id="keyArbitraryModal">
+<div class="modal-backdrop" id="keyArbitraryModal" data-dismiss="explicit" role="dialog" aria-modal="true" aria-labelledby="keyArbitraryModalTitle">
     <div class="modal-window panel keys-modal-window">
         <div class="modal-head">
             <div>
-                <h2>Добавить ключи не по порядку</h2>
+                <h2 id="keyArbitraryModalTitle">Добавить ключи не по порядку</h2>
                 <p class="subtitle">Для каждого ключа вы самостоятельно укажете номер и HEX.</p>
             </div>
-            <button type="button" class="btn-small btn-ghost modal-close" data-close="keyArbitraryModal">Закрыть</button>
+            <button type="button" class="btn-small btn-ghost modal-close keys-modal-close" data-close="keyArbitraryModal" aria-label="Закрыть">×</button>
         </div>
         <form method="get" action="/keys/arbitrary" class="keys-modal-form">
             <label>Тип ключа</label>
@@ -277,14 +291,14 @@
     </div>
 </div>
 
-<div class="modal-backdrop" id="keyMissingModal">
+<div class="modal-backdrop" id="keyMissingModal" data-dismiss="explicit" role="dialog" aria-modal="true" aria-labelledby="keyMissingModalTitle">
     <div class="modal-window panel keys-modal-window">
         <div class="modal-head">
             <div>
-                <h2>Найти пропущенные номера</h2>
+                <h2 id="keyMissingModalTitle">Найти пропущенные номера</h2>
                 <p class="subtitle">Проверка выполняется отдельно внутри выбранного типа ключа.</p>
             </div>
-            <button type="button" class="btn-small btn-ghost modal-close" data-close="keyMissingModal">Закрыть</button>
+            <button type="button" class="btn-small btn-ghost modal-close keys-modal-close" data-close="keyMissingModal" aria-label="Закрыть">×</button>
         </div>
         <form method="get" action="/keys/missing" class="keys-modal-form">
             <label>Тип ключа</label>
@@ -315,7 +329,7 @@
     <div class="modal-window panel keys-modal-window">
         <div class="modal-head">
             <div><h2 id="keyPrepareModalTitle">Добавить ключи по порядку</h2><p class="subtitle">Создайте последовательность номеров для считывателя.</p></div>
-            <button type="button" class="btn-small btn-ghost modal-close" data-close="keyPrepareModal">Закрыть</button>
+            <button type="button" class="btn-small btn-ghost modal-close keys-modal-close" data-close="keyPrepareModal" aria-label="Закрыть">×</button>
         </div>
         <form method="post" action="/keys/prepare" class="keys-modal-form">
             <label>Тип ключа</label>
@@ -349,11 +363,11 @@
     </div>
 </div>
 
-<div class="modal-backdrop" id="keyImportModal">
+<div class="modal-backdrop" id="keyImportModal" data-dismiss="explicit" role="dialog" aria-modal="true" aria-labelledby="keyImportModalTitle">
     <div class="modal-window panel keys-modal-window">
         <div class="modal-head">
-            <div><h2>Импорт из Excel</h2><p class="subtitle">Каждый лист файла будет отдельным типом ключа.</p></div>
-            <button type="button" class="btn-small btn-ghost modal-close" data-close="keyImportModal">Закрыть</button>
+            <div><h2 id="keyImportModalTitle">Импорт из Excel</h2><p class="subtitle">Каждый лист файла будет отдельным типом ключа.</p></div>
+            <button type="button" class="btn-small btn-ghost modal-close keys-modal-close" data-close="keyImportModal" aria-label="Закрыть">×</button>
         </div>
         <form method="post" action="/keys/import" enctype="multipart/form-data" class="keys-modal-form">
             <label>Excel или CSV</label>
@@ -366,11 +380,11 @@
     </div>
 </div>
 
-<div class="modal-backdrop" id="keyTypesModal">
+<div class="modal-backdrop" id="keyTypesModal" data-dismiss="explicit" role="dialog" aria-modal="true" aria-labelledby="keyTypesModalTitle">
     <div class="modal-window panel keys-modal-window is-wide">
         <div class="modal-head">
-            <div><h2>Типы ключей</h2><p class="subtitle">Справочник расширяется без изменения программы.</p></div>
-            <button type="button" class="btn-small btn-ghost modal-close" data-close="keyTypesModal">Закрыть</button>
+            <div><h2 id="keyTypesModalTitle">Типы ключей</h2><p class="subtitle">Справочник расширяется без изменения программы.</p></div>
+            <button type="button" class="btn-small btn-ghost modal-close keys-modal-close" data-close="keyTypesModal" aria-label="Закрыть">×</button>
         </div>
 
         <form method="post" action="/keys/types" class="key-type-create-form">
@@ -419,8 +433,8 @@ document.querySelectorAll(".modal-backdrop").forEach((modal) => {
 });
 
 document.addEventListener("keydown", (event) => {
-    const prepareModal = document.getElementById("keyPrepareModal");
-    if (event.key === "Escape" && prepareModal?.classList.contains("active")) {
+    const explicitModal = document.querySelector('.modal-backdrop[data-dismiss="explicit"].active');
+    if (event.key === "Escape" && explicitModal) {
         event.preventDefault();
         event.stopImmediatePropagation();
     }

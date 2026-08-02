@@ -1,5 +1,7 @@
 from unittest.mock import patch
 
+import requests
+
 from starlette.requests import Request
 
 from tests.postgres_test_case import PostgreSQLTestCase
@@ -100,6 +102,103 @@ class SystemSafetyTests(PostgreSQLTestCase):
         fallback.assert_not_called()
         writer.assert_not_called()
         self.assertIn("Не выбрана ни одна панель", response.body.decode("utf-8"))
+
+    def test_partial_panel_write_keeps_success_and_reports_each_failure(self):
+        key = {
+            "id": 999,
+            "number": "100",
+            "hex_value": "AABBCCDD",
+            "status": "free",
+            "type_name": "Синий",
+        }
+        panels = [
+            {"id": 20, "name": "Подъезд 1", "mac": "08:13:CD:00:00:01"},
+            {"id": 21, "name": "Подъезд 2", "mac": "08:13:CD:00:00:02"},
+            {"id": 22, "name": "Подъезд 3", "mac": "08:13:CD:00:00:03"},
+        ]
+        success = {
+            "ok": True,
+            "written": True,
+            "status": "SUCCESS",
+            "response": "Ключ успешно записан",
+            "message": "Ключ успешно записан",
+        }
+        auth_error = {
+            "ok": False,
+            "written": False,
+            "status": "AUTH_REQUIRED",
+            "response": "Ошибка авторизации CRM",
+            "message": "Ошибка авторизации CRM",
+        }
+
+        with patch(
+            "app.services.writer.crm_add_key",
+            side_effect=[success, requests.Timeout(), auth_error],
+        ) as crm_add_key:
+            results = write_key_to_panels(
+                "partial_test",
+                key,
+                panels,
+                flat_num="7",
+                address="Тестовая 1",
+                request=self._request("/message/write"),
+            )
+
+        self.assertEqual(crm_add_key.call_count, 3)
+        self.assertEqual(
+            [result["status"] for result in results],
+            ["SUCCESS", "TIMEOUT", "AUTH_REQUIRED"],
+        )
+        self.assertEqual(
+            [result["written"] for result in results],
+            [True, False, False],
+        )
+        self.assertTrue(all(result["persisted"] for result in results))
+        with database.db() as conn:
+            stored = conn.execute(
+                """
+                SELECT panel_id, status
+                FROM operation_log
+                WHERE mode = 'partial_test'
+                ORDER BY panel_id
+                """
+            ).fetchall()
+        self.assertEqual(
+            [(row["panel_id"], row["status"]) for row in stored],
+            [(20, "SUCCESS"), (21, "TIMEOUT"), (22, "AUTH_REQUIRED")],
+        )
+
+    def test_invalid_panel_response_does_not_stop_remaining_panels(self):
+        key = {
+            "id": 999,
+            "number": "101",
+            "hex_value": "AABBCCDE",
+            "status": "free",
+        }
+        panels = [
+            {"id": 30, "name": "Подъезд 1", "mac": "08:13:CD:00:00:04"},
+            {"id": 31, "name": "Подъезд 2", "mac": "08:13:CD:00:00:05"},
+        ]
+        success = {
+            "ok": True,
+            "written": True,
+            "status": "SUCCESS",
+            "response": "Ключ успешно записан",
+            "message": "Ключ успешно записан",
+        }
+
+        with patch(
+            "app.services.writer.crm_add_key",
+            side_effect=[None, success],
+        ):
+            results = write_key_to_panels(
+                "invalid_response_test",
+                key,
+                panels,
+                request=self._request("/message/write"),
+            )
+
+        self.assertEqual([item["status"] for item in results], ["ERROR", "SUCCESS"])
 
     def test_passwords_are_salted_and_legacy_passwords_still_verify(self):
         first = hash_password("strong-password")

@@ -1,3 +1,4 @@
+import json
 from unittest.mock import patch
 
 from starlette.requests import Request
@@ -172,6 +173,91 @@ class MessageParserTests(PostgreSQLTestCase):
         writer.assert_not_called()
         self.assertIn(
             "не выбрана ни одна панель",
+            response.body.decode("utf-8"),
+        )
+
+    def test_message_write_returns_managed_document_for_async_form(self):
+        request = Request(
+            {
+                "type": "http",
+                "method": "POST",
+                "path": "/message/write",
+                "headers": [(b"x-requested-with", b"KeyWriterAsync")],
+                "client": ("127.0.0.1", 50000),
+                "session": {"user": {"login": "test", "role": "admin"}},
+            }
+        )
+
+        response = message_write(
+            request=request,
+            address="Тестовая 1",
+            apartment="7",
+            source_text="",
+            key_numbers=[],
+            key_type_ids=[],
+            panel_ids=[],
+        )
+        payload = json.loads(response.body)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["url"], "/message")
+        self.assertIn("<!DOCTYPE html>", payload["html"])
+
+    def test_used_key_requires_explicit_operator_choice_before_write(self):
+        request = Request(
+            {
+                "type": "http",
+                "method": "POST",
+                "path": "/message/write",
+                "headers": [],
+                "client": ("127.0.0.1", 50000),
+                "session": {"user": {"login": "test", "role": "admin"}},
+            }
+        )
+        key = {
+            "id": 55,
+            "number": "003044",
+            "hex_value": "A0EEF8B2",
+            "status": "issued_resident",
+        }
+        panel = {
+            "id": 7,
+            "address": "Новый дом 10",
+            "name": "Подъезд 1",
+            "mac": "08:13:CD:00:00:07",
+        }
+        context = {
+            "is_used": True,
+            "assignment_type_name": "Жилец",
+            "assignment_address": "Старый дом 1",
+            "assignment_apartment": "4",
+            "owner_name": "",
+            "panel_ids": [3],
+        }
+
+        with (
+            patch("app.routers.message.find_key", return_value=key),
+            patch("app.routers.message.is_ambiguous_key", return_value=False),
+            patch("app.routers.message.get_panels", return_value=[panel]),
+            patch(
+                "app.routers.message.get_key_write_contexts",
+                return_value={55: context},
+            ),
+            patch("app.routers.message.write_key_to_panels") as writer,
+        ):
+            response = message_write(
+                request=request,
+                address="Новый дом 10",
+                apartment="8",
+                source_text="",
+                key_numbers=["003044"],
+                key_type_ids=[0],
+                panel_ids=[7],
+                occupied_action="",
+            )
+
+        writer.assert_not_called()
+        self.assertIn(
+            "сначала выберите способ",
             response.body.decode("utf-8"),
         )
 

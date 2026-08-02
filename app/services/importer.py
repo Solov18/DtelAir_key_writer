@@ -30,6 +30,24 @@ def _clean_header(value) -> str:
     return str(value or "").strip().lower()
 
 
+def _panel_header(value) -> str:
+    return re.sub(r"[^0-9a-zа-я]+", "", _clean_header(value).replace("ё", "е"))
+
+
+def _panel_column(headers: list[str], *aliases: str) -> int | None:
+    normalized_aliases = {_panel_header(alias) for alias in aliases}
+    for index, header in enumerate(headers):
+        if _panel_header(header) in normalized_aliases:
+            return index
+    return None
+
+
+def _row_text(row: tuple, index: int | None) -> str:
+    if index is None or index >= len(row):
+        return ""
+    return str(row[index] or "").strip()
+
+
 def _first_value(row: dict, names: tuple[str, ...]):
     for name in names:
         value = row.get(name)
@@ -341,20 +359,24 @@ def import_panels_excel(filename: str, content: bytes) -> dict:
             )
         )
 
-        headers = [
-            str(header or "").strip().lower()
-            for header in header_row
-        ]
-
-        address_index = None
-        mac_index = None
-
-        for index, header in enumerate(headers):
-            if header in ("адрес", "address"):
-                address_index = index
-
-            if header in ("mac", "мас", "мак"):
-                mac_index = index
+        headers = [str(header or "").strip() for header in header_row]
+        address_index = _panel_column(headers, "Адрес", "Address")
+        entrance_index = _panel_column(
+            headers,
+            "Подъезд / вход",
+            "Подъезд",
+            "Вход",
+            "Entrance",
+        )
+        ip_index = _panel_column(headers, "IP", "IP-адрес", "IP address")
+        mac_index = _panel_column(
+            headers,
+            "MAC",
+            "MAC-адрес",
+            "МАС",
+            "МАК",
+        )
+        tags_index = _panel_column(headers, "Теги", "Tags")
 
         if address_index is None or mac_index is None:
             continue
@@ -363,8 +385,11 @@ def import_panels_excel(filename: str, content: bytes) -> dict:
             min_row=2,
             values_only=True,
         ):
-            raw_address = str(row[address_index] or "").strip()
-            raw_mac = str(row[mac_index] or "").strip().upper()
+            raw_address = _row_text(row, address_index)
+            raw_entrance = _row_text(row, entrance_index)
+            raw_ip = _row_text(row, ip_index)
+            raw_mac = _row_text(row, mac_index).upper()
+            raw_tags = _row_text(row, tags_index)
 
             mac = raw_mac.replace(" ", "")
 
@@ -376,7 +401,10 @@ def import_panels_excel(filename: str, content: bytes) -> dict:
                 result["errors"] += 1
                 continue
 
-            address, entrance = split_panel_address(raw_address)
+            if entrance_index is None:
+                address, entrance = split_panel_address(raw_address)
+            else:
+                address, entrance = raw_address, raw_entrance
             name = f"{address} {entrance}".strip()
 
             rows.append(
@@ -385,7 +413,8 @@ def import_panels_excel(filename: str, content: bytes) -> dict:
                     "entrance": entrance,
                     "name": name,
                     "mac": mac,
-                    "tags": "",
+                    "tags": raw_tags,
+                    "ip": raw_ip,
                 }
             )
 
@@ -402,11 +431,18 @@ def import_panels_excel(filename: str, content: bytes) -> dict:
 
             if existing:
                 old = dict(existing)
+                address = item["address"] or (old.get("address") or "")
+                entrance = item["entrance"] or (old.get("entrance") or "")
+                ip = item["ip"] or (old.get("ip") or "")
+                tags = item["tags"] or (old.get("tags") or "")
+                name = f"{address} {entrance}".strip()
 
                 changed = (
-                    old.get("address") != item["address"]
-                    or old.get("entrance") != item["entrance"]
-                    or old.get("name") != item["name"]
+                    old.get("address") != address
+                    or old.get("entrance") != entrance
+                    or old.get("name") != name
+                    or (old.get("ip") or "") != ip
+                    or (old.get("tags") or "") != tags
                 )
 
                 conn.execute(
@@ -415,14 +451,16 @@ def import_panels_excel(filename: str, content: bytes) -> dict:
                     SET address = ?,
                         entrance = ?,
                         name = ?,
-                        tags = ?
+                        tags = ?,
+                        ip = ?
                     WHERE mac = ?
                     """,
                     (
-                        item["address"],
-                        item["entrance"],
-                        item["name"],
-                        item["tags"],
+                        address,
+                        entrance,
+                        name,
+                        tags,
+                        ip,
                         item["mac"],
                     ),
                 )
@@ -435,8 +473,8 @@ def import_panels_excel(filename: str, content: bytes) -> dict:
             else:
                 conn.execute(
                     """
-                    INSERT INTO panels(address, entrance, name, mac, tags)
-                    VALUES(?,?,?,?,?)
+                    INSERT INTO panels(address, entrance, name, mac, tags, ip)
+                    VALUES(?,?,?,?,?,?)
                     """,
                     (
                         item["address"],
@@ -444,6 +482,7 @@ def import_panels_excel(filename: str, content: bytes) -> dict:
                         item["name"],
                         item["mac"],
                         item["tags"],
+                        item["ip"],
                     ),
                 )
 

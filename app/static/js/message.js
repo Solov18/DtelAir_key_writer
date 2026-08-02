@@ -100,9 +100,57 @@
         document.querySelectorAll(".message-key-type-select")
     );
     const serverReady = writeForm.dataset.canWrite === "true";
+    const hasUsedKeys = writeForm.dataset.hasUsedKeys === "true";
+    const occupiedActionInputs = Array.from(
+        document.querySelectorAll("input[name='occupied_action']")
+    );
+    const keyCheckRows = Array.from(
+        document.querySelectorAll(".message-key-check")
+    );
 
     function unresolvedTypes() {
         return typeSelectors.filter((select) => !Number(select.value));
+    }
+
+    function selectedOccupiedAction() {
+        return occupiedActionInputs.find((input) => input.checked)?.value || "";
+    }
+
+    function updateKeyPanelStates(checkedPanels) {
+        const selectedIds = new Set(
+            checkedPanels.map((checkbox) => Number(checkbox.value))
+        );
+        keyCheckRows.forEach((row) => {
+            const label = row.querySelector("[data-key-state-label]");
+            if (!label || row.dataset.keyConflict === "true") return;
+            const knownIds = new Set(
+                (row.dataset.knownPanels || "")
+                    .split(",")
+                    .map((value) => Number(value))
+                    .filter(Boolean)
+            );
+            const matchedCount = Array.from(selectedIds).filter((id) =>
+                knownIds.has(id)
+            ).length;
+            const isUsed = row.dataset.keyUsed === "true";
+            let text = "Свободен — готов к записи";
+            let tone = "success";
+            if (selectedIds.size && matchedCount === selectedIds.size) {
+                text = selectedIds.size === 1
+                    ? "Уже записан на выбранной панели"
+                    : "Уже записан на всех выбранных панелях";
+                tone = "info";
+            } else if (matchedCount) {
+                text = "Частично записан на выбранных панелях";
+                tone = "warning";
+            } else if (isUsed) {
+                text = "Уже используется";
+                tone = "warning";
+            }
+            label.textContent = text;
+            label.classList.remove("success", "warning", "info", "error");
+            label.classList.add(tone);
+        });
     }
 
     function updateWriteState() {
@@ -110,6 +158,9 @@
             (checkbox) => checkbox.checked
         );
         const unresolved = unresolvedTypes();
+        const occupiedAction = selectedOccupiedAction();
+
+        updateKeyPanelStates(checkedPanels);
 
         if (selectedCount) {
             selectedCount.textContent = String(checkedPanels.length);
@@ -133,6 +184,13 @@
         } else if (unresolved.length) {
             ready = false;
             message = "Выберите тип для каждого неоднозначного ключа.";
+        } else if (hasUsedKeys && !occupiedAction) {
+            ready = false;
+            message = "Ключ уже используется — выберите переназначение или добавление на новые панели.";
+        } else if (hasUsedKeys && occupiedAction === "reassign") {
+            message = "Будет создано новое назначение; старые панели останутся без изменений.";
+        } else if (hasUsedKeys && occupiedAction === "add_panels") {
+            message = "Текущее назначение сохранится; запросы уйдут только на недостающие панели.";
         }
 
         if (writeButton) {
@@ -171,39 +229,56 @@
             updateWriteState();
         });
     });
+    occupiedActionInputs.forEach((input) => {
+        input.addEventListener("change", updateWriteState);
+    });
 
-    let writeConfirmed = false;
+    let writeInFlight = false;
     writeForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
         updateWriteState();
-        if (writeConfirmed) {
-            writeConfirmed = false;
-            if (writeButton) {
-                writeButton.disabled = true;
-                writeButton.textContent = "Запись выполняется…";
-            }
-            return;
-        }
-        if (writeButton?.disabled) {
-            event.preventDefault();
-            return;
-        }
+        if (writeInFlight || writeButton?.disabled) return;
 
         const checkedPanels = panelCheckboxes.filter(
             (checkbox) => checkbox.checked
         );
         const keyCount = Number(writeForm.dataset.keyCount || 0);
         const apartment = writeForm.dataset.apartment || "—";
-        event.preventDefault();
-        const confirmation = await window.showDangerConfirm({
-            title: "Подтвердите запись ключей",
-            message: `Записать ключей: ${keyCount}\n` +
-            `Панелей: ${checkedPanels.length}\n` +
-            `Квартира: ${apartment}\n\n` +
-            "После подтверждения начнётся фактическая запись.",
-            confirmText: "Записать ключи",
-            cancelText: "Вернуться к проверке",
-            source: writeButton,
-        });
+        const occupiedAction = selectedOccupiedAction();
+        let confirmation = false;
+        try {
+            let title = "Подтвердите запись ключей";
+            let message = `Записать ключей: ${keyCount}\n` +
+                `Панелей: ${checkedPanels.length}\n` +
+                `Квартира: ${apartment}\n\n` +
+                "После подтверждения начнётся фактическая запись.";
+            let confirmText = "Записать ключи";
+            if (occupiedAction === "reassign") {
+                title = "Подтвердите переназначение ключа";
+                message = "Ключ уже назначен другому адресу. Его текущее назначение в CRM будет заменено новым. Запись на старых панелях сохранится, пока ключ не будет удалён с них отдельной операцией";
+                confirmText = "Переназначить и записать";
+            } else if (occupiedAction === "add_panels") {
+                title = "Подтвердите дополнительный доступ";
+                message = "Ключ уже используется. Он будет дополнительно записан на выбранные панели без изменения текущего назначения";
+                confirmText = "Добавить на панели";
+            }
+            confirmation = await window.showDangerConfirm({
+                title,
+                message,
+                confirmText,
+                cancelText: "Вернуться к проверке",
+                source: writeButton,
+            });
+        } catch (error) {
+            console.error("key_write.confirmation.error", error);
+            await window.showAlert?.({
+                title: "Не удалось открыть подтверждение",
+                message: "Обновите страницу и повторите попытку.",
+                source: writeButton,
+            });
+            updateWriteState();
+            return;
+        }
 
         if (!confirmation) {
             return;
@@ -218,8 +293,24 @@
             selectedPanelsContainer?.appendChild(hiddenInput);
         });
 
-        writeConfirmed = true;
-        writeForm.requestSubmit(writeButton || undefined);
+        console.info("key_write.submit", {
+            keyCount,
+            panelIds: checkedPanels.map((checkbox) => checkbox.value),
+        });
+        writeInFlight = true;
+        if (writeButton) {
+            writeButton.disabled = true;
+            writeButton.textContent = "Запись выполняется…";
+        }
+        // Keep the write page visible while the server communicates with CRM.
+        // This flow deliberately does not use the global blocking overlay.
+        window.suppressGlobalLoaderForNextNavigation?.();
+        writeForm.submit();
+    });
+
+    window.addEventListener("pageshow", () => {
+        writeInFlight = false;
+        updateWriteState();
     });
 
     updateWriteState();

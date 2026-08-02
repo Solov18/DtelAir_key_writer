@@ -1,14 +1,19 @@
+import asyncio
+import io
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import Mock, patch
 
 import requests
+from openpyxl import load_workbook
 from starlette.requests import Request
 
 from tests.postgres_test_case import PostgreSQLTestCase
 
 from app.repositories import panel_repository
 from app.routers import panels as panels_router
+from app.services.importer import import_panels_excel
 from app.services import panel_api
 
 
@@ -29,6 +34,84 @@ class PanelRepositoryTests(PostgreSQLTestCase):
             for panel in panel_repository.get_all_panels()
             if panel["mac"] == normalized_mac
         )
+
+    def test_panel_export_removes_timezone_after_localizing_datetimes(self):
+        panel = {
+            "id": 15,
+            "address": "ул. Тепличная, д.83",
+            "entrance": "Подъезд 4",
+            "name": "Панель 4",
+            "ip": "10.0.0.15",
+            "mac": "08:13:CD:00:17:1E",
+            "status_name": "В сети",
+            "supply_voltage": 12.9,
+            "device_model": "Sokol",
+            "firmware_version": "2.2.5.10.5",
+            "last_checked_at": datetime(2026, 8, 1, 11, 40, tzinfo=timezone.utc),
+            "last_online_at": datetime(2026, 8, 1, 11, 39, tzinfo=timezone.utc),
+        }
+
+        with patch.object(panels_router, "get_all_panels", return_value=[panel]):
+            response = panels_router.panels_export()
+
+        async def read_response() -> bytes:
+            chunks = []
+            async for chunk in response.body_iterator:
+                chunks.append(chunk)
+            return b"".join(chunks)
+
+        workbook = load_workbook(io.BytesIO(asyncio.run(read_response())))
+        sheet = workbook.active
+        checked_at = sheet.cell(row=2, column=11).value
+        online_at = sheet.cell(row=2, column=12).value
+
+        self.assertEqual(checked_at, datetime(2026, 8, 1, 14, 40))
+        self.assertEqual(online_at, datetime(2026, 8, 1, 14, 39))
+        self.assertIsNone(checked_at.tzinfo)
+        self.assertIsNone(online_at.tzinfo)
+
+    def test_exported_workbook_can_be_edited_and_imported_without_data_loss(self):
+        existing = self._create(
+            "ул. Тепличная, д.83",
+            "Подъезд 4",
+            "08:13:CD:00:17:1E",
+            "10.90.171.20",
+        )
+
+        response = panels_router.panels_export()
+
+        async def read_response() -> bytes:
+            chunks = []
+            async for chunk in response.body_iterator:
+                chunks.append(chunk)
+            return b"".join(chunks)
+
+        workbook = load_workbook(io.BytesIO(asyncio.run(read_response())))
+        sheet = workbook.active
+        sheet.append(
+            [
+                None,
+                "ул. Малышева, д.7",
+                "Подъезд 2",
+                "ул. Малышева, д.7 Подъезд 2",
+                "10.80.72.10",
+                "08:13:CD:00:34:81",
+            ]
+        )
+        content = io.BytesIO()
+        workbook.save(content)
+
+        report = import_panels_excel("panels_export.xlsx", content.getvalue())
+
+        self.assertEqual(report["added"], 1)
+        self.assertEqual(report["errors"], 0)
+        panels = {panel["mac"]: panel for panel in panel_repository.get_all_panels()}
+        existing_after = panels[existing["mac"]]
+        added = panels["08:13:CD:00:34:81"]
+        self.assertEqual(existing_after["entrance"], "Подъезд 4")
+        self.assertEqual(existing_after["ip"], "10.90.171.20")
+        self.assertEqual(added["entrance"], "Подъезд 2")
+        self.assertEqual(added["ip"], "10.80.72.10")
 
     def test_server_filters_pagination_and_status_statistics(self):
         first = self._create("Тепличная 63", "Подъезд 1", "08:13:CD:00:00:01", "10.0.0.1")
@@ -81,6 +164,32 @@ class PanelRepositoryTests(PostgreSQLTestCase):
         self.assertEqual(statistics["offline"], 1)
         self.assertEqual(statistics["disabled"], 1)
         self.assertEqual(statistics["unchecked"], 0)
+
+    def test_sip_problem_filter_returns_only_failed_registered_panels(self):
+        failed = self._create("Абрикосовая 21", "Подъезд 1", "08:13:CD:00:40:01", "10.0.40.1")
+        healthy = self._create("Абрикосовая 21", "Подъезд 2", "08:13:CD:00:40:02", "10.0.40.2")
+        unknown = self._create("Абрикосовая 21", "Подъезд 3", "08:13:CD:00:40:03", "10.0.40.3")
+
+        panel_repository.update_panel_api_status(failed["id"], {"status": "online", "sip_registered": False})
+        panel_repository.update_panel_api_status(healthy["id"], {"status": "online", "sip_registered": True})
+        panel_repository.update_panel_api_status(unknown["id"], {"status": "online"})
+
+        page = panel_repository.get_panel_page(status="sip_error")
+
+        self.assertEqual(page["total"], 1)
+        self.assertEqual(page["items"][0]["id"], failed["id"])
+        self.assertEqual(panel_repository.get_panel_statistics()["sip_failed"], 1)
+
+    def test_voltage_problem_filter_uses_monitoring_thresholds(self):
+        low = self._create("Волжская 38", "Калитка", "08:13:CD:00:41:01", "10.0.41.1")
+        normal = self._create("Волжская 38", "Подъезд 1", "08:13:CD:00:41:02", "10.0.41.2")
+        panel_repository.update_panel_api_status(low["id"], {"status": "online", "supply_voltage": 9.34})
+        panel_repository.update_panel_api_status(normal["id"], {"status": "online", "supply_voltage": 12.9})
+
+        page = panel_repository.get_panel_page(status="voltage_alert")
+
+        self.assertEqual(page["total"], 1)
+        self.assertEqual(page["items"][0]["id"], low["id"])
 
     def test_unchecked_and_voltage_boundaries_are_not_reported_as_offline(self):
         unchecked = self._create("Мира 8", "1", "08:13:CD:00:00:07")

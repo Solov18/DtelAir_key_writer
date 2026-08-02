@@ -4,7 +4,11 @@ from datetime import datetime, timezone
 
 from app.db import db
 from app.search_utils import normalize_search_text
-from app.services.panel_health import supply_voltage_tone
+from app.panel_health import (
+    SUPPLY_VOLTAGE_MAX,
+    SUPPLY_VOLTAGE_MIN,
+    supply_voltage_tone,
+)
 
 
 PANEL_STATUS_LABELS = {
@@ -264,6 +268,14 @@ def get_panel_statistics(stale_after_seconds: int = 600) -> dict:
                 SUM(
                     CASE
                         WHEN enabled = 1
+                         AND last_checked_at IS NOT NULL
+                         AND sip_registered = 0
+                        THEN 1 ELSE 0
+                    END
+                ) AS sip_failed,
+                SUM(
+                    CASE
+                        WHEN enabled = 1
                          AND last_checked_at IS NULL
                         THEN 1 ELSE 0
                     END
@@ -282,7 +294,16 @@ def get_panel_statistics(stale_after_seconds: int = 600) -> dict:
             (max(30, int(stale_after_seconds)),),
         ).fetchone()
     result = dict(row)
-    for key in ("total", "online", "offline", "errors", "disabled", "unchecked", "stale"):
+    for key in (
+        "total",
+        "online",
+        "offline",
+        "errors",
+        "disabled",
+        "sip_failed",
+        "unchecked",
+        "stale",
+    ):
         result[key] = int(result.get(key) or 0)
     result["online_percent"] = (
         round(result["online"] / result["total"] * 100)
@@ -384,6 +405,18 @@ def get_panel_page(
             "AND last_checked_at < CURRENT_TIMESTAMP - (? * INTERVAL '1 second')"
         )
         params.append(max(30, int(stale_after_seconds)))
+    elif status == "voltage_alert":
+        conditions.append(
+            "enabled = 1 AND last_checked_at IS NOT NULL "
+            "AND supply_voltage IS NOT NULL "
+            "AND supply_voltage NOT BETWEEN ? AND ?"
+        )
+        params.extend([SUPPLY_VOLTAGE_MIN, SUPPLY_VOLTAGE_MAX])
+    elif status == "sip_error":
+        conditions.append(
+            "enabled = 1 AND last_checked_at IS NOT NULL "
+            "AND sip_registered = 0"
+        )
 
     where_sql = " AND ".join(conditions)
     page_size = min(100, max(10, int(page_size or 20)))

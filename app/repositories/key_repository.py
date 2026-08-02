@@ -3,13 +3,19 @@ import re
 from sqlalchemy.exc import IntegrityError
 
 from app.db import db
-from app.search_utils import normalize_search_text
+from app.search_utils import (
+    assignment_address_sql,
+    normalize_search_text,
+    parse_assignment_search_query,
+)
 
 
 KEY_STATUSES = {
     "free": "Свободен",
     "issued_resident": "Выдан жильцу",
     "issued_employee": "Выдан сотруднику",
+    "issued_contractor": "Выдан подрядчику",
+    "issued_other": "Выдан",
     "assigned_uk": "Закреплён за УК",
     "blocked": "Заблокирован",
     "lost": "Утерян",
@@ -21,6 +27,8 @@ KEY_STATUS_TONES = {
     "free": "success",
     "issued_resident": "info",
     "issued_employee": "purple",
+    "issued_contractor": "purple",
+    "issued_other": "info",
     "assigned_uk": "warning",
     "blocked": "danger",
     "lost": "danger",
@@ -32,6 +40,16 @@ ASSIGNMENT_STATUSES = {
     "resident": "issued_resident",
     "employee": "issued_employee",
     "uk": "assigned_uk",
+    "contractor": "issued_contractor",
+    "other": "issued_other",
+}
+
+ASSIGNMENT_TYPE_NAMES = {
+    "resident": "Жилец",
+    "uk": "УК",
+    "employee": "Сотрудник",
+    "contractor": "Подрядчик",
+    "other": "Другой",
 }
 
 
@@ -50,6 +68,9 @@ def _normalize_hex(value: str) -> str:
 
 def _assignment_text(row: dict) -> str:
     assignment_type = row.get("assignment_type") or ""
+    # ``note`` belongs to the physical key itself; only the active assignment
+    # note may describe its current owner.
+    owner_name = (row.get("assignment_note") or "").strip()
 
     if assignment_type == "resident":
         parts = [row.get("assignment_address") or "Жилец"]
@@ -58,10 +79,13 @@ def _assignment_text(row: dict) -> str:
         return " / ".join(parts)
 
     if assignment_type == "employee":
-        return row.get("employee_name") or "Сотрудник"
+        return owner_name or row.get("employee_name") or "Сотрудник"
 
     if assignment_type == "uk":
-        return row.get("uk_name") or "Управляющая компания"
+        return owner_name or row.get("uk_name") or "Управляющая компания"
+
+    if assignment_type in {"contractor", "other"}:
+        return owner_name or ASSIGNMENT_TYPE_NAMES[assignment_type]
 
     return "Свободен"
 
@@ -71,6 +95,10 @@ def _normalize_key_row(row) -> dict:
     item["status_name"] = key_status_name(item.get("status", ""))
     item["status_tone"] = key_status_tone(item.get("status", ""))
     item["assignment_text"] = _assignment_text(item)
+    item["assignment_type_name"] = ASSIGNMENT_TYPE_NAMES.get(
+        item.get("assignment_type") or "",
+        "",
+    )
     item["has_hex"] = bool(item.get("hex_value"))
     return item
 
@@ -364,58 +392,62 @@ def _keys_filter_sql(
 
     normalized_query = normalize_search_text(query)
     if normalized_query:
-        pattern = f"%{normalized_query}%"
-        conditions.append(
-            """
-            (
-                SMART_NORM(k.number) LIKE ?
-                OR SMART_NORM(k.hex_value) LIKE ?
-                OR SMART_NORM(kt.name) LIKE ?
-                OR SMART_NORM(k.note) LIKE ?
-                OR SMART_NORM(ka.address) LIKE ?
-                OR SMART_NORM(ka.apartment) LIKE ?
-                OR SMART_NORM(e.full_name) LIKE ?
-                OR SMART_NORM(ug.name) LIKE ?
-                OR EXISTS (
-                    SELECT 1
-                    FROM operation_log ol
-                    WHERE ol.key_id = k.id
-                      AND (
-                          SMART_NORM(ol.address) LIKE ?
-                          OR SMART_NORM(ol.apartment) LIKE ?
-                          OR SMART_NORM(ol.panel_name) LIKE ?
-                          OR SMART_NORM(ol.details) LIKE ?
-                          OR SMART_NORM(ol.comment) LIKE ?
-                      )
-                )
-                OR EXISTS (
-                    SELECT 1
-                    FROM key_assignments kah
-                    LEFT JOIN employees eh ON eh.id = kah.employee_id
-                    LEFT JOIN uk_groups ugh ON ugh.id = kah.uk_group_id
-                    WHERE kah.key_id = k.id
-                      AND (
-                          SMART_NORM(kah.address) LIKE ?
-                          OR SMART_NORM(kah.apartment) LIKE ?
-                          OR SMART_NORM(kah.note) LIKE ?
-                          OR SMART_NORM(eh.full_name) LIKE ?
-                          OR SMART_NORM(ugh.name) LIKE ?
-                      )
-                )
-                OR SMART_NORM(CASE k.status
+        parsed = parse_assignment_search_query(query)
+        if parsed["has_apartment"]:
+            conditions.append("ka.id IS NOT NULL")
+            conditions.append("SMART_NORM(ka.apartment) = ?")
+            params.append(normalize_search_text(parsed["apartment"]))
+            if parsed["looks_like_address"]:
+                address_sql, address_params = assignment_address_sql(parsed)
+                conditions.append(f"({address_sql})")
+                params.extend(address_params)
+        elif parsed["looks_like_address"]:
+            address_sql, address_params = assignment_address_sql(parsed)
+            conditions.extend(("ka.id IS NOT NULL", f"({address_sql})"))
+            params.extend(address_params)
+        else:
+            pattern = f"%{normalized_query}%"
+            conditions.append(
+                """
+                (
+                    SMART_NORM(k.number) LIKE ?
+                    OR SMART_NORM(k.hex_value) LIKE ?
+                    OR SMART_NORM(kt.name) LIKE ?
+                    OR SMART_NORM(k.note) LIKE ?
+                    OR SMART_NORM(ka.address) LIKE ?
+                    OR SMART_NORM(ka.apartment) LIKE ?
+                    OR SMART_NORM(e.full_name) LIKE ?
+                    OR SMART_NORM(ug.name) LIKE ?
+                    OR SMART_NORM(ka.note) LIKE ?
+                    OR SMART_NORM(CONCAT(
+                        CASE ka.assignment_type
+                            WHEN 'resident' THEN 'Жилец'
+                            WHEN 'employee' THEN 'Сотрудник'
+                            WHEN 'uk' THEN 'УК управляющая компания'
+                            WHEN 'contractor' THEN 'Подрядчик'
+                            WHEN 'other' THEN 'Другой'
+                            ELSE ''
+                        END,
+                        ' ', COALESCE(ka.note, ''),
+                        ' ', COALESCE(e.full_name, ''),
+                        ' ', COALESCE(ug.name, '')
+                    )) LIKE ?
+                    OR SMART_NORM(CASE k.status
                     WHEN 'free' THEN 'Свободен'
                     WHEN 'issued_resident' THEN 'Выдан жильцу'
                     WHEN 'issued_employee' THEN 'Выдан сотруднику'
+                    WHEN 'issued_contractor' THEN 'Выдан подрядчику'
+                    WHEN 'issued_other' THEN 'Выдан'
                     WHEN 'assigned_uk' THEN 'Закреплён за УК'
                     WHEN 'blocked' THEN 'Заблокирован'
                     WHEN 'lost' THEN 'Утерян'
                     WHEN 'defective' THEN 'Брак'
                     WHEN 'archived' THEN 'Архив'
-                END) LIKE ?
+                    END) LIKE ?
+                )
+                """
             )
-            """
-        )
-        params.extend([pattern] * 19)
+            params.extend([pattern] * 11)
 
     if key_type_id:
         conditions.append("k.key_type_id = ?")
@@ -427,6 +459,7 @@ def _keys_filter_sql(
 
     if availability == "free":
         conditions.append("k.status = 'free'")
+        conditions.append("ka.id IS NULL")
     elif availability == "used":
         conditions.append("k.status <> 'free'")
 
@@ -503,6 +536,7 @@ def get_keys_page(
                 ka.address AS assignment_address,
                 ka.apartment AS assignment_apartment,
                 ka.assigned_at,
+                ka.note AS assignment_note,
                 e.full_name AS employee_name,
                 ug.name AS uk_name
             FROM keys k
@@ -557,6 +591,118 @@ def get_key(key_id: int) -> dict | None:
         return _normalize_key_row(row) if row else None
 
 
+def get_key_write_contexts(key_ids: list[int]) -> dict[int, dict]:
+    """Return active assignments and known panel access for a group of keys.
+
+    A panel is considered known only after a successful write (or an explicit
+    ``already exists`` response).  The latest successful remove operation
+    closes that relation.  This keeps preview and write validation on one
+    server-side source without issuing requests to physical panels.
+    """
+
+    clean_ids = sorted({int(value) for value in key_ids if int(value) > 0})
+    if not clean_ids:
+        return {}
+    placeholders = ", ".join("?" for _ in clean_ids)
+    with db() as conn:
+        assignment_rows = conn.execute(
+            f"""
+            SELECT
+                k.id AS key_id,
+                k.status AS key_status,
+                ka.id AS assignment_id,
+                ka.assignment_type,
+                ka.address AS assignment_address,
+                ka.apartment AS assignment_apartment,
+                ka.note AS assignment_note,
+                ka.assigned_at,
+                e.full_name AS employee_name,
+                ug.name AS uk_name
+            FROM keys k
+            LEFT JOIN key_assignments ka
+                ON ka.key_id = k.id AND ka.active = 1
+            LEFT JOIN employees e ON e.id = ka.employee_id
+            LEFT JOIN uk_groups ug ON ug.id = ka.uk_group_id
+            WHERE k.id IN ({placeholders})
+            """,
+            clean_ids,
+        ).fetchall()
+        panel_rows = conn.execute(
+            f"""
+            WITH latest_success AS (
+                SELECT DISTINCT ON (ol.key_id, ol.panel_id)
+                    ol.key_id,
+                    ol.panel_id,
+                    ol.action,
+                    ol.mode,
+                    ol.created_at,
+                    ol.id
+                FROM operation_log ol
+                WHERE ol.key_id IN ({placeholders})
+                  AND ol.panel_id IS NOT NULL
+                  AND UPPER(COALESCE(ol.status, '')) IN ('SUCCESS', 'ALREADY_EXISTS')
+                ORDER BY ol.key_id, ol.panel_id, ol.id DESC
+            )
+            SELECT
+                ls.*,
+                p.address,
+                p.entrance,
+                p.name,
+                p.mac
+            FROM latest_success ls
+            JOIN panels p ON p.id = ls.panel_id
+            ORDER BY p.address, p.entrance, p.name
+            """,
+            clean_ids,
+        ).fetchall()
+
+    contexts: dict[int, dict] = {}
+    for row in assignment_rows:
+        item = dict(row)
+        assignment_type = item.get("assignment_type") or ""
+        owner = (
+            item.get("assignment_note")
+            or item.get("employee_name")
+            or item.get("uk_name")
+            or ""
+        )
+        contexts[int(item["key_id"])] = {
+            **item,
+            "assignment_type_name": ASSIGNMENT_TYPE_NAMES.get(
+                assignment_type,
+                assignment_type or "—",
+            ),
+            "owner_name": owner,
+            "is_used": bool(
+                item.get("assignment_id")
+                or item.get("key_status") not in {"", "free"}
+            ),
+            "panels": [],
+            "panel_ids": [],
+        }
+
+    removal_markers = ("remove", "delete", "unlink")
+    for row in panel_rows:
+        item = dict(row)
+        action = f"{item.get('action') or ''} {item.get('mode') or ''}".lower()
+        if any(marker in action for marker in removal_markers):
+            continue
+        context = contexts.setdefault(
+            int(item["key_id"]),
+            {"is_used": False, "panels": [], "panel_ids": []},
+        )
+        panel = {
+            "id": int(item["panel_id"]),
+            "address": item.get("address") or "",
+            "entrance": item.get("entrance") or "",
+            "name": item.get("name") or "",
+            "mac": item.get("mac") or "",
+        }
+        context["panels"].append(panel)
+        context["panel_ids"].append(panel["id"])
+    return contexts
+
+
 def get_key_history(key_id: int, limit: int = 200) -> list[dict]:
     key = get_key(key_id)
     if not key:
@@ -597,7 +743,174 @@ def get_key_assignments(key_id: int) -> list[dict]:
             """,
             (key_id,),
         ).fetchall()
-        return [dict(row) for row in rows]
+        result = []
+        for row in rows:
+            item = dict(row)
+            item["assignment_type_name"] = ASSIGNMENT_TYPE_NAMES.get(
+                item.get("assignment_type"),
+                item.get("assignment_type") or "—",
+            )
+            item["owner_name"] = (
+                item.get("note")
+                or item.get("employee_name")
+                or item.get("uk_name")
+                or ""
+            )
+            result.append(item)
+        return result
+
+
+def get_assignment_addresses() -> list[str]:
+    """Return canonical address choices already present in the panel registry."""
+    with db() as conn:
+        return [
+            row[0]
+            for row in conn.execute(
+                """
+                SELECT MIN(address) AS address
+                FROM panels
+                WHERE BTRIM(COALESCE(address, '')) <> ''
+                GROUP BY SMART_NORM(address)
+                ORDER BY SMART_NORM(MIN(address))
+                """
+            )
+        ]
+
+
+def _assignment_description(row: dict) -> str:
+    assignment_type = row.get("assignment_type") or ""
+    parts = [ASSIGNMENT_TYPE_NAMES.get(assignment_type, assignment_type or "—")]
+    address = (row.get("address") or "").strip()
+    apartment = (row.get("apartment") or "").strip()
+    owner_name = (
+        row.get("owner_name")
+        or row.get("note")
+        or row.get("employee_name")
+        or row.get("uk_name")
+        or ""
+    ).strip()
+    if address:
+        parts.append(address)
+    parts.append(f"квартира {apartment}" if apartment else "квартира не указана")
+    if owner_name:
+        parts.append(owner_name)
+    return ", ".join(parts)
+
+
+def update_key_assignment(
+    key_id: int,
+    assignment_type: str,
+    *,
+    address: str,
+    apartment: str = "",
+    owner_name: str = "",
+    reason: str,
+    assigned_by: str = "",
+) -> dict:
+    """Replace only the CRM assignment and preserve the previous row as history."""
+    if assignment_type not in ASSIGNMENT_STATUSES:
+        raise ValueError("Некорректный тип владельца ключа.")
+    clean_reason = (reason or "").strip()
+    if not clean_reason:
+        raise ValueError("Укажите причину изменения назначения.")
+    clean_address = (address or "").strip()
+    if not clean_address:
+        raise ValueError("Выберите адрес из реестра CRM.")
+
+    with db() as conn:
+        current_row = conn.execute(
+            """
+            SELECT ka.*, e.full_name AS employee_name, ug.name AS uk_name
+            FROM key_assignments ka
+            LEFT JOIN employees e ON e.id = ka.employee_id
+            LEFT JOIN uk_groups ug ON ug.id = ka.uk_group_id
+            WHERE ka.key_id = ? AND ka.active = 1
+            LIMIT 1
+            """,
+            (key_id,),
+        ).fetchone()
+        if not current_row:
+            raise ValueError("У ключа нет текущего назначения для редактирования.")
+
+        stored_address = conn.execute(
+            """
+            SELECT MIN(address)
+            FROM panels
+            WHERE SMART_NORM(address) = SMART_NORM(?)
+              AND BTRIM(COALESCE(address, '')) <> ''
+            """,
+            (clean_address,),
+        ).fetchone()[0]
+        if not stored_address:
+            raise ValueError("Адрес не найден в CRM. Выберите существующий адрес.")
+
+        current = dict(current_row)
+        current["owner_name"] = (
+            current.get("note")
+            or current.get("employee_name")
+            or current.get("uk_name")
+            or ""
+        )
+        old_description = _assignment_description(current)
+
+        employee_id = (
+            current.get("employee_id")
+            if assignment_type == "employee"
+            and current.get("assignment_type") == "employee"
+            else None
+        )
+        uk_group_id = (
+            current.get("uk_group_id")
+            if assignment_type == "uk" and current.get("assignment_type") == "uk"
+            else None
+        )
+
+        conn.execute(
+            """
+            UPDATE key_assignments
+            SET active = 0, released_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (current["id"],),
+        )
+        set_key_assignment_on_connection(
+            conn,
+            key_id,
+            assignment_type,
+            address=stored_address,
+            apartment=(apartment or "").strip(),
+            employee_id=employee_id,
+            uk_group_id=uk_group_id,
+            assigned_by=(assigned_by or "").strip(),
+            note=(owner_name or "").strip(),
+        )
+
+        new_row = conn.execute(
+            """
+            SELECT ka.*, e.full_name AS employee_name, ug.name AS uk_name
+            FROM key_assignments ka
+            LEFT JOIN employees e ON e.id = ka.employee_id
+            LEFT JOIN uk_groups ug ON ug.id = ka.uk_group_id
+            WHERE ka.key_id = ? AND ka.active = 1
+            LIMIT 1
+            """,
+            (key_id,),
+        ).fetchone()
+        updated = dict(new_row)
+        updated["owner_name"] = (
+            updated.get("note")
+            or updated.get("employee_name")
+            or updated.get("uk_name")
+            or ""
+        )
+        new_description = _assignment_description(updated)
+        return {
+            "old": current,
+            "new": updated,
+            "old_description": old_description,
+            "new_description": new_description,
+            "reason": clean_reason,
+        }
 
 
 def prepare_key_range(

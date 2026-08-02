@@ -121,6 +121,47 @@ class CrmServiceTests(unittest.TestCase):
         )
         self.assertEqual(session.calls[0][2]["json"]["value"], "363FFAD7")
 
+    def test_existing_key_has_separate_status(self):
+        self.configure(crm_cookie="PHPSESSID=test-session")
+        session = FakeSession()
+        session.create_responses.append(
+            FakeResponse(data={"result": False, "message": "Ключ уже существует"})
+        )
+
+        with patch.object(crm.requests, "Session", return_value=session):
+            result = crm.crm_add_key(
+                "08:13:CD:00:1D:C2",
+                "363FFAD7",
+                "10",
+                1,
+            )
+
+        self.assertFalse(result["written"])
+        self.assertEqual(result["status"], "ALREADY_EXISTS")
+
+    def test_write_lock_wait_has_timeout(self):
+        self.configure(crm_cookie="PHPSESSID=test-session", request_timeout=3)
+
+        class BusyLock:
+            def acquire(self, *, timeout):
+                self.timeout = timeout
+                return False
+
+            def release(self):
+                raise AssertionError("Нельзя освобождать lock, который не был получен")
+
+        busy_lock = BusyLock()
+        with patch.object(crm, "_crm_lock", busy_lock):
+            result = crm.crm_add_key(
+                "08:13:CD:00:1D:C2",
+                "363FFAD7",
+                "10",
+                1,
+            )
+
+        self.assertEqual(result["status"], "TIMEOUT")
+        self.assertEqual(busy_lock.timeout, 3)
+
     def test_credentials_login_before_write(self):
         self.configure(
             crm_login="operator",
@@ -148,6 +189,30 @@ class CrmServiceTests(unittest.TestCase):
         self.assertIn("text/html", login_page_call[2]["headers"]["Accept"])
         self.assertIsNone(login_page_call[2]["headers"]["Content-Type"])
         self.assertIsNone(login_page_call[2]["headers"]["X-Requested-With"])
+
+    def test_multi_step_write_uses_one_shared_deadline(self):
+        self.configure(
+            crm_login="operator",
+            crm_password="secret",
+            crm_buyer_id="42",
+            request_timeout=5,
+        )
+        session = FakeSession()
+
+        with (
+            patch.object(crm.requests, "Session", return_value=session),
+            patch.object(crm, "monotonic", side_effect=[100.0, 101.0, 102.0, 103.0]),
+        ):
+            result = crm.crm_add_key(
+                "08:13:CD:00:1D:C2",
+                "363FFAD7",
+                "0",
+                1,
+            )
+
+        self.assertTrue(result["written"])
+        timeouts = [call[2]["timeout"] for call in session.calls]
+        self.assertEqual(timeouts, [4.0, 3.0, 2.0])
 
     def test_extracts_csrf_from_hidden_form_field(self):
         token = crm._extract_csrf(

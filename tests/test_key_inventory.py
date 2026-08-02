@@ -2,11 +2,13 @@ import io
 from unittest.mock import patch
 
 from openpyxl import Workbook
+from starlette.requests import Request
 
 from tests.postgres_test_case import PostgreSQLTestCase
 
 import app.db as database
-from app.repositories import key_repository
+from app.repositories import key_repository, panel_repository
+from app.routers.keys import key_assignment_update_route
 from app.services.importer import import_keys_file
 from app.services.writer import write_key_to_panels
 
@@ -22,6 +24,44 @@ class KeyInventoryTests(PostgreSQLTestCase):
             hex_value,
             "Тест",
         )
+
+    @staticmethod
+    def _write_request() -> Request:
+        return Request(
+            {
+                "type": "http",
+                "method": "POST",
+                "path": "/message/write",
+                "headers": [],
+                "client": ("127.0.0.1", 50000),
+                "session": {
+                    "user": {
+                        "login": "admin",
+                        "full_name": "Администратор",
+                        "role": "admin",
+                    }
+                },
+            }
+        )
+
+    @staticmethod
+    def _success_result():
+        return {
+            "ok": True,
+            "written": True,
+            "status": "SUCCESS",
+            "response": "Ключ успешно записан",
+            "message": "Ключ успешно записан",
+        }
+
+    @staticmethod
+    def _create_panel(address: str, entrance: str, suffix: int) -> dict:
+        mac = f"08:13:CD:20:00:{suffix:02X}"
+        panel_repository.create_or_update_panel(address, entrance, mac=mac)
+        with database.db() as conn:
+            return dict(
+                conn.execute("SELECT * FROM panels WHERE mac = ?", (mac,)).fetchone()
+            )
 
     def test_number_is_unique_only_inside_type(self):
         blue_id = key_repository.create_key_type("Синий", "#168EE8")
@@ -259,6 +299,109 @@ class KeyInventoryTests(PostgreSQLTestCase):
         self.assertEqual(len(assignments), 1)
         self.assertEqual(assignments[0]["active"], 0)
 
+    def test_assignment_can_be_edited_without_panel_requests_and_keeps_history(self):
+        key_type_id = key_repository.create_key_type("Оранжевый", "#FF982A")
+        key = self._create_key(key_type_id, "003602", "A0F0BD52")
+        with database.db() as conn:
+            conn.execute(
+                """
+                INSERT INTO panels(address, entrance, name, mac, enabled)
+                VALUES ('ул. Голубые Дали 80', 'подъезд 1', 'Голубые Дали 80',
+                        '08:13:CD:80:00:01', 1)
+                """
+            )
+        key_repository.set_key_assignment(
+            key["id"],
+            "resident",
+            address="ул. Голубые Дали 80",
+            assigned_by="Импорт",
+            note="Перенос старой базы",
+        )
+        request = Request(
+            {
+                "type": "http",
+                "method": "POST",
+                "path": f"/keys/{key['id']}/assignment",
+                "headers": [],
+                "session": {
+                    "user": {
+                        "login": "admin",
+                        "full_name": "Соловьёв Евгений",
+                        "role": "admin",
+                    }
+                },
+                "client": ("127.0.0.1", 12345),
+            }
+        )
+
+        with patch("app.services.writer.crm_add_key") as crm_add_key:
+            response = key_assignment_update_route(
+                request,
+                key["id"],
+                assignment_type="uk",
+                address="ул. Голубые Дали 80",
+                apartment="",
+                owner_name="УК Голубые Дали",
+                reason="Исправление владельца при переносе старой базы",
+            )
+
+        crm_add_key.assert_not_called()
+        self.assertEqual(response.status_code, 303)
+        updated = key_repository.get_key(key["id"])
+        assignments = key_repository.get_key_assignments(key["id"])
+        self.assertEqual(updated["status"], "assigned_uk")
+        self.assertEqual(updated["number"], "003602")
+        self.assertEqual(updated["hex_value"], "A0F0BD52")
+        self.assertEqual(len(assignments), 2)
+        self.assertEqual(assignments[0]["assignment_type"], "uk")
+        self.assertEqual(assignments[0]["address"], "ул. Голубые Дали 80")
+        self.assertEqual(assignments[0]["apartment"], "")
+        self.assertEqual(assignments[0]["note"], "УК Голубые Дали")
+        self.assertEqual(assignments[0]["active"], 1)
+        self.assertEqual(assignments[1]["assignment_type"], "resident")
+        self.assertEqual(assignments[1]["active"], 0)
+        with database.db() as conn:
+            operation = dict(
+                conn.execute(
+                    """
+                    SELECT action, details, address, apartment, username
+                    FROM operation_log
+                    WHERE key_id = ? AND action = 'key_assignment_update'
+                    """,
+                    (key["id"],),
+                ).fetchone()
+            )
+        self.assertIn("Жилец, ул. Голубые Дали 80, квартира не указана", operation["details"])
+        self.assertIn("УК, ул. Голубые Дали 80, квартира не указана, УК Голубые Дали", operation["details"])
+        self.assertIn("Исправление владельца", operation["details"])
+        self.assertEqual(operation["address"], "ул. Голубые Дали 80")
+        self.assertEqual(operation["apartment"], "")
+        self.assertEqual(operation["username"], "admin")
+
+    def test_assignment_edit_rejects_unknown_address_without_changing_current_row(self):
+        key_type_id = key_repository.create_key_type("Синий", "#168EE8")
+        key = self._create_key(key_type_id, "42", "AABB0042")
+        key_repository.set_key_assignment(
+            key["id"],
+            "resident",
+            address="ул. Существующая 1",
+            apartment="7",
+        )
+
+        with self.assertRaisesRegex(ValueError, "Адрес не найден"):
+            key_repository.update_key_assignment(
+                key["id"],
+                "other",
+                address="ул. Несуществующая 99",
+                owner_name="Техническая служба",
+                reason="Проверка",
+            )
+
+        assignments = key_repository.get_key_assignments(key["id"])
+        self.assertEqual(len(assignments), 1)
+        self.assertEqual(assignments[0]["active"], 1)
+        self.assertEqual(assignments[0]["assignment_type"], "resident")
+
     def test_excel_import_rejects_rows_without_hex(self):
         workbook = Workbook()
         blue = workbook.active
@@ -373,7 +516,7 @@ class KeyInventoryTests(PostgreSQLTestCase):
         self.assertEqual(uk_assignments_after_release, 0)
         self.assertEqual(key_repository.get_key(key["id"])["status"], "free")
 
-    def test_panel_id_and_previous_address_remain_searchable_in_history(self):
+    def test_released_assignment_is_not_returned_as_current_search_result(self):
         key_type_id = key_repository.create_key_type("Синий", "#168EE8")
         key = self._create_key(key_type_id, 1523, "363FFAD7")
 
@@ -412,8 +555,330 @@ class KeyInventoryTests(PostgreSQLTestCase):
             ).fetchone()[0]
 
         self.assertEqual(panel_id, 42)
-        self.assertEqual(key_repository.get_keys_page(query="Тепличная 63")["total"], 1)
-        self.assertEqual(key_repository.get_keys_page(query="кв 15")["total"], 1)
+        self.assertEqual(key_repository.get_keys_page(query="Тепличная 63")["total"], 0)
+        self.assertEqual(key_repository.get_keys_page(query="кв 15")["total"], 0)
+
+    def _create_assignment_search_fixture(self):
+        blue_id = key_repository.create_key_type("Синий", "#168EE8")
+        orange_id = key_repository.create_key_type("Оранжевый", "#FF982A")
+        exact = self._create_key(blue_id, 7001, "AA000001")
+        other_flat = self._create_key(blue_id, 7002, "AA000002")
+        other_house = self._create_key(orange_id, 7003, "AA000003")
+        misleading_number = self._create_key(blue_id, 32, "AA000032")
+        uk_key = self._create_key(orange_id, 7004, "AA000004")
+        employee_key = self._create_key(blue_id, 7005, "AA000005")
+
+        key_repository.set_key_assignment(
+            exact["id"],
+            "resident",
+            address="ул. Тепличная, д. 71/5",
+            apartment="32",
+            assigned_by="Тест",
+        )
+        key_repository.set_key_assignment(
+            other_flat["id"],
+            "resident",
+            address="Тепличная 71 корпус 5",
+            apartment="33",
+            assigned_by="Тест",
+        )
+        key_repository.set_key_assignment(
+            other_house["id"],
+            "resident",
+            address="Тепличная 71",
+            apartment="32",
+            assigned_by="Тест",
+        )
+        with database.db() as conn:
+            uk_group_id = conn.execute(
+                "INSERT INTO uk_groups(name) VALUES ('УК Малышева')"
+            ).lastrowid
+            employee_id = conn.execute(
+                "INSERT INTO employees(full_name) VALUES ('Иванов Сергей Петрович')"
+            ).lastrowid
+        key_repository.set_key_assignment(
+            uk_key["id"],
+            "uk",
+            address="ул. Малышева 7",
+            uk_group_id=uk_group_id,
+            assigned_by="Тест",
+            note="УК Малышева",
+        )
+        key_repository.set_key_assignment(
+            employee_key["id"],
+            "employee",
+            employee_id=employee_id,
+            assigned_by="Тест",
+        )
+        return {
+            "blue_id": blue_id,
+            "orange_id": orange_id,
+            "exact": exact,
+            "other_flat": other_flat,
+            "other_house": other_house,
+            "misleading_number": misleading_number,
+            "uk_key": uk_key,
+            "employee_key": employee_key,
+        }
+
+    def test_key_register_searches_number_and_hex(self):
+        fixture = self._create_assignment_search_fixture()
+
+        by_number = key_repository.get_keys_page(query="7001")
+        by_hex = key_repository.get_keys_page(query="aa:00:00:01")
+
+        self.assertEqual([item["id"] for item in by_number["items"]], [fixture["exact"]["id"]])
+        self.assertEqual([item["id"] for item in by_hex["items"]], [fixture["exact"]["id"]])
+
+    def test_key_register_searches_exact_house(self):
+        fixture = self._create_assignment_search_fixture()
+
+        result = key_repository.get_keys_page(query="ул Тепличная дом 71/5")
+
+        self.assertEqual(
+            {item["id"] for item in result["items"]},
+            {fixture["exact"]["id"], fixture["other_flat"]["id"]},
+        )
+
+    def test_key_register_requires_exact_apartment_with_address(self):
+        fixture = self._create_assignment_search_fixture()
+
+        result = key_repository.get_keys_page(query="Тепличная 71/5 квартира №32")
+
+        self.assertEqual([item["id"] for item in result["items"]], [fixture["exact"]["id"]])
+        self.assertEqual(result["items"][0]["assignment_address"], "ул. Тепличная, д. 71/5")
+        self.assertEqual(result["items"][0]["assignment_apartment"], "32")
+
+    def test_key_register_searches_only_by_apartment(self):
+        fixture = self._create_assignment_search_fixture()
+
+        result = key_repository.get_keys_page(query="кв. 32")
+
+        self.assertEqual(
+            {item["id"] for item in result["items"]},
+            {fixture["exact"]["id"], fixture["other_house"]["id"]},
+        )
+        self.assertNotIn(fixture["misleading_number"]["id"], {item["id"] for item in result["items"]})
+
+    def test_key_register_searches_assignment_owner_and_uk(self):
+        fixture = self._create_assignment_search_fixture()
+
+        result = key_repository.get_keys_page(query="УК Малышева")
+
+        self.assertEqual([item["id"] for item in result["items"]], [fixture["uk_key"]["id"]])
+        self.assertEqual(result["items"][0]["assignment_type_name"], "УК")
+        self.assertEqual(result["items"][0]["uk_name"], "УК Малышева")
+
+        employee_result = key_repository.get_keys_page(query="Иванов Сергей")
+        self.assertEqual(
+            [item["id"] for item in employee_result["items"]],
+            [fixture["employee_key"]["id"]],
+        )
+        self.assertEqual(
+            employee_result["items"][0]["assignment_text"],
+            "Иванов Сергей Петрович",
+        )
+
+    def test_assignment_search_combines_with_type_and_status_filters(self):
+        fixture = self._create_assignment_search_fixture()
+
+        blue = key_repository.get_keys_page(
+            query="Тепличная 71/5",
+            key_type_id=fixture["blue_id"],
+        )
+        orange = key_repository.get_keys_page(
+            query="Тепличная 71/5",
+            key_type_id=fixture["orange_id"],
+        )
+        issued = key_repository.get_keys_page(
+            query="Тепличная 71/5 кв32",
+            status="issued_resident",
+        )
+        free = key_repository.get_keys_page(
+            query="Тепличная 71/5 кв32",
+            availability="free",
+        )
+
+        self.assertEqual(blue["total"], 2)
+        self.assertEqual(orange["total"], 0)
+        self.assertEqual([item["id"] for item in issued["items"]], [fixture["exact"]["id"]])
+        self.assertEqual(free["total"], 0)
+
+    def test_free_key_is_written_and_receives_assignment(self):
+        type_id = key_repository.create_key_type("Синий", "#168EE8")
+        key = self._create_key(type_id, 8101, "CC008101")
+        panel = self._create_panel("Тестовая 10", "Подъезд 1", 1)
+
+        with patch(
+            "app.services.writer.crm_add_key",
+            return_value=self._success_result(),
+        ) as crm:
+            results = write_key_to_panels(
+                "message",
+                key,
+                [panel],
+                flat_num="12",
+                address="Тестовая 10",
+                request=self._write_request(),
+                assignment_type="resident",
+                write_option="write_free_key",
+            )
+
+        crm.assert_called_once()
+        self.assertEqual(results[0]["status"], "SUCCESS")
+        current = key_repository.get_key_assignments(key["id"])[0]
+        self.assertTrue(current["active"])
+        self.assertEqual(current["address"], "Тестовая 10")
+        self.assertEqual(current["apartment"], "12")
+
+    def test_used_key_can_be_reassigned_without_removing_old_panels(self):
+        type_id = key_repository.create_key_type("Оранжевый", "#FF982A")
+        key = self._create_key(type_id, 8102, "CC008102")
+        panel = self._create_panel("Новая 20", "Подъезд 2", 2)
+        key_repository.set_key_assignment(
+            key["id"], "resident", address="Старая 1", apartment="4"
+        )
+
+        with patch(
+            "app.services.writer.crm_add_key",
+            return_value=self._success_result(),
+        ):
+            write_key_to_panels(
+                "message",
+                key_repository.get_key(key["id"]),
+                [panel],
+                flat_num="8",
+                address="Новая 20",
+                request=self._write_request(),
+                assignment_type="resident",
+                assignment_policy="replace",
+                write_option="reassign_to_new_address",
+                previous_assignment="Жилец, Старая 1, кв. 4",
+            )
+
+        assignments = key_repository.get_key_assignments(key["id"])
+        self.assertEqual(len(assignments), 2)
+        self.assertEqual(assignments[0]["address"], "Новая 20")
+        self.assertTrue(assignments[0]["active"])
+        self.assertFalse(assignments[1]["active"])
+
+    def test_used_key_can_add_panels_without_changing_assignment(self):
+        type_id = key_repository.create_key_type("Служебный", "#9B72E8")
+        key = self._create_key(type_id, 8103, "CC008103")
+        panel = self._create_panel("Другой дом 3", "Вход", 3)
+        key_repository.set_key_assignment(
+            key["id"], "uk", address="Дом УК 1", note="УК Тест"
+        )
+
+        with patch(
+            "app.services.writer.crm_add_key",
+            return_value=self._success_result(),
+        ):
+            write_key_to_panels(
+                "message",
+                key_repository.get_key(key["id"]),
+                [panel],
+                flat_num="15",
+                address="Другой дом 3",
+                request=self._write_request(),
+                assignment_policy="preserve",
+                write_option="add_selected_panels",
+                previous_assignment="УК, Дом УК 1, УК Тест",
+            )
+
+        assignments = key_repository.get_key_assignments(key["id"])
+        self.assertEqual(len(assignments), 1)
+        self.assertEqual(assignments[0]["assignment_type"], "uk")
+        self.assertEqual(assignments[0]["address"], "Дом УК 1")
+        context = key_repository.get_key_write_contexts([key["id"]])[key["id"]]
+        self.assertEqual(context["panel_ids"], [panel["id"]])
+
+    def test_key_already_on_one_selected_panel_writes_only_missing_panel(self):
+        type_id = key_repository.create_key_type("Синий", "#168EE8")
+        key = self._create_key(type_id, 8104, "CC008104")
+        first = self._create_panel("Общий дом 4", "Подъезд 1", 4)
+        second = self._create_panel("Общий дом 4", "Подъезд 2", 5)
+
+        with patch(
+            "app.services.writer.crm_add_key",
+            return_value=self._success_result(),
+        ):
+            write_key_to_panels(
+                "message", key, [first], request=self._write_request()
+            )
+        context = key_repository.get_key_write_contexts([key["id"]])[key["id"]]
+        with patch(
+            "app.services.writer.crm_add_key",
+            return_value=self._success_result(),
+        ) as crm:
+            results = write_key_to_panels(
+                "message",
+                key_repository.get_key(key["id"]),
+                [first, second],
+                request=self._write_request(),
+                assignment_policy="preserve",
+                known_panel_ids=set(context["panel_ids"]),
+                write_option="add_selected_panels",
+            )
+
+        crm.assert_called_once_with(second["mac"], key["hex_value"], "0", 1)
+        self.assertEqual(
+            [result["status"] for result in results],
+            ["ALREADY_ON_PANEL", "SUCCESS"],
+        )
+
+    def test_key_on_all_selected_panels_sends_no_repeated_request(self):
+        type_id = key_repository.create_key_type("Синий", "#168EE8")
+        key = self._create_key(type_id, 8105, "CC008105")
+        panel = self._create_panel("Общий дом 5", "Подъезд 1", 6)
+        with patch(
+            "app.services.writer.crm_add_key",
+            return_value=self._success_result(),
+        ):
+            write_key_to_panels(
+                "message", key, [panel], request=self._write_request()
+            )
+        context = key_repository.get_key_write_contexts([key["id"]])[key["id"]]
+
+        with patch("app.services.writer.crm_add_key") as crm:
+            results = write_key_to_panels(
+                "message",
+                key_repository.get_key(key["id"]),
+                [panel],
+                request=self._write_request(),
+                assignment_policy="preserve",
+                known_panel_ids=set(context["panel_ids"]),
+                write_option="add_selected_panels",
+            )
+
+        crm.assert_not_called()
+        self.assertEqual(results[0]["status"], "ALREADY_ON_PANEL")
+
+    def test_repeated_additional_panel_write_is_idempotent(self):
+        type_id = key_repository.create_key_type("Уникальный", "#22B889")
+        key = self._create_key(type_id, 8106, "CC008106")
+        panel = self._create_panel("Повторная 6", "Вход", 7)
+        with patch(
+            "app.services.writer.crm_add_key",
+            return_value=self._success_result(),
+        ) as crm:
+            first = write_key_to_panels(
+                "message", key, [panel], request=self._write_request()
+            )
+            known = key_repository.get_key_write_contexts([key["id"]])[key["id"]]
+            second = write_key_to_panels(
+                "message",
+                key_repository.get_key(key["id"]),
+                [panel],
+                request=self._write_request(),
+                assignment_policy="preserve",
+                known_panel_ids=set(known["panel_ids"]),
+                write_option="add_selected_panels",
+            )
+
+        self.assertEqual(crm.call_count, 1)
+        self.assertEqual(first[0]["status"], "SUCCESS")
+        self.assertEqual(second[0]["status"], "ALREADY_ON_PANEL")
 
 
 if __name__ == "__main__":

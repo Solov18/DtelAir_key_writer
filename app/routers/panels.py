@@ -32,6 +32,7 @@ from app.repositories.system_settings_repository import (
 from app.services import import_panels_excel
 from app.services.audit import log_event
 from app.services.auth import get_current_user
+from app.services.excel_export import excel_safe_value
 from app.services.panel_api import (
     PanelApiError,
     check_panel,
@@ -435,8 +436,9 @@ def panels_export():
             [
                 panel["id"], panel["address"], panel["entrance"], panel["name"],
                 panel["ip"], panel["mac"], panel["status_name"], panel.get("supply_voltage", ""),
-                panel.get("device_model", ""), panel.get("firmware_version", ""), panel.get("last_checked_at", ""),
-                panel.get("last_online_at", ""),
+                panel.get("device_model", ""), panel.get("firmware_version", ""),
+                excel_safe_value(panel.get("last_checked_at", "")),
+                excel_safe_value(panel.get("last_online_at", "")),
             ]
         )
     sheet.freeze_panes = "A2"

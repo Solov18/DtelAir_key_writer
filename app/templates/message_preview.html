@@ -138,7 +138,12 @@
                     <thead><tr><th>Номер</th><th>Тип</th><th>HEX</th><th>Состояние</th></tr></thead>
                     <tbody>
                     {% for key in keys %}
-                    <tr>
+                    <tr
+                        class="message-key-check"
+                        data-key-used="{{ 'true' if key.write_context.is_used else 'false' }}"
+                        data-key-conflict="{{ 'true' if key.ambiguous else 'false' }}"
+                        data-known-panels="{{ key.write_context.known_panel_ids_csv }}"
+                    >
                         <td><b>№{{ key.number }}</b></td>
                         <td>
                             {% if key.ambiguous %}
@@ -151,11 +156,42 @@
                         </td>
                         <td>{{ key.item.hex_value if key.item else '—' }}</td>
                         <td>
-                            {% if key.ambiguous %}<span class="badge warning">Нужен тип</span>
-                            {% elif key.item %}<span class="badge success">Готов</span>
+                            {% if key.ambiguous %}<span class="badge warning">Конфликт номера или HEX</span>
+                            {% elif key.item %}
+                            <span
+                                class="badge {% if key.write_context.write_state == 'free' %}success{% elif key.write_context.write_state in ('partial_selected', 'used') %}warning{% else %}info{% endif %}"
+                                data-key-state-label
+                            >
+                                {% if key.write_context.write_state == 'free' %}Свободен — готов к записи
+                                {% elif key.write_context.write_state == 'all_selected' %}Уже записан на выбранной панели
+                                {% elif key.write_context.write_state == 'partial_selected' %}Частично записан на выбранных панелях
+                                {% else %}Уже используется{% endif %}
+                            </span>
                             {% else %}<span class="badge error">Не найден</span>{% endif %}
                         </td>
                     </tr>
+                    {% if key.item and key.write_context.is_used %}
+                    <tr class="message-key-assignment-row">
+                        <td colspan="4">
+                            <div class="message-key-assignment">
+                                <div>
+                                    <b>Ключ уже используется</b>
+                                    <span>{{ key.write_context.description }}</span>
+                                </div>
+                                <div>
+                                    <b>Уже записан на панелях</b>
+                                    {% if key.write_context.panels %}
+                                    <ul>
+                                        {% for assigned_panel in key.write_context.panels %}
+                                        <li>{{ assigned_panel.address }}{% if assigned_panel.entrance %} · {{ assigned_panel.entrance }}{% elif assigned_panel.name %} · {{ assigned_panel.name }}{% endif %}</li>
+                                        {% endfor %}
+                                    </ul>
+                                    {% else %}<span>Подтверждённых записей на панелях в журнале нет</span>{% endif %}
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endif %}
                     {% endfor %}
                     </tbody>
                 </table>
@@ -189,14 +225,35 @@
                 Исправьте отмеченные выше данные и обновите подбор.
                 {% endif %}
             </span>
+            {% if has_used_keys %}
+            <fieldset class="message-write-options" form="messageWriteForm">
+                <legend>Выберите действие для уже используемых ключей</legend>
+                <label class="message-write-choice">
+                    <input type="radio" name="occupied_action" value="reassign" form="messageWriteForm">
+                    <span>
+                        <b>Переназначить на новый адрес</b>
+                        <small>В CRM ключ будет считаться выданным по новому адресу и квартире. Прежнее назначение останется в истории. На выбранные панели ключ запишется только там, где его ещё нет. Со старых панелей ключ не удаляется.</small>
+                    </span>
+                </label>
+                <label class="message-write-choice">
+                    <input type="radio" name="occupied_action" value="add_panels" form="messageWriteForm">
+                    <span>
+                        <b>Добавить ещё на выбранные панели</b>
+                        <small>Сохранить текущее назначение и добавить доступ только на недостающие панели.</small>
+                    </span>
+                </label>
+            </fieldset>
+            {% endif %}
         </div>
         <form
             method="post"
             action="/message/write"
             id="messageWriteForm"
+            data-no-loader
             data-can-write="{{ 'true' if can_write else 'false' }}"
             data-apartment="{{ parsed.apartment }}"
             data-key-count="{{ keys|length }}"
+            data-has-used-keys="{{ 'true' if has_used_keys else 'false' }}"
         >
             <input type="hidden" name="source_text" value="{{ text }}">
             <input type="hidden" name="address" value="{{ parsed.address }}">
@@ -206,21 +263,23 @@
             <input type="hidden" name="key_type_ids" value="{{ key.item.key_type_id if key.item and key.item.key_type_id else 0 }}" data-key-type-for="{{ key.number }}">
             {% endfor %}
             <div id="selectedPanelsContainer"></div>
-            <button
-                type="submit"
-                class="btn"
-                id="messageWriteButton"
-                data-ready-label="Записать на выбранные панели"
-                {% if not can_write or has_unresolved_types %}disabled{% endif %}
-            >
-                Записать на выбранные панели
-            </button>
-            <a class="btn btn-ghost" href="{{ back_url }}">Исправить сообщение</a>
+            <div class="message-final-actions">
+                <a class="btn btn-ghost" href="{{ back_url }}">Исправить сообщение</a>
+                <button
+                    type="submit"
+                    class="btn"
+                    id="messageWriteButton"
+                    data-ready-label="Записать на выбранные панели"
+                    {% if not can_write or has_unresolved_types or has_used_keys %}disabled{% endif %}
+                >
+                    Записать на выбранные панели
+                </button>
+            </div>
         </form>
     </section>
 </div>
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/message.js?v=2"></script>
+<script src="/static/js/message.js?v=6"></script>
 {% endblock %}

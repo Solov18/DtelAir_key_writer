@@ -9,6 +9,7 @@ from app.services import (
     is_ambiguous_key,
     write_key_to_panels,
 )
+from app.response_utils import async_document_response
 from app.templates_config import templates
 
 router = APIRouter()
@@ -152,7 +153,7 @@ def manual_write_execute(
             }
         )
 
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         "write_results.html",
         {
             "request": request,
@@ -162,3 +163,4 @@ def manual_write_execute(
             "back_url": "/write/manual",
         },
     )
+    return async_document_response(request, response, url="/write/manual")

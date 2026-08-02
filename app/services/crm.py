@@ -1,11 +1,16 @@
 import json
+import logging
 import re
 from html.parser import HTMLParser
 from threading import RLock
+from time import monotonic
 
 import requests
 
 from app.settings import settings
+
+
+logger = logging.getLogger("uvicorn.error")
 
 
 class CrmAuthError(RuntimeError):
@@ -160,7 +165,18 @@ def _reset_session() -> None:
     _crm_session_authenticated = False
 
 
-def _login(session: requests.Session) -> None:
+def _remaining_timeout(deadline: float | None = None) -> float:
+    """Return a bounded timeout and stop a multi-step CRM call at its deadline."""
+
+    if deadline is None:
+        return max(1, float(settings.request_timeout))
+    remaining = deadline - monotonic()
+    if remaining <= 0:
+        raise requests.Timeout("CRM request deadline exceeded")
+    return max(0.1, remaining)
+
+
+def _login(session: requests.Session, *, deadline: float | None = None) -> None:
     global _crm_session_authenticated
 
     login_page = session.get(
@@ -171,7 +187,7 @@ def _login(session: requests.Session) -> None:
             "Origin": None,
             "X-Requested-With": None,
         },
-        timeout=settings.request_timeout,
+        timeout=_remaining_timeout(deadline),
     )
 
     if login_page.status_code != 200:
@@ -193,7 +209,7 @@ def _login(session: requests.Session) -> None:
             "rememberMe": True,
         },
         headers={"X-CSRF-Token": csrf_token},
-        timeout=settings.request_timeout,
+        timeout=_remaining_timeout(deadline),
         allow_redirects=False,
     )
 
@@ -212,7 +228,7 @@ def _login(session: requests.Session) -> None:
     _crm_session_authenticated = True
 
 
-def _get_session() -> requests.Session:
+def _get_session(*, deadline: float | None = None) -> requests.Session:
     global _crm_session
 
     if _crm_session is None:
@@ -227,7 +243,7 @@ def _get_session() -> requests.Session:
         )
 
     if not _crm_session_authenticated:
-        _login(_crm_session)
+        _login(_crm_session, deadline=deadline)
 
     return _crm_session
 
@@ -262,11 +278,17 @@ def _send_create_key(
     session: requests.Session,
     url: str,
     payload: dict,
+    *,
+    timeout: float | None = None,
 ) -> requests.Response:
     return session.post(
         url,
         json=payload,
-        timeout=settings.request_timeout,
+        timeout=(
+            max(0.1, float(timeout))
+            if timeout is not None
+            else max(1, float(settings.request_timeout))
+        ),
         allow_redirects=False,
     )
 
@@ -279,7 +301,7 @@ def _send_delete_key(
     return session.post(
         url,
         json=payload,
-        timeout=settings.request_timeout,
+        timeout=max(1, float(settings.request_timeout)),
         allow_redirects=False,
     )
 
@@ -512,17 +534,46 @@ def crm_add_key(
             ),
         )
 
-    with _crm_lock:
+    operation_timeout = max(1, float(settings.request_timeout))
+    deadline = monotonic() + operation_timeout
+    logger.info(
+        "key_write.crm.start mac=%s timeout_seconds=%s",
+        clean_mac,
+        operation_timeout,
+    )
+    if not _crm_lock.acquire(timeout=operation_timeout):
+        logger.warning("key_write.crm.lock_timeout mac=%s", clean_mac)
+        return _result(
+            ok=False,
+            status="TIMEOUT",
+            response="Превышено время ожидания очереди записи в CRM",
+        )
+
+    try:
         try:
-            session = _get_session()
-            response = _send_create_key(session, url, payload)
+            logger.info("key_write.crm.session mac=%s", clean_mac)
+            session = _get_session(deadline=deadline)
+            logger.info("key_write.crm.request mac=%s", clean_mac)
+            response = _send_create_key(
+                session,
+                url,
+                payload,
+                timeout=_remaining_timeout(deadline),
+            )
 
             if _is_auth_response(response) and _has_login_credentials():
+                logger.info("key_write.crm.reauth mac=%s", clean_mac)
                 _reset_session()
-                session = _get_session()
-                response = _send_create_key(session, url, payload)
+                session = _get_session(deadline=deadline)
+                response = _send_create_key(
+                    session,
+                    url,
+                    payload,
+                    timeout=_remaining_timeout(deadline),
+                )
 
             if _is_auth_response(response):
+                logger.warning("key_write.crm.auth_error mac=%s", clean_mac)
                 return _result(
                     ok=False,
                     status="AUTH_REQUIRED",
@@ -533,6 +584,11 @@ def crm_add_key(
                 )
 
             if not response.ok:
+                logger.warning(
+                    "key_write.crm.http_error mac=%s status_code=%s",
+                    clean_mac,
+                    response.status_code,
+                )
                 return _result(
                     ok=False,
                     status=f"HTTP_{response.status_code}",
@@ -542,6 +598,7 @@ def crm_add_key(
             try:
                 data = response.json()
             except ValueError:
+                logger.warning("key_write.crm.invalid_response mac=%s", clean_mac)
                 return _result(
                     ok=False,
                     status="INVALID_RESPONSE",
@@ -550,11 +607,26 @@ def crm_add_key(
 
             message = _message_text(data.get("message"))
             ok = data.get("result") is True
+            normalized_message = message.casefold().replace("ё", "е")
+            already_exists = (
+                not ok
+                and (
+                    "уже существует" in normalized_message
+                    or "уже добавлен" in normalized_message
+                    or "already exists" in normalized_message
+                )
+            )
+            status = "SUCCESS" if ok else "ALREADY_EXISTS" if already_exists else "CRM_ERROR"
+            logger.info(
+                "key_write.crm.response mac=%s status=%s",
+                clean_mac,
+                status,
+            )
 
             return _result(
                 ok=ok,
                 written=ok,
-                status="SUCCESS" if ok else "CRM_ERROR",
+                status=status,
                 response=message or (
                     "Ключ успешно записан"
                     if ok
@@ -563,26 +635,33 @@ def crm_add_key(
             )
 
         except CrmAuthError as error:
+            logger.warning("key_write.crm.auth_exception mac=%s", clean_mac)
             return _result(
                 ok=False,
                 status="AUTH_REQUIRED",
                 response=str(error),
             )
         except requests.Timeout:
+            logger.warning("key_write.crm.timeout mac=%s", clean_mac)
             return _result(
                 ok=False,
                 status="TIMEOUT",
                 response="CRM не ответила за отведённое время",
             )
-        except requests.RequestException as error:
+        except requests.RequestException:
+            logger.warning("key_write.crm.connection_error mac=%s", clean_mac)
             return _result(
                 ok=False,
                 status="CONNECTION_ERROR",
-                response=f"Ошибка соединения с CRM: {error}",
+                response="CRM или панель недоступны",
             )
-        except Exception as error:
+        except Exception:
+            logger.exception("key_write.crm.unexpected_error mac=%s", clean_mac)
             return _result(
                 ok=False,
                 status="ERROR",
-                response=str(error),
+                response="Непредвиденная ошибка записи ключа",
             )
+    finally:
+        _crm_lock.release()
+        logger.info("key_write.crm.finish mac=%s", clean_mac)

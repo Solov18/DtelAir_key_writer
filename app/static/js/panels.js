@@ -79,6 +79,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function statusMarkup(panel) {
         return `<span class="panel-status is-${panel.status_tone}"><i></i>${panel.status_name}</span>${
+            panel.sip_registered === false || panel.sip_registered === 0
+                ? '<small class="panel-sip-flag">SIP не зарегистрирован</small>'
+                : ""
+        }${
             panel.is_stale ? '<small class="panel-stale-flag">Данные устарели</small>' : ""
         }`;
     }
@@ -125,6 +129,14 @@ document.addEventListener("DOMContentLoaded", () => {
         });
         const power = document.querySelector('[data-inspector-field="supply_voltage"]');
         if (power) power.className = `is-${panel.voltage_tone}`;
+        const sip = document.querySelector('[data-inspector-field="sip_registered"]');
+        if (sip) {
+            const failed = panel.sip_registered === false || panel.sip_registered === 0;
+            sip.textContent = panel.sip_registered === null || panel.sip_registered === undefined
+                ? "—"
+                : failed ? "Нет — требуется проверка" : "Есть";
+            sip.classList.toggle("is-sip-error", failed);
+        }
         const error = document.querySelector('[data-inspector-field="last_error"]');
         if (error) {
             error.textContent = panel.last_error || "";
@@ -133,7 +145,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function applyStatistics(statistics) {
-        ["total", "online", "offline", "errors", "disabled", "unchecked", "stale"].forEach((name) => {
+        ["total", "online", "offline", "errors", "disabled", "sip_failed", "unchecked", "stale"].forEach((name) => {
             const element = document.querySelector(`[data-stat="${name}"]`);
             if (element) element.textContent = statistics[name] ?? 0;
         });

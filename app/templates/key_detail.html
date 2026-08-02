@@ -71,11 +71,48 @@
                 </header>
                 {% if key.assignment_type %}
                 <div class="key-card-assignment-body">
-                    <span class="key-assignment-kind">{% if key.assignment_type == 'resident' %}Жилец{% elif key.assignment_type == 'employee' %}Сотрудник{% else %}УК{% endif %}</span>
-                    <b>{{ key.assignment_text }}</b>
+                    <span class="key-assignment-kind">{{ assignment_type_names.get(key.assignment_type, key.assignment_type) }}</span>
+                    {% if key.assignment_note and key.assignment_type != 'resident' %}<b>{{ key.assignment_note }}</b>{% endif %}
+                    <span><strong>Адрес:</strong> {{ key.assignment_address or 'не указан' }}</span>
+                    <span><strong>Квартира:</strong> {{ key.assignment_apartment or 'не указана' }}</span>
                     <span>Назначен: {{ key.assigned_at or '—' }}</span>
-                    {% if key.assignment_note %}<p>{{ key.assignment_note }}</p>{% endif %}
+                    {% if key.assignment_note and key.assignment_type == 'resident' %}<p>{{ key.assignment_note }}</p>{% endif %}
                 </div>
+                <details class="key-assignment-edit" id="assignment-edit" {% if error %}open{% endif %}>
+                    <summary class="btn">Редактировать назначение</summary>
+                    <form method="post" action="/keys/{{ key.id }}/assignment" class="key-assignment-edit-form">
+                        <label>
+                            <span>Тип владельца</span>
+                            <select name="assignment_type" required>
+                                {% for value, label in assignment_type_names.items() %}
+                                <option value="{{ value }}" {% if value == key.assignment_type %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+                        <label>
+                            <span>Адрес</span>
+                            <input name="address" value="{{ key.assignment_address or '' }}" list="assignment-addresses" placeholder="Начните вводить существующий адрес" autocomplete="off" required>
+                            <small>Можно выбрать только адрес, уже существующий в CRM.</small>
+                        </label>
+                        <datalist id="assignment-addresses">
+                            {% for address in assignment_addresses %}<option value="{{ address }}"></option>{% endfor %}
+                        </datalist>
+                        <label>
+                            <span>Квартира</span>
+                            <input name="apartment" value="{{ key.assignment_apartment or '' }}" placeholder="Можно оставить пустой">
+                        </label>
+                        <label>
+                            <span>Название владельца или комментарий</span>
+                            <input name="owner_name" value="{{ key.employee_name or key.uk_name or (key.assignment_note if key.assignment_type in ('uk', 'contractor', 'other') else '') }}" placeholder="Например: УК Малышева или Техническая служба">
+                        </label>
+                        <label>
+                            <span>Причина изменения</span>
+                            <textarea name="reason" rows="3" placeholder="Почему изменяется текущее назначение" required></textarea>
+                        </label>
+                        <div class="key-assignment-edit-note">Изменяется только учётная запись в CRM. На физические панели запросы не отправляются.</div>
+                        <button class="btn" type="submit">Сохранить назначение</button>
+                    </form>
+                </details>
                 <form method="post" action="/keys/{{ key.id }}/release" class="key-card-assignment-action" data-confirm="Освободить ключ и завершить текущее назначение?">
                     <input name="note" value="Освобождён вручную" type="hidden">
                     <button class="btn btn-ghost" type="submit">Освободить ключ</button>
@@ -139,10 +176,17 @@
                 <div><small>Движение ключа</small><h2>История назначений</h2></div>
             </header>
             <div class="key-assignment-timeline">
+                {% for item in assignment_changes %}
+                <div class="is-change">
+                    <i></i>
+                    <span><b>Назначение изменено</b><small>{{ item.details_view or item.details }}</small><small>{{ item.created_at }} · {{ item.user_name }}</small></span>
+                    <em>Журнал</em>
+                </div>
+                {% endfor %}
                 {% for item in assignments %}
                 <div class="{% if item.active %}is-active{% endif %}">
                     <i></i>
-                    <span><b>{% if item.assignment_type == 'resident' %}{{ item.address }}{% if item.apartment %} / кв. {{ item.apartment }}{% endif %}{% elif item.assignment_type == 'employee' %}{{ item.employee_name or 'Сотрудник' }}{% else %}{{ item.uk_name or 'УК' }}{% endif %}</b><small>{{ item.assigned_at }}{% if item.released_at %} — {{ item.released_at }}{% endif %}</small></span>
+                    <span><b>{{ item.assignment_type_name }}{% if item.owner_name %} · {{ item.owner_name }}{% endif %}</b><small>{{ item.address or 'Адрес не указан' }}{% if item.apartment %} / кв. {{ item.apartment }}{% else %} / квартира не указана{% endif %}</small><small>{{ item.assigned_at }}{% if item.released_at %} — {{ item.released_at }}{% endif %}</small></span>
                     <em>{% if item.active %}Текущее{% else %}Завершено{% endif %}</em>
                 </div>
                 {% else %}

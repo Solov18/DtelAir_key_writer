@@ -52,6 +52,16 @@
                     <td>
                         {% if r.written %}
                         <span class="badge success">Записан</span>
+                        {% elif r.status == 'ALREADY_EXISTS' %}
+                        <span class="badge warning">Уже существует</span>
+                        {% elif r.status == 'ALREADY_ON_PANEL' %}
+                        <span class="badge info">Уже записан</span>
+                        {% elif r.status == 'TIMEOUT' %}
+                        <span class="badge error">Таймаут</span>
+                        {% elif r.status == 'CONNECTION_ERROR' %}
+                        <span class="badge error">Панель недоступна</span>
+                        {% elif r.status == 'AUTH_REQUIRED' %}
+                        <span class="badge error">Ошибка авторизации</span>
                         {% elif r.status == 'TRAINING_MODE' %}
                         <span class="badge dry-run">Учебная проверка</span>
                         {% elif r.status == 'DRY_RUN' %}
@@ -60,7 +70,11 @@
                         <span class="badge error">Ошибка</span>
                         {% endif %}
                     </td>
-                    <td>{{ r.response or r.message or 'Нет ответа' }}</td>
+                    <td>
+                        {{ r.response or r.message or 'Нет ответа' }}
+                        {% if r.persistence_error %}<br><span class="warn">{{ r.persistence_error }}</span>{% endif %}
+                        {% if r.assignment_error %}<br><span class="warn">{{ r.assignment_error }}</span>{% endif %}
+                    </td>
                 </tr>
                 {% endfor %}
             </table>

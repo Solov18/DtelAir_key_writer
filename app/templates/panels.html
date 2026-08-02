@@ -43,34 +43,39 @@
     {% endif %}
 
     <section class="panels-stats" aria-label="Статистика панелей">
-        <article class="panel-stat is-total">
+        <a class="panel-stat is-total {% if not filters.status %}is-active{% endif %}" href="/panels" aria-label="Показать все панели">
             <span class="panel-stat-icon"><svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="3"/><circle cx="12" cy="14" r="3"/><path d="M9 7h6"/></svg></span>
             <div><small>Всего панелей</small><b data-stat="total">{{ statistics.total }}</b></div>
-        </article>
-        <article class="panel-stat is-online">
+        </a>
+        <a class="panel-stat is-online {% if filters.status == 'online' %}is-active{% endif %}" href="/panels?status=online" aria-label="Показать панели в сети">
             <span class="panel-stat-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.6 2.6L16 9"/></svg></span>
             <div><small>В сети</small><b><span data-stat="online">{{ statistics.online }}</span> <em data-stat-percent="online">{{ statistics.online_percent }}%</em></b></div>
-        </article>
-        <article class="panel-stat is-offline">
+        </a>
+        <a class="panel-stat is-offline {% if filters.status == 'offline' %}is-active{% endif %}" href="/panels?status=offline" aria-label="Показать панели без связи">
             <span class="panel-stat-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 8l8 8M16 8l-8 8"/></svg></span>
             <div><small>Нет связи</small><b data-stat="offline">{{ statistics.offline }}</b></div>
-        </article>
-        <article class="panel-stat is-error">
+        </a>
+        <a class="panel-stat is-error {% if filters.status == 'error' %}is-active{% endif %}" href="/panels?status=error" aria-label="Показать панели с ошибками API">
             <span class="panel-stat-icon"><svg viewBox="0 0 24 24"><path d="M12 3 2.8 20h18.4Z"/><path d="M12 9v5M12 17h.01"/></svg></span>
             <div><small>Ошибки API</small><b data-stat="errors">{{ statistics.errors }}</b></div>
-        </article>
-        <article class="panel-stat is-disabled">
+        </a>
+        <a class="panel-stat is-sip {% if filters.status == 'sip_error' %}is-active{% endif %}"
+           href="/panels?status=sip_error" aria-label="Показать панели с проблемами SIP">
+            <span class="panel-stat-icon"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></svg></span>
+            <div><small>Проблемы SIP</small><b data-stat="sip_failed">{{ statistics.sip_failed }}</b></div>
+        </a>
+        <a class="panel-stat is-disabled {% if filters.status == 'disabled' %}is-active{% endif %}" href="/panels?status=disabled" aria-label="Показать отключённые панели">
             <span class="panel-stat-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M8 16h8"/></svg></span>
             <div><small>Отключены</small><b data-stat="disabled">{{ statistics.disabled }}</b></div>
-        </article>
-        <article class="panel-stat is-unchecked">
+        </a>
+        <a class="panel-stat is-unchecked {% if filters.status == 'unchecked' %}is-active{% endif %}" href="/panels?status=unchecked" aria-label="Показать непроверенные панели">
             <span class="panel-stat-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.8 9a2.4 2.4 0 1 1 3.7 2c-1 .6-1.5 1.1-1.5 2M12 17h.01"/></svg></span>
             <div><small>Не проверено</small><b data-stat="unchecked">{{ statistics.unchecked }}</b></div>
-        </article>
-        <article class="panel-stat is-stale">
+        </a>
+        <a class="panel-stat is-stale {% if filters.status == 'stale' %}is-active{% endif %}" href="/panels?status=stale" aria-label="Показать панели с устаревшими данными">
             <span class="panel-stat-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
             <div><small>Данные устарели</small><b data-stat="stale">{{ statistics.stale }}</b></div>
-        </article>
+        </a>
     </section>
 
     <section class="panel panels-workspace">
@@ -123,6 +128,8 @@
                     'online': 'В сети',
                     'offline': 'Нет связи',
                     'error': 'Ошибки API',
+                    'voltage_alert': 'Проблемы питания',
+                    'sip_error': 'Проблемы SIP',
                     'unchecked': 'Не проверено',
                     'stale': 'Данные устарели',
                     'disabled': 'Отключены'
@@ -131,6 +138,8 @@
                     ('online', 'В сети'),
                     ('offline', 'Нет связи'),
                     ('error', 'Ошибки API'),
+                    ('voltage_alert', 'Проблемы питания'),
+                    ('sip_error', 'Проблемы SIP'),
                     ('unchecked', 'Не проверено'),
                     ('stale', 'Данные устарели'),
                     ('disabled', 'Отключены')
@@ -170,6 +179,7 @@
                             <td><code class="panel-mac">{{ panel.mac }}</code></td>
                             <td data-panel-cell="status">
                                 <span class="panel-status is-{{ panel.status_tone }}"><i></i>{{ panel.status_name }}</span>
+                                {% if panel.sip_registered is not none and not panel.sip_registered %}<small class="panel-sip-flag">SIP не зарегистрирован</small>{% endif %}
                                 {% if panel.is_stale %}<small class="panel-stale-flag">Данные устарели</small>{% endif %}
                             </td>
                             <td class="panel-voltage is-{{ panel.voltage_tone }}" data-panel-cell="voltage">{% if panel.supply_voltage is not none %}{{ "%.2f"|format(panel.supply_voltage) }} В{% else %}—{% endif %}</td>
@@ -206,11 +216,19 @@
                     </span>
                     {% if panel_page.pages > 1 %}
                     <nav aria-label="Страницы панелей">
-                        {% if panel_page.page > 1 %}<a href="/panels?{{ base_query }}{% if base_query %}&{% endif %}page={{ panel_page.page - 1 }}">←</a>{% endif %}
+                        {% if panel_page.page > 1 %}
+                        <a href="/panels?{{ base_query }}{% if base_query %}&{% endif %}page=1" aria-label="Первая страница" title="Первая страница">«</a>
+                        <a href="/panels?{{ base_query }}{% if base_query %}&{% endif %}page={{ panel_page.page - 1 }}" aria-label="Предыдущая страница" title="Предыдущая страница">‹</a>
+                        {% endif %}
+                        {% if panel_page.page > 3 %}<span class="panels-page-gap" aria-hidden="true">…</span>{% endif %}
                         {% for number in range([1, panel_page.page - 2]|max, [panel_page.pages, panel_page.page + 2]|min + 1) %}
                             {% if number == panel_page.page %}<b>{{ number }}</b>{% else %}<a href="/panels?{{ base_query }}{% if base_query %}&{% endif %}page={{ number }}">{{ number }}</a>{% endif %}
                         {% endfor %}
-                        {% if panel_page.page < panel_page.pages %}<a href="/panels?{{ base_query }}{% if base_query %}&{% endif %}page={{ panel_page.page + 1 }}">→</a>{% endif %}
+                        {% if panel_page.page < panel_page.pages - 2 %}<span class="panels-page-gap" aria-hidden="true">…</span>{% endif %}
+                        {% if panel_page.page < panel_page.pages %}
+                        <a href="/panels?{{ base_query }}{% if base_query %}&{% endif %}page={{ panel_page.page + 1 }}" aria-label="Следующая страница" title="Следующая страница">›</a>
+                        <a href="/panels?{{ base_query }}{% if base_query %}&{% endif %}page={{ panel_page.pages }}" aria-label="Последняя страница" title="Последняя страница">»</a>
+                        {% endif %}
                     </nav>
                     {% endif %}
                 </footer>
@@ -253,7 +271,7 @@
                         <div class="panel-power-row"><dt>Напряжение питания</dt><dd><b class="is-{{ selected_panel.voltage_tone }}" data-inspector-field="supply_voltage">{% if selected_panel.supply_voltage is not none %}{{ "%.2f"|format(selected_panel.supply_voltage) }} В{% else %}—{% endif %}</b></dd></div>
                         <div><dt>Температура</dt><dd data-inspector-field="temperature">{% if selected_panel.temperature is not none %}{{ "%.1f"|format(selected_panel.temperature) }} °C{% else %}—{% endif %}</dd></div>
                         <div><dt>Время работы</dt><dd data-inspector-field="uptime_text">{{ selected_panel.uptime_text }}</dd></div>
-                        <div><dt>SIP-регистрация</dt><dd>{% if selected_panel.sip_registered is none %}—{% elif selected_panel.sip_registered %}Есть{% else %}Нет{% endif %}</dd></div>
+                        <div><dt>SIP-регистрация</dt><dd data-inspector-field="sip_registered" class="{% if selected_panel.sip_registered is not none and not selected_panel.sip_registered %}is-sip-error{% endif %}">{% if selected_panel.sip_registered is none %}—{% elif selected_panel.sip_registered %}Есть{% else %}Нет — требуется проверка{% endif %}</dd></div>
                         <div><dt>Последний онлайн</dt><dd data-inspector-field="last_online_at">{{ format_datetime(selected_panel.last_online_at) }}</dd></div>
                         <div><dt>Последняя проверка</dt><dd data-inspector-field="last_checked_at">{{ format_datetime(selected_panel.last_checked_at) }}</dd></div>
                     </dl>

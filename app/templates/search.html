@@ -63,8 +63,21 @@
     <div class="panel search-empty">
         <div class="search-empty-icon">?</div>
         <div>
+            {% if result.no_results_message %}
+            <h2>{{ result.no_results_message }}</h2>
+            <p>Другие квартиры, панели с похожими номерами и технические поля в результаты не добавлены.</p>
+            {% if result.structured_query.address_source %}
+            <div class="search-empty-actions">
+                {% if result.structured_query.house_found %}
+                <a class="btn btn-secondary" href="/panels?q={{ result.structured_query.address_source }}">Открыть карточку дома</a>
+                {% endif %}
+                <a class="btn btn-secondary" href="/search?q={{ result.structured_query.address_source }}">Искать только по адресу</a>
+            </div>
+            {% endif %}
+            {% else %}
             <h2>Точного совпадения нет</h2>
             <p>Попробуйте часть адреса, фамилии, номера телефона или HEX без разделителей.</p>
+            {% endif %}
         </div>
     </div>
     {% endif %}

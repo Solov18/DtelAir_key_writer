@@ -42,12 +42,39 @@
         checkboxes.forEach((item) => { item.checked = false; });
         updateState();
     });
-    form.addEventListener("submit", (event) => {
+    let writeInFlight = false;
+    form.addEventListener("submit", async (event) => {
+        event.preventDefault();
         const selected = checkboxes.filter((item) => item.checked).length;
-        if (!selected || !confirmation?.checked) {
-            event.preventDefault();
+        if (writeInFlight || !selected || !confirmation?.checked) {
             updateState();
+            return;
         }
+        writeInFlight = true;
+        if (submit) {
+            submit.disabled = true;
+            submit.textContent = "Запись выполняется…";
+        }
+        let pageResponse = null;
+        try {
+            pageResponse = await window.submitHtmlFormWithLoader(form, {submitter: submit});
+        } catch (error) {
+            console.error("key_write.request.error", error);
+            await window.showAlert({
+                title: "Запись не завершена",
+                message: error?.message || "Не удалось получить ответ сервера.",
+                source: submit,
+            });
+        } finally {
+            writeInFlight = false;
+            if (form.isConnected) updateState();
+            console.info("key_write.loader.closed");
+        }
+        if (pageResponse) window.renderHtmlResponse(pageResponse);
+    });
+    window.addEventListener("pageshow", () => {
+        writeInFlight = false;
+        updateState();
     });
     updateState();
 })();

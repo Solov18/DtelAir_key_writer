@@ -7,9 +7,11 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Stre
 from openpyxl import Workbook
 
 from app.repositories.key_repository import (
+    ASSIGNMENT_TYPE_NAMES,
     KEY_STATUSES,
     create_key_type,
     get_all_keys_for_export,
+    get_assignment_addresses,
     get_key,
     get_key_assignments,
     get_key_history,
@@ -25,11 +27,13 @@ from app.repositories.key_repository import (
     save_prepared_key,
     set_key_status,
     update_key,
+    update_key_assignment,
     update_key_type,
 )
 from app.repositories.log_repository import normalize_operation_row
 from app.services import import_keys_file
 from app.services.audit import log_event
+from app.services.excel_export import excel_safe_value
 from app.templates_config import templates
 
 router = APIRouter()
@@ -456,7 +460,7 @@ def keys_export():
                     key["hex_value"],
                     key_status_name(key["status"]),
                     key["note"],
-                    key["created_at"],
+                    excel_safe_value(key["created_at"]),
                     key["created_by"],
                 ]
             )
@@ -486,6 +490,10 @@ def key_detail(request: Request, key_id: int):
     key = get_key(key_id)
     if not key:
         return _keys_redirect(error="Ключ не найден")
+    history = [
+        normalize_operation_row(item)
+        for item in get_key_history(key_id)
+    ]
 
     return templates.TemplateResponse(
         "key_detail.html",
@@ -495,9 +503,13 @@ def key_detail(request: Request, key_id: int):
             "key_types": get_key_types(),
             "key_statuses": KEY_STATUSES,
             "assignments": get_key_assignments(key_id),
-            "history": [
-                normalize_operation_row(item)
-                for item in get_key_history(key_id)
+            "assignment_addresses": get_assignment_addresses(),
+            "assignment_type_names": ASSIGNMENT_TYPE_NAMES,
+            "history": history,
+            "assignment_changes": [
+                item
+                for item in history
+                if item.get("action") == "key_assignment_update"
             ],
             "message": request.query_params.get("message", ""),
             "error": request.query_params.get("error", ""),
@@ -542,6 +554,58 @@ def key_update_route(
     )
     return RedirectResponse(
         f"/keys/{key_id}?message=Ключ+обновлён",
+        status_code=303,
+    )
+
+
+@router.post("/keys/{key_id}/assignment")
+def key_assignment_update_route(
+    request: Request,
+    key_id: int,
+    assignment_type: str = Form(...),
+    address: str = Form(...),
+    apartment: str = Form(""),
+    owner_name: str = Form(""),
+    reason: str = Form(...),
+):
+    try:
+        change = update_key_assignment(
+            key_id,
+            assignment_type,
+            address=address,
+            apartment=apartment,
+            owner_name=owner_name,
+            reason=reason,
+            assigned_by=_user_name(request),
+        )
+    except ValueError as error:
+        return RedirectResponse(
+            f"/keys/{key_id}?{urlencode({'error': str(error)})}#assignment-edit",
+            status_code=303,
+        )
+
+    key = get_key(key_id)
+    details = (
+        "Назначение изменено: "
+        f"{change['old_description']} → {change['new_description']}. "
+        f"Причина: {change['reason']}"
+    )
+    log_event(
+        request=request,
+        action="key_assignment_update",
+        object_type="Ключ",
+        object_name=f"{(key or {}).get('type_name', '')} №{(key or {}).get('number', key_id)}",
+        details=details,
+        key_id=key_id,
+        key_type=(key or {}).get("type_name", ""),
+        printed_number=(key or {}).get("number", ""),
+        hex_value=(key or {}).get("hex_value", "-"),
+        address=change["new"].get("address", ""),
+        apartment=change["new"].get("apartment", ""),
+        comment=change["reason"],
+    )
+    return RedirectResponse(
+        f"/keys/{key_id}?message=Назначение+изменено",
         status_code=303,
     )
 

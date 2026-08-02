@@ -372,12 +372,17 @@ def score_address(message_tokens: set[str], item: dict) -> int:
     return round((street_score * 0.42 + house_score * 0.58) * 1000)
 
 
-def find_address_candidates(text: str, limit: int = 6) -> list[dict]:
+def find_address_candidates(
+    text: str,
+    limit: int = 6,
+    *,
+    address_catalog: list[dict] | None = None,
+) -> list[dict]:
     message = remove_noise(text)
     message_tokens = set(message.split())
     ranked: list[dict] = []
 
-    for item in get_panel_addresses():
+    for item in address_catalog if address_catalog is not None else get_panel_addresses():
         street_score = _street_similarity(message_tokens, item["street_tokens"])
         if street_score < 0.58:
             continue
