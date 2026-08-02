@@ -37,6 +37,46 @@ class PresentationTests(unittest.TestCase):
             "Запуск мониторинга панелей",
         )
 
+    def test_key_write_audit_payload_is_presented_without_raw_json(self):
+        row = normalize_operation_row(
+            {
+                "action": "key_write_decision",
+                "status": "SUCCESS",
+                "details": (
+                    '{"write_option":"write_free_key",'
+                    '"selected_panel_ids":[383,382],'
+                    '"new_panel_ids":[383,382],'
+                    '"successful_panel_ids":[383,382],'
+                    '"failed_panel_ids":[], '
+                    '"new_assignment":{"type":"resident",'
+                    '"address":"пер. Богдана Хмельницкого 10",'
+                    '"apartment":"23"}}'
+                ),
+            }
+        )
+
+        self.assertEqual(row["action_name"], "Итог записи ключа")
+        self.assertIn("Обработано панелей: 2 из 2", row["details_view"])
+        self.assertIn("пер. Богдана Хмельницкого 10, кв. 23", row["details_view"])
+        self.assertNotIn("write_option", row["details_view"])
+
+        panel_row = normalize_operation_row(
+            {
+                "action": "write_free_key",
+                "status": "SUCCESS",
+                "details": (
+                    '{"target_address":"пер. Богдана Хмельницкого 10",'
+                    '"target_apartment":"23",'
+                    '"panel_name":"основной вход"}'
+                ),
+            }
+        )
+        self.assertEqual(panel_row["action_name"], "Запись свободного ключа")
+        self.assertEqual(
+            panel_row["details_view"],
+            "Ключ записан на панель «основной вход»; адрес: пер. Богдана Хмельницкого 10; кв. 23.",
+        )
+
     def test_shared_combobox_and_selected_row_components_are_used(self):
         script = Path("app/static/js/combobox.js").read_text(encoding="utf-8")
         components = Path("app/static/css/components.css").read_text(encoding="utf-8")

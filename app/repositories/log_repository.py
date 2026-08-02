@@ -1,3 +1,4 @@
+import json
 import re
 from datetime import date, datetime
 
@@ -37,6 +38,10 @@ ACTION_NAMES = {
     "key_assignment_update": "Изменение назначения ключа",
     "key_status_change": "Изменение статуса ключа",
     "key_release": "Освобождение ключа",
+    "write_free_key": "Запись свободного ключа",
+    "reassign_to_new_address": "Переназначение ключа",
+    "add_selected_panels": "Дополнительная запись ключа",
+    "key_write_decision": "Итог записи ключа",
     "import_panels": "Импорт панелей",
 
     "panel_create": "Добавление панели",
@@ -197,6 +202,60 @@ def _operation_timestamp_parts(value: object) -> tuple[str, str]:
     return raw_value, ""
 
 
+def _write_operation_details(action: str, raw_details: str) -> str | None:
+    """Turn the structured key-write audit payload into operator-facing text."""
+
+    if action not in {
+        "write_free_key",
+        "reassign_to_new_address",
+        "add_selected_panels",
+        "key_write_decision",
+    }:
+        return None
+    try:
+        payload = json.loads(raw_details)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+
+    if action == "key_write_decision":
+        selected = len(payload.get("selected_panel_ids") or [])
+        successful = len(payload.get("successful_panel_ids") or [])
+        failed = len(payload.get("failed_panel_ids") or [])
+        new_count = len(payload.get("new_panel_ids") or [])
+        parts = [f"Обработано панелей: {successful} из {selected}"]
+        if new_count:
+            parts.append(f"новых записей: {new_count}")
+        if failed:
+            parts.append(f"ошибок: {failed}")
+        assignment = payload.get("new_assignment") or {}
+        if assignment:
+            destination = str(assignment.get("address") or "").strip()
+            apartment = str(assignment.get("apartment") or "").strip()
+            if apartment:
+                destination = f"{destination}, кв. {apartment}" if destination else f"кв. {apartment}"
+            if destination:
+                parts.append(f"текущее назначение: {destination}")
+        return "; ".join(parts) + "."
+
+    panel_name = str(payload.get("panel_name") or "").strip()
+    address = str(payload.get("target_address") or "").strip()
+    apartment = str(payload.get("target_apartment") or "").strip()
+    if action == "write_free_key":
+        prefix = "Ключ записан на панель"
+    elif action == "reassign_to_new_address":
+        prefix = "Ключ переназначен и записан на панель"
+    else:
+        prefix = "Ключ дополнительно записан на панель"
+    parts = [f"{prefix} «{panel_name}»" if panel_name else prefix]
+    if address:
+        parts.append(f"адрес: {address}")
+    if apartment:
+        parts.append(f"кв. {apartment}")
+    return "; ".join(parts) + "."
+
+
 def normalize_operation_row(row: dict) -> dict:
     row = dict(row)
     for field in ("details", "response", "comment"):
@@ -229,7 +288,8 @@ def normalize_operation_row(row: dict) -> dict:
         else:
             object_name = "—"
 
-    details = redact_audit_text(row.get("details") or "")
+    raw_details = redact_audit_text(row.get("details") or "")
+    details = _write_operation_details(action, raw_details) or raw_details
 
     if not details:
         parts = []
