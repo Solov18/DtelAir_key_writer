@@ -1,0 +1,48 @@
+/* One readable standard for register detail sidebars. */
+.detail-layout {
+    --detail-sidebar-width: clamp(350px, 22vw, 410px);
+    min-width: 0;
+}
+
+.detail-sidebar {
+    min-width: 0;
+    width: 100%;
+    scrollbar-gutter: stable;
+}
+
+.detail-sidebar h2,
+.detail-sidebar h3 {
+    overflow-wrap: anywhere;
+}
+
+.detail-sidebar dt,
+.detail-sidebar label,
+.detail-sidebar small {
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.detail-sidebar dd,
+.detail-sidebar p,
+.detail-sidebar b,
+.detail-sidebar a,
+.detail-sidebar span {
+    min-width: 0;
+    font-size: 13px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+}
+
+.detail-sidebar code,
+.detail-sidebar .technical-value,
+.detail-sidebar [data-copy-value] {
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: normal;
+    word-break: normal;
+    user-select: text;
+}
+
+@media (max-width: 760px) {
+    .detail-layout { --detail-sidebar-width: min(100%, 410px); }
+}

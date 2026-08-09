@@ -2,7 +2,7 @@ import re
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Request, Form, Query
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from app.services import (
     parse_message,
@@ -14,9 +14,43 @@ from app.services import (
 )
 from app.response_utils import async_document_response
 from app.repositories.key_repository import get_key_write_contexts
+from app.repositories.panel_repository import get_panel_page
 from app.templates_config import templates
 
 router = APIRouter()
+
+
+@router.get("/message/panels/search", response_class=JSONResponse)
+def message_panel_search(
+    query: str = Query("", max_length=160),
+):
+    """Search the complete panel registry without exposing API credentials."""
+    if len(query.strip()) < 2:
+        return {"items": [], "total": 0}
+
+    page = get_panel_page(query=query, page=1, page_size=60)
+    items = []
+    for panel in page["items"]:
+        has_mac = bool((panel.get("mac") or "").strip())
+        enabled = bool(panel.get("enabled"))
+        items.append(
+            {
+                "id": int(panel["id"]),
+                "address": panel.get("address") or "",
+                "entrance": panel.get("entrance") or "",
+                "name": panel.get("name") or "",
+                "mac": panel.get("mac") or "",
+                "status_name": panel.get("status_name") or "Не проверена",
+                "status_tone": panel.get("status_tone") or "muted",
+                "selectable": enabled and has_mac,
+                "unavailable_reason": (
+                    "Панель отключена" if not enabled
+                    else "Не указан MAC" if not has_mac
+                    else ""
+                ),
+            }
+        )
+    return {"items": items, "total": page["total"]}
 
 
 def _key_values_from_override(value: str) -> list[str]:
@@ -28,16 +62,33 @@ def _key_values_from_override(value: str) -> list[str]:
     return result
 
 
-def _build_key_rows(numbers: list[str]) -> list[dict]:
+def _build_key_rows(requests: list[dict] | list[str]) -> list[dict]:
     keys: list[dict] = []
-    for number in numbers:
-        item = find_key(number)
+    for request in requests:
+        if isinstance(request, str):
+            request = {"number": request, "type_id": None, "type_name": "", "type_text": ""}
+        number = str(request.get("number") or "").strip()
+        type_id = request.get("type_id")
+        lookup_value = str(request.get("hex_value") or number).strip()
+        item = find_key(lookup_value, int(type_id) if type_id else None)
         ambiguous = is_ambiguous_key(item)
+        identity_conflict = bool(
+            item
+            and not ambiguous
+            and request.get("hex_value")
+            and number
+            and str(item.get("number") or "").casefold() != number.casefold()
+        )
         keys.append(
             {
                 "number": number,
+                "requested_type_id": int(type_id) if type_id else None,
+                "requested_type_name": request.get("type_name") or "",
+                "requested_type_text": request.get("type_text") or "",
+                "requested_hex": request.get("hex_value") or "",
                 "item": None if ambiguous else item,
                 "ambiguous": ambiguous,
+                "identity_conflict": identity_conflict,
                 "matches": item.get("matches", []) if ambiguous else [],
             }
         )
@@ -128,8 +179,12 @@ def message_preview(
         parsed["key_numbers"] = _key_values_from_override(
             key_numbers_override
         )
+        parsed["key_requests"] = [
+            {"number": value, "type_id": None, "type_name": "", "type_text": ""}
+            for value in parsed["key_numbers"]
+        ]
 
-    keys = _build_key_rows(parsed["key_numbers"])
+    keys = _build_key_rows(parsed.get("key_requests") or parsed["key_numbers"])
     panels = (
         find_panels_by_address(parsed["address"])
         if parsed["address"]
@@ -147,7 +202,7 @@ def message_preview(
     has_used_keys = _enrich_key_write_rows(keys, panels)
 
     missing_keys = [
-        item["number"]
+        " ".join(filter(None, [item.get("requested_type_name"), f"№{item['number']}"]))
         for item in keys
         if not item["item"] and not item["ambiguous"]
     ]
@@ -205,8 +260,7 @@ def message_preview(
             "missing_keys": missing_keys,
             "ambiguous_keys": ambiguous_keys,
             "can_write": bool(
-                panels
-                and keys
+                keys
                 and not missing_keys
                 and parsed["apartment"]
             ),
@@ -225,9 +279,23 @@ def message_write(
     key_numbers: list[str] = Form([]),
     key_type_ids: list[int] = Form([]),
     panel_ids: list[int] = Form([]),
+    automatic_panel_ids: list[int] = Form([]),
+    manual_panel_ids: list[int] = Form([]),
     occupied_action: str = Form(""),
 ):
     # Важная защита: запись выполняется только на явно выбранные панели.
+    automatic_panel_ids = automatic_panel_ids if isinstance(automatic_panel_ids, list) else []
+    manual_panel_ids = manual_panel_ids if isinstance(manual_panel_ids, list) else []
+    panel_ids = list(dict.fromkeys(int(value) for value in panel_ids))
+    selected_panel_ids = set(panel_ids)
+    automatic_panel_ids = list(dict.fromkeys(
+        int(value) for value in automatic_panel_ids if int(value) in selected_panel_ids
+    ))
+    automatic_panel_set = set(automatic_panel_ids)
+    manual_panel_ids = list(dict.fromkeys(
+        int(value) for value in manual_panel_ids
+        if int(value) in selected_panel_ids and int(value) not in automatic_panel_set
+    ))
     panels = get_panels(panel_ids=panel_ids) if panel_ids else []
     all_results = []
 
@@ -280,6 +348,8 @@ def message_write(
                         known_panel_ids=set(context.get("panel_ids", [])),
                         write_option=write_option,
                         previous_assignment=_write_context_description(context),
+                        automatic_panel_ids=set(automatic_panel_ids),
+                        manual_panel_ids=set(manual_panel_ids),
                     ),
                 }
             )

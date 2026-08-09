@@ -150,9 +150,15 @@
         });
         search?.addEventListener("input", () => {
             const query = normalize(search.value);
+            const queryTokens = String(search.value || "")
+                .split(/[^\p{L}\p{N}]+/u)
+                .map(normalize)
+                .filter(Boolean);
             optionButtons.forEach((item) => {
+                const haystack = normalize(item.dataset.search || item.dataset.label || item.textContent);
                 item.hidden = Boolean(query)
-                    && !normalize(item.dataset.label || item.textContent).includes(query);
+                    && !haystack.includes(query)
+                    && !queryTokens.every((token) => haystack.includes(token));
             });
             setActive(visibleOptions()[0]);
             positionPopup(trigger, popup);
@@ -261,6 +267,7 @@
                 button.setAttribute("role", "option");
                 button.dataset.value = option.value;
                 button.dataset.label = option.textContent.trim();
+                button.dataset.search = option.dataset.search || option.textContent.trim();
                 button.textContent = option.textContent.trim();
                 button.disabled = option.disabled;
                 button.setAttribute(
@@ -285,6 +292,10 @@
 
         rebuild();
         const instance = initializeRoot(root);
+        select.addEventListener("invalid", (event) => {
+            event.preventDefault();
+            instance?.open();
+        });
         new MutationObserver(rebuild).observe(select, {
             childList: true,
             subtree: true,

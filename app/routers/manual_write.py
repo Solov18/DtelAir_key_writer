@@ -108,6 +108,8 @@ def manual_write_execute(
     apartment: str = Form(""),
     inner: int = Form(1),
     panel_ids: list[int] = Form([]),
+    automatic_panel_ids: list[int] = Form([]),
+    manual_panel_ids: list[int] = Form([]),
     key_type_id: int = Form(0),
 ):
     key = find_key(key_query, key_type_id or None)
@@ -115,6 +117,20 @@ def manual_write_execute(
     if is_ambiguous_key(key):
         key = None
 
+    automatic_panel_ids = automatic_panel_ids if isinstance(automatic_panel_ids, list) else []
+    manual_panel_ids = manual_panel_ids if isinstance(manual_panel_ids, list) else []
+    panel_ids = panel_ids if isinstance(panel_ids, list) else []
+    panel_ids = list(dict.fromkeys(int(value) for value in panel_ids))
+    selected_panel_ids = set(panel_ids)
+    automatic_panel_ids = list(dict.fromkeys(
+        int(value) for value in automatic_panel_ids
+        if int(value) in selected_panel_ids
+    ))
+    automatic_panel_set = set(automatic_panel_ids)
+    manual_panel_ids = list(dict.fromkeys(
+        int(value) for value in manual_panel_ids
+        if int(value) in selected_panel_ids and int(value) not in automatic_panel_set
+    ))
     panels = get_panels(panel_ids=panel_ids) if panel_ids else []
 
     all_results = []
@@ -139,6 +155,8 @@ def manual_write_execute(
                     inner=inner,
                     address=address,
                     request=request,
+                    automatic_panel_ids=set(automatic_panel_ids),
+                    manual_panel_ids=set(manual_panel_ids),
                 ),
             }
         )

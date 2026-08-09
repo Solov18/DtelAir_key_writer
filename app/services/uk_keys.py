@@ -109,13 +109,34 @@ def issue_key(
     *,
     group_id: int,
     key_id: int,
-    panel_link_id: int,
+    panel_link_id: int | None = None,
+    panel_link_ids: list[int] | None = None,
     apartment_override: str = "",
     override_confirmed: bool = False,
     comment: str = "",
     request=None,
     training_mode: bool = False,
 ) -> dict:
+    selected_link_ids = list(dict.fromkeys(
+        int(value)
+        for value in (panel_link_ids or ([panel_link_id] if panel_link_id else []))
+        if value
+    ))
+    if not selected_link_ids:
+        raise ValueError("Выберите хотя бы одну панель УК.")
+    available_links = {
+        int(item["link_id"]): item
+        for item in uk_repository.get_group_panels(group_id)
+    }
+    if any(link_id not in available_links for link_id in selected_link_ids):
+        raise ValueError("Одна или несколько выбранных панелей не закреплены за этой УК.")
+    override = (apartment_override or "").strip()
+    for link_id in selected_link_ids:
+        registered = str(available_links[link_id].get("apartment") or "").strip()
+        if override and override != registered and not override_confirmed:
+            raise ValueError("Изменение квартиры только для операции требует подтверждения.")
+        if not (override or registered):
+            raise ValueError("Для одной из выбранных панелей не указана квартира УК.")
     if training_mode:
         return {
             "ok": True,
@@ -125,19 +146,58 @@ def issue_key(
     issue_id, programming_id = uk_repository.create_key_issue(
         group_id,
         key_id,
-        panel_link_id,
+        selected_link_ids[0],
         apartment_override=apartment_override,
         override_confirmed=override_confirmed,
         comment=comment,
         issued_by=_actor(request),
     )
-    result = _run_programming(
-        programming_id,
-        operation="add",
-        request=request,
-    )
-    result["issue_id"] = issue_id
-    return result
+    programming_ids = [programming_id]
+    for link_id in selected_link_ids[1:]:
+        programming_ids.append(uk_repository.create_programming(
+            group_id,
+            issue_id,
+            link_id,
+            apartment_override=apartment_override,
+            override_confirmed=override_confirmed,
+        ))
+
+    results: list[dict] = []
+    for link_id, current_id in zip(selected_link_ids, programming_ids):
+        try:
+            panel_result = _run_programming(current_id, operation="add", request=request)
+        except Exception as error:
+            safe_error = _safe_response(str(error))
+            uk_repository.record_crm_result(
+                current_id,
+                operation="add",
+                status="error",
+                idempotency_key=uuid4().hex,
+                safe_response=safe_error,
+                requested_by=_actor(request),
+            )
+            panel_result = {
+                "ok": False,
+                "status": "ERROR",
+                "response": safe_error,
+                "programming_id": current_id,
+            }
+        results.append({**panel_result, "panel_link_id": link_id})
+
+    success_count = sum(bool(item.get("ok")) for item in results)
+    if results and all(item.get("status") == "DRY_RUN" for item in results):
+        status = "DRY_RUN"
+    else:
+        status = "SUCCESS" if success_count == len(results) else ("PARTIAL" if success_count else "ERROR")
+    return {
+        "ok": success_count == len(results),
+        "status": status,
+        "issue_id": issue_id,
+        "programming_id": programming_ids[0],
+        "results": results,
+        "success_count": success_count,
+        "error_count": len(results) - success_count,
+    }
 
 
 def add_master_panel(

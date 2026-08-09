@@ -1,3 +1,28 @@
+/* The project has one scrollbar skin. Page CSS must not redefine it. */
+html * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scroll-thumb) var(--scroll-track);
+}
+
+html *::-webkit-scrollbar {
+    width: var(--scroll-size);
+    height: var(--scroll-size);
+}
+
+html *::-webkit-scrollbar-track {
+    background: var(--scroll-track);
+    border-radius: var(--scroll-radius);
+}
+
+html *::-webkit-scrollbar-thumb {
+    background: var(--scroll-thumb);
+    border: 2px solid var(--scroll-track);
+    border-radius: var(--scroll-radius);
+}
+
+html *::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-hover); }
+html *::-webkit-scrollbar-corner { background: transparent; }
+
 .custom-scroll,
 .table-scroll,
 .employee-picker,

@@ -1,5 +1,5 @@
 from pathlib import Path
-from datetime import datetime
+from datetime import date, datetime
 from urllib.parse import parse_qs
 
 from fastapi import Request
@@ -30,17 +30,29 @@ def csrf_token(request: Request) -> str:
     return str(request.session.get("csrf_token") or "")
 
 
-def format_datetime(value) -> str:
+def format_datetime(value, *, with_seconds: bool = False) -> str:
     if value in (None, ""):
         return "—"
     if isinstance(value, str):
+        raw_value = value.strip()
         try:
-            value = datetime.fromisoformat(value)
+            value = datetime.fromisoformat(raw_value.replace("Z", "+00:00"))
         except ValueError:
-            return value
+            try:
+                parsed_date = date.fromisoformat(raw_value)
+            except ValueError:
+                return raw_value
+            return parsed_date.strftime("%d.%m.%Y")
     if isinstance(value, datetime):
-        return value.strftime("%d.%m.%Y %H:%M:%S")
+        pattern = "%d.%m.%Y %H:%M:%S" if with_seconds else "%d.%m.%Y %H:%M"
+        return value.strftime(pattern)
+    if isinstance(value, date):
+        return value.strftime("%d.%m.%Y")
     return str(value)
+
+
+def format_datetime_seconds(value) -> str:
+    return format_datetime(value, with_seconds=True)
 
 
 templates.env.globals["current_user"] = current_user
@@ -54,3 +66,6 @@ templates.env.globals["training_mode"] = (
 templates.env.globals["notice_code"] = notice_code
 templates.env.globals["csrf_token"] = csrf_token
 templates.env.globals["format_datetime"] = format_datetime
+templates.env.globals["format_datetime_seconds"] = format_datetime_seconds
+templates.env.filters["datetime"] = format_datetime
+templates.env.filters["datetime_seconds"] = format_datetime_seconds

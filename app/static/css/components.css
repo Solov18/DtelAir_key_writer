@@ -498,6 +498,10 @@ body.light-theme .app-dialog__panel { background:#fff; box-shadow:0 24px 70px rg
     transform: none !important;
 }
 
+.app-combobox__options button[hidden] {
+    display: none !important;
+}
+
 .app-combobox__options button:hover,
 .app-combobox__options button:focus-visible,
 .app-combobox__options button.is-active {

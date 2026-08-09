@@ -40,47 +40,28 @@
                     <div><dt>Порядковый номер</dt><dd class="is-emphasized">№{{ key.number }}</dd></div>
                     <div><dt>HEX</dt><dd><code class="keys-hex{% if not key.hex_value %} is-empty{% endif %}">{{ key.hex_value or 'Не считан' }}</code></dd></div>
                     <div><dt>Статус</dt><dd><span class="key-status is-{{ key.status_tone }}">{{ key.status_name }}</span></dd></div>
-                    <div><dt>Дата добавления</dt><dd>{{ key.created_at or '—' }}</dd></div>
+                    <div><dt>Дата добавления</dt><dd>{{ key.created_at|datetime }}</dd></div>
                     <div><dt>Кем добавлен</dt><dd>{{ key.created_by or 'Система' }}</dd></div>
                     <div class="is-wide"><dt>Комментарий</dt><dd>{{ key.note or 'Комментарий не указан' }}</dd></div>
                 </dl>
             </section>
 
-            <details class="panel key-edit-disclosure" id="key-edit" {% if error %}open{% endif %}>
-                <summary>
-                    <span class="key-card-section-icon"><svg viewBox="0 0 24 24"><path d="m4 20 4.5-1 10-10-3.5-3.5-10 10Z"/><path d="m13.5 7 3.5 3.5"/></svg></span>
-                    <span><small>Служебное действие</small><b>Редактировать данные ключа</b></span>
-                    <i>⌄</i>
-                </summary>
-                <form method="post" action="/keys/{{ key.id }}/update" class="key-edit-form key-card-edit-form">
-                    <label><span>Тип ключа</span><select name="key_type_id">{% for item in key_types %}<option value="{{ item.id }}" {% if item.id == key.key_type_id %}selected{% endif %}>{{ item.name }}</option>{% endfor %}</select></label>
-                    <label><span>Номер</span><input name="number" value="{{ key.number }}" required></label>
-                    <label class="is-wide"><span>HEX</span><input name="hex_value" value="{{ key.hex_value }}" autocomplete="off" required pattern="[0-9A-Fa-f :\-]{6,23}" title="Укажите HEX: от 6 до 16 символов 0–9/A–F"></label>
-                    <label class="is-wide"><span>Комментарий</span><textarea name="note" rows="3" placeholder="Назначение или служебная информация">{{ key.note or '' }}</textarea></label>
-                    <div class="key-edit-note">HEX обязателен. Изменение типа, номера или HEX записывается в журнал операций.</div>
-                    <button type="submit" class="btn">Сохранить изменения</button>
-                </form>
-            </details>
-        </main>
-
-        <aside class="key-card-side-column">
-            <section class="panel key-card-assignment">
+            <section class="panel key-card-assignment key-card-assignment-wide">
                 <header class="key-card-section-head">
                     <span class="key-card-section-icon"><svg viewBox="0 0 24 24"><path d="M12 21s7-5.2 7-12a7 7 0 1 0-14 0c0 6.8 7 12 7 12Z"/><circle cx="12" cy="9" r="2"/></svg></span>
                     <div><small>Актуальные данные</small><h2>Текущее назначение</h2></div>
                 </header>
                 {% if key.assignment_type %}
-                <div class="key-card-assignment-body">
-                    <span class="key-assignment-kind">{{ assignment_type_names.get(key.assignment_type, key.assignment_type) }}</span>
-                    {% if key.assignment_note and key.assignment_type != 'resident' %}<b>{{ key.assignment_note }}</b>{% endif %}
-                    <span><strong>Адрес:</strong> {{ key.assignment_address or 'не указан' }}</span>
-                    <span><strong>Квартира:</strong> {{ key.assignment_apartment or 'не указана' }}</span>
-                    <span>Назначен: {{ key.assigned_at or '—' }}</span>
-                    {% if key.assignment_note and key.assignment_type == 'resident' %}<p>{{ key.assignment_note }}</p>{% endif %}
+                <div class="key-card-assignment-body key-card-assignment-overview">
+                    <div><small>Тип владельца</small><b><span class="key-assignment-kind">{{ assignment_type_names.get(key.assignment_type, key.assignment_type) }}</span></b></div>
+                    <div><small>Адрес</small><b>{{ key.assignment_address or 'не указан' }}</b></div>
+                    <div><small>Квартира</small><b>{{ key.assignment_apartment or 'не указана' }}</b></div>
+                    <div><small>Владелец / комментарий</small><b>{{ key.employee_name or key.uk_name or key.assignment_note or 'не указан' }}</b></div>
+                    <div><small>Дата назначения</small><b>{{ key.assigned_at|datetime }}</b></div>
                 </div>
-                <details class="key-assignment-edit" id="assignment-edit" {% if error %}open{% endif %}>
+                <details class="key-assignment-edit key-assignment-edit-wide" id="assignment-edit" {% if error %}open{% endif %}>
                     <summary class="btn">Редактировать назначение</summary>
-                    <form method="post" action="/keys/{{ key.id }}/assignment" class="key-assignment-edit-form">
+                    <form method="post" action="/keys/{{ key.id }}/assignment" class="key-assignment-edit-form key-assignment-edit-form-wide">
                         <label>
                             <span>Тип владельца</span>
                             <select name="assignment_type" required>
@@ -89,7 +70,7 @@
                                 {% endfor %}
                             </select>
                         </label>
-                        <label>
+                        <label class="is-address">
                             <span>Адрес</span>
                             <input name="address" value="{{ key.assignment_address or '' }}" list="assignment-addresses" placeholder="Начните вводить существующий адрес" autocomplete="off" required>
                             <small>Можно выбрать только адрес, уже существующий в CRM.</small>
@@ -101,22 +82,18 @@
                             <span>Квартира</span>
                             <input name="apartment" value="{{ key.assignment_apartment or '' }}" placeholder="Можно оставить пустой">
                         </label>
-                        <label>
+                        <label class="is-wide">
                             <span>Название владельца или комментарий</span>
                             <input name="owner_name" value="{{ key.employee_name or key.uk_name or (key.assignment_note if key.assignment_type in ('uk', 'contractor', 'other') else '') }}" placeholder="Например: УК Малышева или Техническая служба">
                         </label>
-                        <label>
+                        <label class="is-wide">
                             <span>Причина изменения</span>
-                            <textarea name="reason" rows="3" placeholder="Почему изменяется текущее назначение" required></textarea>
+                            <textarea name="reason" rows="4" placeholder="Почему изменяется текущее назначение" required></textarea>
                         </label>
-                        <div class="key-assignment-edit-note">Изменяется только учётная запись в CRM. На физические панели запросы не отправляются.</div>
-                        <button class="btn" type="submit">Сохранить назначение</button>
+                        <div class="key-assignment-edit-note is-wide">Изменяется только учётная запись в CRM. На физические панели запросы не отправляются.</div>
+                        <button class="btn is-wide" type="submit">Сохранить назначение</button>
                     </form>
                 </details>
-                <form method="post" action="/keys/{{ key.id }}/release" class="key-card-assignment-action" data-confirm="Освободить ключ и завершить текущее назначение?">
-                    <input name="note" value="Освобождён вручную" type="hidden">
-                    <button class="btn btn-ghost" type="submit">Освободить ключ</button>
-                </form>
                 {% else %}
                 <div class="key-card-free-state">
                     <span>✓</span><b>Ключ свободен</b><p>Его можно назначить жильцу, сотруднику или управляющей компании.</p>
@@ -126,6 +103,24 @@
                 {% endif %}
                 {% endif %}
             </section>
+        </main>
+
+        <aside class="key-card-side-column">
+            <details class="panel key-edit-disclosure key-edit-disclosure-compact" id="key-edit" {% if error %}open{% endif %}>
+                <summary>
+                    <span class="key-card-section-icon"><svg viewBox="0 0 24 24"><path d="m4 20 4.5-1 10-10-3.5-3.5-10 10Z"/><path d="m13.5 7 3.5 3.5"/></svg></span>
+                    <span><small>Служебное действие</small><b>Редактировать данные ключа</b></span>
+                    <i>⌄</i>
+                </summary>
+                <form method="post" action="/keys/{{ key.id }}/update" class="key-edit-form key-card-edit-form key-card-edit-form-compact">
+                    <label><span>Тип ключа</span><select name="key_type_id">{% for item in key_types %}<option value="{{ item.id }}" {% if item.id == key.key_type_id %}selected{% endif %}>{{ item.name }}</option>{% endfor %}</select></label>
+                    <label><span>Номер</span><input name="number" value="{{ key.number }}" required></label>
+                    <label><span>HEX</span><input name="hex_value" value="{{ key.hex_value }}" autocomplete="off" required pattern="[0-9A-Fa-f :\-]{6,23}" title="Укажите HEX: от 6 до 16 символов 0–9/A–F"></label>
+                    <label><span>Комментарий</span><textarea name="note" rows="3" placeholder="Служебная информация">{{ key.note or '' }}</textarea></label>
+                    <div class="key-edit-note">HEX обязателен. Изменения сохраняются в журнале.</div>
+                    <button type="submit" class="btn">Сохранить изменения</button>
+                </form>
+            </details>
 
             <section class="panel key-card-status-actions">
                 <header class="key-card-section-head">
@@ -140,6 +135,14 @@
                     {% if key.status != 'free' and not key.assignment_type %}<form method="post" action="/keys/{{ key.id }}/release"><input type="hidden" name="note" value="Ключ возвращён в свободные"><button class="btn" type="submit">Вернуть в свободные</button></form>{% endif %}
                 </div>
             </section>
+
+            {% if key.assignment_type %}
+            <form method="post" action="/keys/{{ key.id }}/release" class="panel key-card-assignment-action key-card-release-panel" data-confirm="Освободить ключ и завершить текущее назначение?">
+                <div><small>Текущее назначение</small><b>Завершить и освободить ключ</b></div>
+                <input name="note" value="Освобождён вручную" type="hidden">
+                <button class="btn btn-ghost" type="submit">Освободить ключ</button>
+            </form>
+            {% endif %}
         </aside>
     </div>
 
@@ -155,7 +158,7 @@
                     <tbody>
                     {% for item in history %}
                     <tr>
-                        <td>{{ item.created_at or '—' }}</td>
+                        <td>{{ item.created_at|datetime_seconds }}</td>
                         <td><b>{{ item.action_name }}</b><small>{{ item.comment or item.details_view }}</small></td>
                         <td>{{ item.address or '—' }}{% if item.apartment or item.flat_num %}<small>кв. {{ item.apartment or item.flat_num }}</small>{% endif %}</td>
                         <td>{{ item.panel_name or '—' }}<small>{{ item.mac or '' }}</small></td>
@@ -179,14 +182,14 @@
                 {% for item in assignment_changes %}
                 <div class="is-change">
                     <i></i>
-                    <span><b>Назначение изменено</b><small>{{ item.details_view or item.details }}</small><small>{{ item.created_at }} · {{ item.user_name }}</small></span>
+                    <span><b>Назначение изменено</b><small>{{ item.details_view or item.details }}</small><small>{{ item.created_at|datetime }} · {{ item.user_name }}</small></span>
                     <em>Журнал</em>
                 </div>
                 {% endfor %}
                 {% for item in assignments %}
                 <div class="{% if item.active %}is-active{% endif %}">
                     <i></i>
-                    <span><b>{{ item.assignment_type_name }}{% if item.owner_name %} · {{ item.owner_name }}{% endif %}</b><small>{{ item.address or 'Адрес не указан' }}{% if item.apartment %} / кв. {{ item.apartment }}{% else %} / квартира не указана{% endif %}</small><small>{{ item.assigned_at }}{% if item.released_at %} — {{ item.released_at }}{% endif %}</small></span>
+                    <span><b>{{ item.assignment_type_name }}{% if item.owner_name %} · {{ item.owner_name }}{% endif %}</b><small>{{ item.address or 'Адрес не указан' }}{% if item.apartment %} / кв. {{ item.apartment }}{% else %} / квартира не указана{% endif %}</small><small>{{ item.assigned_at|datetime }}{% if item.released_at %} — {{ item.released_at|datetime }}{% endif %}</small></span>
                     <em>{% if item.active %}Текущее{% else %}Завершено{% endif %}</em>
                 </div>
                 {% else %}

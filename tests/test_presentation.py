@@ -3,10 +3,16 @@ from pathlib import Path
 
 from app.presentation import operation_status_name, operation_status_tone
 from app.repositories.log_repository import ACTION_NAMES, normalize_operation_row
-from app.templates_config import templates
+from app.templates_config import format_datetime, format_datetime_seconds, templates
 
 
 class PresentationTests(unittest.TestCase):
+    def test_shared_datetime_formatter_hides_timezone_and_microseconds(self):
+        value = "2026-08-03 20:42:08.214655+03:00"
+        self.assertEqual(format_datetime(value), "03.08.2026 20:42")
+        self.assertEqual(format_datetime_seconds(value), "03.08.2026 20:42:08")
+        self.assertEqual(format_datetime(None), "—")
+
     def test_crm_statuses_are_human_readable(self):
         self.assertEqual(operation_status_name("SUCCESS"), "Успешно")
         self.assertEqual(
@@ -143,6 +149,20 @@ class PresentationTests(unittest.TestCase):
             if name.endswith(".html"):
                 templates.env.get_template(name)
 
+    def test_selected_key_sidebar_wraps_values_and_supports_copying(self):
+        template = Path("app/templates/keys.html").read_text(encoding="utf-8")
+        styles = Path("app/static/css/pages/keys_log.css").read_text(encoding="utf-8")
+
+        self.assertIn("keys-copy-button", template)
+        self.assertIn("data-copy-value", template)
+        self.assertIn("copyKeySidebarValue", template)
+        self.assertIn("keys-current-assignment-value", template)
+        self.assertIn("var(--detail-sidebar-width, 390px)", styles)
+        self.assertIn("detail-layout", template)
+        self.assertIn("detail-sidebar", template)
+        self.assertIn("user-select: text", styles)
+        self.assertIn("overflow-wrap: anywhere", styles)
+
     def test_topbar_uses_shared_compact_navigation_layout(self):
         base = Path("app/templates/base.html").read_text(encoding="utf-8")
         layout = Path("app/static/css/layout.css").read_text(encoding="utf-8")
@@ -215,6 +235,7 @@ class PresentationTests(unittest.TestCase):
 
     def test_key_registry_modals_close_only_with_explicit_cross(self):
         source = Path("app/templates/keys.html").read_text(encoding="utf-8")
+        modal_script = Path("app/static/js/modal.js").read_text(encoding="utf-8")
 
         for modal_id in (
             "keyArbitraryModal",
@@ -232,14 +253,31 @@ class PresentationTests(unittest.TestCase):
                 source,
             )
 
-        self.assertIn(
-            "event.target === modal && modal.dataset.dismiss !== \"explicit\"",
-            source,
-        )
-        self.assertIn(
-            "document.querySelector('.modal-backdrop[data-dismiss=\"explicit\"].active')",
-            source,
-        )
+        self.assertIn("event.target === modal", modal_script)
+        self.assertIn('event.key === "Escape"', modal_script)
+        self.assertIn("event.stopImmediatePropagation()", modal_script)
+        self.assertNotIn('document.querySelectorAll(".modal-backdrop")', source)
+
+    def test_shared_modal_scroll_detail_and_large_list_search_components(self):
+        base = Path("app/templates/base.html").read_text(encoding="utf-8")
+        modal_script = Path("app/static/js/modal.js").read_text(encoding="utf-8")
+        combobox = Path("app/static/js/combobox.js").read_text(encoding="utf-8")
+        uk_detail = Path("app/templates/uk_detail.html").read_text(encoding="utf-8")
+        style = Path("app/static/css/style.css").read_text(encoding="utf-8")
+        scroll = Path("app/static/css/scroll.css").read_text(encoding="utf-8")
+
+        self.assertIn('/static/js/modal.js?v=1', base)
+        self.assertIn('./modal.css?v=1', style)
+        self.assertIn('./detail-sidebar.css?v=1', style)
+        self.assertIn('event.key === "Tab"', modal_script)
+        self.assertIn('window.AppModal = {open, close, markClean}', modal_script)
+        self.assertIn('queryTokens.every', combobox)
+        self.assertGreaterEqual(uk_detail.count('data-combobox-search="true"'), 1)
+        self.assertIn('data-search="{{ panel.address }}', uk_detail)
+        self.assertIn('data-uk-key-picker', uk_detail)
+        self.assertIn('data-uk-key-type', uk_detail)
+        self.assertIn('Все типы', uk_detail)
+        self.assertIn('html *::-webkit-scrollbar-thumb', scroll)
 
     def test_message_preview_exposes_used_key_choices_and_panel_states(self):
         template = Path("app/templates/message_preview.html").read_text(
@@ -262,6 +300,52 @@ class PresentationTests(unittest.TestCase):
         self.assertIn("без изменения текущего назначения", script)
         self.assertIn(".message-write-choice", styles)
         self.assertIn("body.light-theme", styles)
+        self.assertIn("+ Добавить дополнительные панели", template)
+        self.assertIn('id="messagePanelPicker"', template)
+        self.assertIn('data-panel-source="automatic"', template)
+        self.assertIn('id="manualPanelSection"', template)
+        self.assertIn('id="messageManualPanelList"', template)
+        self.assertIn('id="messagePanelPickerSelection"', template)
+        self.assertIn('id="messagePanelPickerChips"', template)
+        self.assertIn("Добавлена вручную", script)
+        self.assertIn("Панель уже выбрана", script)
+        self.assertIn("grid-template-columns: repeat(2", styles)
+        self.assertIn("grid-template-columns: repeat(3", styles)
+        self.assertIn('name = checkbox.dataset.panelSource === "manual"', script)
+        self.assertIn("automatic_panel_ids", script)
+        self.assertIn("manual_panel_ids", script)
+        self.assertIn(".message-panel-picker", styles)
+        self.assertIn("panelsEmpty.hidden = checkedPanels.length > 0", script)
+        self.assertIn(".message-empty-state[hidden]", styles)
+        self.assertIn(".panel-card__actions", styles)
+        self.assertIn("gap: 10px", styles)
+        self.assertIn(".panel-card__checkbox", styles)
+        remove_rule = styles.split(".message-manual-panel-remove {", 1)[1].split("}", 1)[0]
+        self.assertNotIn("position: absolute", remove_rule)
+        self.assertNotIn("margin-right: -", remove_rule)
+
+
+    def test_manual_write_supports_additional_panels_without_changing_assignment(self):
+        template = Path("app/templates/manual_write.html").read_text(encoding="utf-8")
+        script = Path("app/static/js/manual-write.js").read_text(encoding="utf-8")
+        styles = Path("app/static/css/pages/manual_write.css").read_text(encoding="utf-8")
+
+        self.assertIn('id="open-manual-panel-picker"', template)
+        self.assertIn('id="manualPanelPicker"', template)
+        self.assertIn('id="manualPanelList"', template)
+        self.assertIn('id="automaticPanelCount"', template)
+        self.assertIn('id="manualPanelCount"', template)
+        self.assertIn("Основной адрес", template)
+        self.assertIn("globalLoader: false", script)
+        self.assertIn('event.key === "Enter"', script)
+        self.assertIn("automatic_panel_ids", script)
+        self.assertIn("manual_panel_ids", script)
+        self.assertIn("panelAlreadySelected", script)
+        self.assertIn("manual-panel-option--manual", styles)
+        self.assertIn(".manual-panel-actions", styles)
+        actions = styles.split(".manual-panel-actions {", 1)[1].split("}", 1)[0]
+        self.assertIn("gap:10px", actions)
+        self.assertNotIn("position:absolute", actions)
 
 
 if __name__ == "__main__":

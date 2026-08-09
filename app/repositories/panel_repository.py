@@ -374,10 +374,13 @@ def get_panel_page(
                 OR SMART_NORM(ip) LIKE ?
                 OR SMART_NORM(device_model) LIKE ?
                 OR SMART_NORM(firmware_version) LIKE ?
+                OR SMART_NORM(
+                    CONCAT_WS(' ', address, entrance, name, tags, mac, CAST(id AS TEXT))
+                ) LIKE ?
             )
             """
         )
-        params.extend([pattern] * 8)
+        params.extend([pattern] * 9)
 
     if address:
         conditions.append("address = ?")

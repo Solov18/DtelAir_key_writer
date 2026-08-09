@@ -55,7 +55,7 @@
                         <div class="user-info">
                             <div><b>{{ u.full_name }}</b>{% if is_self %}<span class="user-current">Вы</span>{% endif %}</div>
                             <span>@{{ u.login }} · {{ u.role_name }}</span>
-                            <small>Последний вход: {{ u.last_login or 'ещё не входил' }}</small>
+                            <small>Последний вход: {{ (u.last_login|datetime) if u.last_login else 'ещё не входил' }}</small>
                         </div>
                         <span class="user-state {% if u.active %}is-active{% endif %}">{{ 'Активен' if u.active else 'Отключён' }}</span>
                     </div>

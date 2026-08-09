@@ -1,0 +1,27 @@
+/* Shared behavior and layout for page-level modal forms. */
+.app-modal-open,
+body.modal-open {
+    overflow: hidden;
+}
+
+.app-modal-surface {
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+}
+
+.app-modal-surface [data-modal-close],
+.app-modal-surface [data-close-uk-modal],
+.app-modal-surface [data-close-uk-detail-modal] {
+    cursor: pointer;
+}
+
+@media (max-width: 720px) {
+    .app-modal-surface {
+        max-width: calc(100vw - 20px) !important;
+        max-height: calc(100dvh - 20px) !important;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .app-modal-surface { scroll-behavior: auto; }
+}

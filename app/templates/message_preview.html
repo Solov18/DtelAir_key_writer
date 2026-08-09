@@ -54,6 +54,7 @@
                     value="{{ parsed.address }}"
                     placeholder="Начните вводить улицу и дом"
                     data-smart-search="panels"
+                    data-smart-submit="messageCorrectionForm"
                     autocomplete="off"
                 >
             </label>
@@ -95,35 +96,49 @@
                     <h2>{{ parsed.address or 'Адрес не выбран' }}</h2>
                     <p>{% if panels %}Отметьте только те панели, куда нужно записать ключи.{% else %}Выберите адрес из подсказок или введите его вручную.{% endif %}</p>
                 </div>
-                {% if panels %}
                 <div class="panel-actions">
+                    <button type="button" class="btn-small" id="open-panel-picker">+ Добавить дополнительные панели</button>
+                    {% if panels %}
                     <button type="button" class="btn-small" id="select-all-panels">Выбрать все</button>
                     <button type="button" class="btn-small btn-ghost" id="clear-all-panels">Снять все</button>
+                    {% endif %}
                 </div>
-                {% endif %}
             </div>
 
-            {% if panels %}
-            <div class="panel-list preview-panel-list custom-scroll">
+            <div class="message-panel-group" id="automaticPanelSection" {% if not panels %}hidden{% endif %}>
+                <div class="message-panel-group__head"><b>Панели найденного адреса</b><span>Автоподбор по основному адресу</span></div>
+                <div class="panel-list preview-panel-list custom-scroll" id="messagePanelList">
                 {% for panel in panels %}
-                <label class="panel-option">
-                    <input type="checkbox" name="panel_ids_preview" value="{{ panel.id }}" checked>
-                    <span class="panel-option-body">
-                        <span class="panel-option-title">{{ panel.entrance or panel.name or 'Вход не указан' }}</span>
-                        <span class="panel-option-meta">{{ panel.address }}</span>
-                        <span class="panel-option-mac">{{ panel.mac }}</span>
-                    </span>
-                </label>
+                <article class="panel-option" data-panel-id="{{ panel.id }}" data-panel-source="automatic">
+                    <label class="panel-card__content" for="automatic-panel-{{ panel.id }}">
+                        <span class="panel-option-body">
+                            <span class="panel-option-title">{{ panel.entrance or panel.name or 'Вход не указан' }}</span>
+                            <span class="panel-option-meta">{{ panel.address }}</span>
+                            <span class="panel-option-mac">{{ panel.mac }}</span>
+                            <span class="message-panel-source is-automatic">Автоподбор</span>
+                        </span>
+                    </label>
+                    <div class="panel-card__actions">
+                        <input class="panel-card__checkbox" id="automatic-panel-{{ panel.id }}" type="checkbox" name="panel_ids_preview" value="{{ panel.id }}" data-panel-source="automatic" aria-label="Выбрать панель {{ panel.entrance or panel.name or panel.address }}" checked>
+                    </div>
+                </article>
                 {% endfor %}
+                </div>
             </div>
-            <footer class="message-selection-footer"><span>Выбрано панелей: <b id="selectedPanelCount">{{ panels|length }}</b></span></footer>
-            {% else %}
-            <div class="message-empty-state">
+            <div class="message-panel-group message-panel-group--manual" id="manualPanelSection" hidden>
+                <div class="message-panel-group__head"><b>Добавлены вручную</b><span>Дополнительные точки доступа — основной адрес ключа не меняется</span></div>
+                <div class="panel-list preview-panel-list preview-panel-list--manual custom-scroll" id="messageManualPanelList"></div>
+            </div>
+            <div class="message-empty-state" id="messagePanelsEmpty" {% if panels %}hidden{% endif %}>
                 <svg viewBox="0 0 24 24"><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg>
                 <b>Панели не выбраны</b>
-                <span>Уточните адрес выше. Запись без явного выбора панелей невозможна.</span>
+                <span>Добавьте панель вручную или уточните адрес выше.</span>
             </div>
-            {% endif %}
+            <footer class="message-selection-footer message-panel-summary">
+                <div><span>Автоматически выбраны:</span><b id="automaticPanelsSummary">{{ panels|length }}</b></div>
+                <div><span>Добавлены вручную и выбраны:</span><b id="manualPanelsSummary">0</b></div>
+                <strong>Всего будет записано: <b id="selectedPanelCount">{{ panels|length }}</b></strong>
+            </footer>
         </section>
 
         <section class="panel message-keys-card">
@@ -135,28 +150,34 @@
             {% if keys %}
             <div class="table-scroll small-scroll message-key-table">
                 <table>
-                    <thead><tr><th>Номер</th><th>Тип</th><th>HEX</th><th>Состояние</th></tr></thead>
+                    <thead><tr><th>Из сообщения</th><th>Запись CRM</th><th>HEX</th><th>Состояние</th></tr></thead>
                     <tbody>
                     {% for key in keys %}
                     <tr
                         class="message-key-check"
                         data-key-used="{{ 'true' if key.write_context.is_used else 'false' }}"
-                        data-key-conflict="{{ 'true' if key.ambiguous else 'false' }}"
+                        data-key-conflict="{{ 'true' if key.ambiguous or key.identity_conflict else 'false' }}"
                         data-known-panels="{{ key.write_context.known_panel_ids_csv }}"
                     >
-                        <td><b>№{{ key.number }}</b></td>
+                        <td class="message-key-source">
+                            <small>Тип из сообщения</small>
+                            <b>{{ key.requested_type_name or 'Не указан' }}</b>
+                            <span>Номер: №{{ key.number }}</span>
+                            {% if key.requested_hex %}<span>HEX: <code>{{ key.requested_hex }}</code></span>{% endif %}
+                        </td>
                         <td>
                             {% if key.ambiguous %}
                             <select class="message-key-type-select" data-key-number="{{ key.number }}">
                                 <option value="0">Выберите тип</option>
                                 {% for match in key.matches %}<option value="{{ match.key_type_id }}">{{ match.type_name }}</option>{% endfor %}
                             </select>
-                            {% elif key.item %}{{ key.item.type_name or key.item.key_type or '—' }}
-                            {% else %}—{% endif %}
+                            {% elif key.item %}<b>{{ key.item.type_name or key.item.key_type or '—' }}</b><small>№{{ key.item.number }}</small>
+                            {% else %}<b>Не найден</b><small>Точной записи CRM нет</small>{% endif %}
                         </td>
-                        <td>{{ key.item.hex_value if key.item else '—' }}</td>
+                        <td><code>{{ key.item.hex_value if key.item else '—' }}</code></td>
                         <td>
-                            {% if key.ambiguous %}<span class="badge warning">Конфликт номера или HEX</span>
+                            {% if key.ambiguous %}<span class="badge warning">Нужно выбрать тип ключа</span>
+                            {% elif key.identity_conflict %}<span class="badge error">Номер не соответствует указанному HEX</span>
                             {% elif key.item %}
                             <span
                                 class="badge {% if key.write_context.write_state == 'free' %}success{% elif key.write_context.write_state in ('partial_selected', 'used') %}warning{% else %}info{% endif %}"
@@ -278,8 +299,32 @@
         </form>
     </section>
 </div>
+
+<div class="message-panel-picker" id="messagePanelPicker" hidden aria-hidden="true">
+    <section class="message-panel-picker__dialog panel modal-scroll" role="dialog" aria-modal="true" aria-labelledby="messagePanelPickerTitle">
+        <header>
+            <div><span class="page-eyebrow">Все панели CRM</span><h2 id="messagePanelPickerTitle">Добавить панели для записи</h2></div>
+            <button type="button" class="message-panel-picker__close" id="close-panel-picker" aria-label="Закрыть">×</button>
+        </header>
+        <p class="message-panel-picker__note">Дополнительные панели дают ключу доступ к другим точкам, но не меняют адрес и квартиру владельца.</p>
+        <label class="search-field message-panel-picker__search">
+            <span class="search-icon" aria-hidden="true">⌕</span>
+            <input id="messagePanelSearch" type="search" placeholder="Адрес, калитка, парковка, MAC или номер панели" autocomplete="off">
+        </label>
+        <div class="message-panel-picker__status" id="messagePanelSearchStatus">Введите не менее двух символов.</div>
+        <div class="message-panel-picker__results custom-scroll" id="messagePanelSearchResults"></div>
+        <div class="message-panel-picker__selection" id="messagePanelPickerSelection" hidden>
+            <span>Выбрано: <b id="messagePanelPickerCount">0</b></span>
+            <div class="message-panel-picker__chips" id="messagePanelPickerChips"></div>
+        </div>
+        <footer>
+            <button type="button" class="btn btn-ghost" id="cancel-panel-picker">Отмена</button>
+            <button type="button" class="btn" id="add-selected-panels" disabled>Добавить выбранные</button>
+        </footer>
+    </section>
+</div>
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/message.js?v=6"></script>
+<script src="/static/js/message.js?v=10"></script>
 {% endblock %}

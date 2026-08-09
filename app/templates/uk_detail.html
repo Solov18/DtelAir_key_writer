@@ -25,7 +25,8 @@
         {% elif notice == 'panel_updated' %}Квартира и комментарий панели обновлены.
         {% elif notice == 'panel_detached' %}Панель откреплена, история сохранена.
         {% elif notice == 'panel_has_keys' %}Сначала обработайте активные ключи на панели.
-        {% elif notice == 'key_issued' %}Ключ выдан и операция записи обработана.
+        {% elif notice == 'key_issued' %}Ключ выдан, все выбранные панели успешно обработаны.
+        {% elif notice == 'key_issue_partial' %}Ключ выдан. Часть панелей обработана с ошибками — подробности показаны у каждой панели.
         {% elif notice == 'key_dry_run' %}DRY_RUN: CRM-запрос не отправлялся.
         {% elif notice == 'master_added' %}Дополнительная панель добавлена к ключу.
         {% elif notice == 'programming_retried' %}Повторная операция обработана.
@@ -84,7 +85,7 @@
             <article class="uk-linked-panel-card">
                 <header>
                     <span class="uk-resource-icon"><svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M9 6h6M9 10h6M10 18h4"/></svg></span>
-                    <div><b>{{ panel.address }}</b><small>{{ panel.entrance or panel.name }} · {{ panel.mac }}</small></div>
+                    <div><b>{{ panel.address }}</b><small class="uk-panel-point">{{ panel.entrance or panel.name or "Точка доступа" }}</small><code class="uk-panel-mac">{{ panel.mac }}</code></div>
                     <a href="/panels?selected_panel_id={{ panel.panel_id }}" title="Открыть панель">↗</a>
                 </header>
                 <form method="post" action="/uk/{{ group.id }}/panels/{{ panel.link_id }}/update">
@@ -116,7 +117,7 @@
                     <div>
                         <span class="page-eyebrow">{{ 'Ключ-вездеход' if issue.is_master else 'Ключ УК' }}</span>
                         <h3>{{ issue.type_name }} · №{{ issue.number }}</h3>
-                        <small>HEX: {{ issue.hex_value }} · выдан {{ issue.issued_at }}</small>
+                        <small>HEX: {{ issue.hex_value }} · выдан {{ issue.issued_at|datetime }}</small>
                     </div>
                     <span class="uk-issue-status is-{{ issue.issue_status }}">{{ issue.issue_status }}</span>
                 </header>
@@ -127,7 +128,7 @@
                     <div class="uk-programming-row {% if not programming.active %}is-inactive{% endif %}">
                         <div>
                             <b>{% if programming.is_primary %}Основная · {% endif %}{{ programming.address }} · {{ programming.entrance or programming.panel_name }}</b>
-                            <small>Квартира {{ programming.apartment }} · {{ programming.status }}{% if programming.crm_response %} · {{ programming.crm_response }}{% endif %}</small>
+                            <small>Квартира {{ programming.apartment }} · {% if programming.status == 'success' %}Успешно{% elif programming.status == 'error' %}Ошибка{% elif programming.status == 'dry_run' %}Пропущено: учебный режим{% elif programming.status == 'pending' %}Ожидает обработки{% else %}{{ programming.status }}{% endif %}{% if programming.crm_response %} · {{ programming.crm_response }}{% endif %}</small>
                         </div>
                         <div class="uk-programming-actions">
                             {% if programming.active and programming.status in ['error', 'dry_run', 'pending'] %}
@@ -178,7 +179,7 @@
                 <thead><tr><th>Дата</th><th>Операция</th><th>Объект</th><th>Пользователь</th><th>Результат</th></tr></thead>
                 <tbody>
                 {% for operation in operations %}
-                <tr><td>{{ operation.created_at }}</td><td>{{ operation.action_name }}</td><td>{{ operation.object_name_view }}<small>{{ operation.details_view }}</small></td><td>{{ operation.user_name }}</td><td><span class="badge {{ operation.status_tone }}">{{ operation.status_name }}</span></td></tr>
+                <tr><td>{{ operation.created_at|datetime_seconds }}</td><td>{{ operation.action_name }}</td><td>{{ operation.object_name_view }}<small>{{ operation.details_view }}</small></td><td>{{ operation.user_name }}</td><td><span class="badge {{ operation.status_tone }}">{{ operation.status_name }}</span></td></tr>
                 {% else %}<tr><td colspan="5">Операций пока нет.</td></tr>{% endfor %}
                 </tbody>
             </table>
@@ -217,7 +218,7 @@
         <header><div><span class="page-eyebrow">Дом УК</span><h2>Закрепить панель</h2></div><button type="button" aria-label="Закрыть" data-close-uk-detail-modal>×</button></header>
         <form method="post" action="/uk/{{ group.id }}/panels/add" class="uk-profile-form">
             <label class="is-wide">Панель
-                <select name="panel_id" required><option value="">Выберите панель</option>{% for panel in available_panels %}<option value="{{ panel.id }}">{{ panel.address }} · {{ panel.entrance or panel.name }} · {{ panel.mac }}</option>{% endfor %}</select>
+                <select name="panel_id" required data-combobox-search="true"><option value="">Выберите панель</option>{% for panel in available_panels %}<option value="{{ panel.id }}" data-search="{{ panel.address }} {{ panel.entrance or '' }} {{ panel.name or '' }} {{ panel.mac }} {{ panel.id }}">{{ panel.address }} · {{ panel.entrance or panel.name }} · {{ panel.mac }}</option>{% endfor %}</select>
             </label>
             <label>Квартира учётной записи УК<input name="apartment" required autocomplete="off"></label>
             <label>Комментарий<input name="comment" autocomplete="off"></label>
@@ -231,12 +232,45 @@
     <div class="uk-modal-card panel custom-scroll" role="dialog" aria-modal="true">
         <header><div><span class="page-eyebrow">Выдача физического ключа</span><h2>Выдать ключ УК</h2></div><button type="button" aria-label="Закрыть" data-close-uk-detail-modal>×</button></header>
         <form method="post" action="/uk/{{ group.id }}/keys/issue" class="uk-profile-form">
-            <label class="is-wide">Свободный ключ
-                <select name="key_id" required><option value="">Выберите ключ с HEX</option>{% for key in available_keys %}<option value="{{ key.id }}">{{ key.type_name }} · №{{ key.number }} · {{ key.hex_value }}</option>{% endfor %}</select>
-            </label>
-            <label class="is-wide">Основная панель
-                <select name="panel_link_id" required><option value="">Выберите панель УК</option>{% for panel in group_panels %}<option value="{{ panel.link_id }}">{{ panel.address }} · {{ panel.entrance or panel.name }} · кв. {{ panel.apartment }}</option>{% endfor %}</select>
-            </label>
+            <section class="uk-key-picker is-wide" data-uk-key-picker data-source="/uk/{{ group.id }}/available-keys">
+                <label for="ukKeyPickerTrigger">Свободный ключ</label>
+                <input type="hidden" name="key_id" data-uk-key-value>
+                <button id="ukKeyPickerTrigger" type="button" class="uk-key-picker__trigger" data-uk-key-trigger aria-haspopup="listbox" aria-expanded="false">
+                    <span data-uk-key-label>Выберите ключ с HEX</span><span aria-hidden="true">⌄</span>
+                </button>
+                <div class="uk-key-picker__dropdown" data-uk-key-dropdown hidden>
+                    <div class="uk-key-picker__filters">
+                        <label><span>Тип ключа</span>
+                            <select data-uk-key-type data-native-select>
+                                <option value="">Все типы</option>
+                                {% for key_type in available_key_types %}<option value="{{ key_type.id }}">{{ key_type.name }}</option>{% endfor %}
+                            </select>
+                        </label>
+                        <label><span>Поиск</span><span class="uk-picker-search-row"><input type="search" data-uk-key-search autocomplete="off" placeholder="Номер, HEX или тип"><button type="button" data-uk-key-find>Найти</button></span></label>
+                    </div>
+                    <div class="uk-key-picker__results custom-scroll" data-uk-key-results role="listbox"></div>
+                    <p class="uk-key-picker__empty" data-uk-key-empty hidden>Свободные ключи не найдены</p>
+                </div>
+            </section>
+            <section class="uk-issue-panel-picker is-wide" data-uk-issue-panels data-source="/uk/{{ group.id }}/available-panels">
+                <div class="uk-issue-panel-picker__head">
+                    <div><b>Панели для записи</b><span>Выберите одну или несколько панелей этой УК</span></div>
+                    <div class="uk-issue-panel-picker__actions">
+                        <button type="button" data-uk-panels-select-all>Выбрать все</button>
+                        <button type="button" data-uk-panels-clear>Снять все</button>
+                    </div>
+                </div>
+                <label class="uk-issue-panel-search">
+                    <span class="sr-only">Поиск панелей</span>
+                    <span class="uk-picker-search-row"><input type="search" autocomplete="off" placeholder="Адрес, вход, парковка, калитка, лифт или MAC" data-uk-panels-search><button type="button" data-uk-panels-find>Найти</button></span>
+                </label>
+                <div class="uk-issue-panel-list custom-scroll" data-uk-panels-list></div>
+                <p class="uk-issue-panel-empty" data-uk-panels-empty hidden>Панели не найдены</p>
+                <div class="uk-issue-panel-summary">
+                    <b>Выбрано панелей: <span data-uk-panels-count>0</span></b>
+                    <span data-uk-panels-selected>Панели пока не выбраны</span>
+                </div>
+            </section>
             <label>Квартира только для операции<input name="apartment_override" autocomplete="off" placeholder="Оставьте пустым для автоподстановки"></label>
             <label class="uk-confirm-field"><input type="checkbox" name="override_confirmed" value="1"><span>Подтверждаю изменение квартиры только для этой операции</span></label>
             <label class="is-wide">Комментарий<textarea name="comment" rows="2"></textarea></label>
@@ -248,5 +282,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/uk-detail.js?v=4"></script>
+<script src="/static/js/uk-detail.js?v=8"></script>
 {% endblock %}

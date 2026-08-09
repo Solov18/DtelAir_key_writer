@@ -48,7 +48,7 @@
         </div>
     </section>
 
-    <div class="uk-directory-layout">
+    <div class="uk-directory-layout detail-layout">
         <section class="uk-register panel">
             <div class="uk-register-toolbar">
                 <div class="uk-register-actions">
@@ -139,7 +139,7 @@
             </footer>
         </section>
 
-        <aside class="uk-inspector panel custom-scroll">
+        <aside class="uk-inspector detail-sidebar panel custom-scroll">
             {% if selected_group %}
             <div class="uk-inspector-profile">
                 <span class="uk-inspector-avatar">{{ selected_group.name[:1]|upper }}</span>
@@ -168,7 +168,7 @@
                 <header><div><span>Последние операции</span><b>{{ selected_operations|length }}</b></div><a href="/uk/{{ selected_group.id }}#history">История</a></header>
                 <div class="uk-inspector-integration-list">
                     {% for operation in selected_operations[:4] %}
-                    <div class="uk-inspector-integration"><span class="uk-integration-mark {% if operation.status_tone == 'success' %}is-configured{% endif %}"></span><span><b>{{ operation.action_name }}</b><small>{{ operation.created_at }} · {{ operation.user_name }}</small></span></div>
+                    <div class="uk-inspector-integration"><span class="uk-integration-mark {% if operation.status_tone == 'success' %}is-configured{% endif %}"></span><span><b>{{ operation.action_name }}</b><small>{{ operation.created_at|datetime }} · {{ operation.user_name }}</small></span></div>
                     {% else %}<div class="uk-inspector-integration-empty"><b>Операций пока нет</b></div>{% endfor %}
                 </div>
             </section>
@@ -204,7 +204,7 @@
             <label>Пароль CRM<input name="crm_password" type="password" autocomplete="new-password"></label>
             {% endif %}
             <label class="is-wide">Комментарий<textarea name="note" rows="3"></textarea></label>
-            <div class="uk-modal-actions is-wide"><button type="button" class="btn btn-ghost" data-close-uk-modal>Отмена</button><button type="submit" class="btn">Добавить УК</button></div>
+            <div class="uk-modal-actions is-wide"><button type="submit" class="btn">Добавить УК</button></div>
         </form>
     </div>
 </div>
@@ -234,7 +234,7 @@
             </dl>
             {% endif %}
             <label class="is-wide">Комментарий<textarea name="note" rows="3">{{ selected_group.note or '' }}</textarea></label>
-            <div class="uk-modal-actions is-wide"><button type="button" class="btn btn-ghost" data-close-uk-modal>Отмена</button><button type="submit" class="btn">Сохранить</button></div>
+            <div class="uk-modal-actions is-wide"><button type="submit" class="btn">Сохранить</button></div>
         </form>
     </div>
 </div>
@@ -242,5 +242,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/uk.js?v=3"></script>
+<script src="/static/js/uk.js?v=4"></script>
 {% endblock %}

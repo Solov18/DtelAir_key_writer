@@ -27,7 +27,8 @@ from app.repositories.employee_repository import (
     update_employee_key_comment,
     update_employee_key_history,
 )
-from app.repositories.key_repository import get_key_types
+from app.repositories.key_repository import get_key_types, save_prepared_key
+from app.repositories.log_repository import get_employee_operations
 from app.services import find_key, get_panels, is_ambiguous_key, write_key_to_panels
 from app.services.audit import log_event
 from app.templates_config import templates
@@ -50,6 +51,7 @@ def _employee_detail_context(
     request: Request,
     employee_id: int,
     message: dict | None = None,
+    missing_key: dict | None = None,
 ) -> dict:
     employee = get_employee_any_status(employee_id)
 
@@ -61,9 +63,11 @@ def _employee_detail_context(
         "active_key": active_keys[0] if active_keys else None,
         "active_keys": active_keys,
         "key_history": get_employee_key_history(employee_id),
+        "operations": get_employee_operations(employee_id),
         "status_labels": KEY_STATUS_LABELS,
         "key_types": get_key_types(include_archived=False),
         "message": message,
+        "missing_key": missing_key,
     }
 
 
@@ -390,7 +394,12 @@ def employee_issue_key(
                 employee_id,
                 {
                     "type": "error",
-                    "text": f"Ключ «{key_value.strip()}» не найден в базе.",
+                    "text": "Ключ не найден в базе CRM",
+                },
+                {
+                    "value": key_value.strip(),
+                    "key_type_id": key_type_id,
+                    "comment": new_key_comment,
                 },
             ),
         )
@@ -430,6 +439,56 @@ def employee_issue_key(
     return RedirectResponse(f"/employees/{employee_id}", status_code=303)
 
 
+@router.post("/employees/{employee_id}/keys/create-and-issue", response_class=HTMLResponse)
+def employee_create_and_issue_key(
+    request: Request,
+    employee_id: int,
+    key_type_id: int = Form(...),
+    number: str = Form(...),
+    hex_value: str = Form(...),
+    comment: str = Form(""),
+):
+    employee = get_employee(employee_id)
+    if not employee:
+        return RedirectResponse("/employees/dismissed", status_code=303)
+    try:
+        key = save_prepared_key(
+            key_type_id,
+            number,
+            hex_value,
+            username=(request.session.get("user") or {}).get("full_name", ""),
+        )
+        issue_key_to_employee(
+            employee_id=employee_id,
+            key_id=key["id"],
+            new_key_comment=comment,
+        )
+    except ValueError as error:
+        return templates.TemplateResponse(
+            "employee_detail.html",
+            _employee_detail_context(
+                request,
+                employee_id,
+                {"type": "error", "text": str(error)},
+                {"value": number, "key_type_id": key_type_id, "comment": comment},
+            ),
+        )
+
+    log_event(
+        request=request,
+        action="employee_key_create_and_issue",
+        object_type="Сотрудник",
+        object_name=employee.get("full_name") or str(employee_id),
+        details=f"Ключ №{key.get('number')} создан только в CRM и выдан сотруднику",
+        printed_number=key.get("number", ""),
+        hex_value=key.get("hex_value", "-"),
+        key_id=key.get("id"),
+        key_type=key.get("type_name") or key.get("key_type", ""),
+        employee_id=employee_id,
+    )
+    return RedirectResponse(f"/employees/{employee_id}?notice=key_created", status_code=303)
+
+
 @router.post("/employees/{employee_id}/keys/add", response_class=HTMLResponse)
 def employee_add_keys(
     request: Request,
@@ -460,11 +519,12 @@ def employee_add_keys(
             return templates.TemplateResponse(
                 "employee_detail.html",
                 _employee_detail_context(
-                    request,
-                    employee_id,
-                    {"type": "error", "text": f"Ключ «{value}» не найден."},
-                ),
-            )
+                request,
+                employee_id,
+                {"type": "error", "text": "Ключ не найден в базе CRM"},
+                {"value": value, "key_type_id": key_type_id, "comment": ""},
+            ),
+        )
         keys.append(key)
 
     try:

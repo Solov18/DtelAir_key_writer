@@ -62,14 +62,10 @@
     confirmButton.addEventListener("click", () => finish(true));
     cancelButton.addEventListener("click", () => finish(false));
     closeButton.addEventListener("click", () => finish(false));
-    root.addEventListener("mousedown", (event) => {
-        if (event.target === root && !dangerMode) finish(false);
-    });
     document.addEventListener("keydown", (event) => {
         if (!root.classList.contains("is-open")) return;
         if (event.key === "Escape") {
             event.preventDefault();
-            finish(false);
             return;
         }
         if (event.key === "Enter" && !event.target.closest("textarea") && event.target !== cancelButton) {

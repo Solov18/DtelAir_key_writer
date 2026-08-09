@@ -158,6 +158,12 @@ class PanelRepositoryTests(PostgreSQLTestCase):
         self.assertEqual(punctuation_page["total"], 1)
         self.assertEqual(punctuation_page["items"][0]["id"], first["id"])
 
+        combined_page = panel_repository.get_panel_page(
+            query="Тепличная 63 подъезд 2",
+        )
+        self.assertEqual(combined_page["total"], 1)
+        self.assertEqual(combined_page["items"][0]["id"], second["id"])
+
         statistics = panel_repository.get_panel_statistics()
         self.assertEqual(statistics["total"], 3)
         self.assertEqual(statistics["online"], 1)

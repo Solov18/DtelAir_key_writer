@@ -198,7 +198,11 @@ def _operation_timestamp_parts(value: object) -> tuple[str, str]:
     """Return a compact, stable timestamp representation for dashboard cards."""
     raw_value = str(value or "").replace("T", " ")
     if len(raw_value) >= 19 and raw_value[10:11] == " ":
-        return raw_value[:10], raw_value[11:19]
+        try:
+            parsed = datetime.fromisoformat(raw_value)
+        except ValueError:
+            return raw_value[:10], raw_value[11:19]
+        return parsed.strftime("%d.%m.%Y"), parsed.strftime("%H:%M:%S")
     return raw_value, ""
 
 
@@ -433,3 +437,26 @@ def get_last_operations(limit: int = 500) -> list[dict]:
 
 def get_recent_operations(limit: int = 5) -> list[dict]:
     return get_last_operations(limit)
+
+
+def get_employee_operations(employee_id: int, limit: int = 100) -> list[dict]:
+    """Return the audit trail for one employee, newest entries first."""
+    safe_limit = max(1, min(int(limit), 500))
+    with db() as conn:
+        rows = conn.execute(
+            """
+            SELECT *
+            FROM operation_log
+            WHERE employee_id = ?
+               OR (
+                    action LIKE 'employee_%'
+                    AND smart_norm(COALESCE(object_name, '')) = smart_norm(
+                        COALESCE((SELECT full_name FROM employees WHERE id = ?), '')
+                    )
+               )
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?
+            """,
+            (employee_id, employee_id, safe_limit),
+        ).fetchall()
+    return [normalize_operation_row(dict(row)) for row in rows]

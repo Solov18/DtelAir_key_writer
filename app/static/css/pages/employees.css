@@ -1106,7 +1106,7 @@ body.light-theme .modal-backdrop {
 .employees-directory-layout {
     min-width: 0;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 350px;
+    grid-template-columns: minmax(0, 1fr) var(--detail-sidebar-width, 390px);
     gap: 12px;
     align-items: stretch;
 }
@@ -1823,7 +1823,7 @@ body.light-theme .employee-row-actions button {
 
 @media (max-width: 1500px) {
     .employees-directory-layout {
-        grid-template-columns: minmax(0, 1fr) 320px;
+        grid-template-columns: minmax(0, 1fr) var(--detail-sidebar-width, 380px);
     }
 
     .employee-summary-card {
@@ -1980,12 +1980,20 @@ body.light-theme .employee-row-actions button {
 
 .employee-profile-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1.3fr) minmax(390px, .9fr);
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+    gap: 16px;
+    align-items: start;
+}
+
+.employee-profile-work-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.65fr) minmax(330px, .9fr);
     gap: 16px;
     align-items: start;
 }
 
 .employee-profile-data,
+.employee-profile-summary,
 .employee-profile-active-keys,
 .employee-profile-issue,
 .employee-profile-history {
@@ -1993,6 +2001,24 @@ body.light-theme .employee-row-actions button {
     overflow: hidden;
     background: rgba(2, 15, 27, .82);
 }
+
+.employee-profile-summary dl {
+    display: grid;
+    gap: 0;
+    margin: 0;
+    padding: 8px 18px 16px;
+}
+
+.employee-profile-summary dl > div {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(110px, auto);
+    gap: 14px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--line-soft);
+}
+
+.employee-profile-summary dt { color: var(--muted); font-size: 12px; }
+.employee-profile-summary dd { margin: 0; color: var(--text-strong); font-size: 13px; font-weight: 800; text-align: right; overflow-wrap: anywhere; }
 
 .employee-profile-section-head {
     min-height: 68px;
@@ -2069,9 +2095,19 @@ body.light-theme .employee-row-actions button {
 .employee-profile-key-list {
     max-height: 510px;
     display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 10px;
     overflow: auto;
     padding: 14px 14px 16px;
+}
+
+.employee-key-open {
+    display: inline-flex;
+    margin: 0 13px 12px 34px;
+    color: var(--blue);
+    font-size: 11px;
+    font-weight: 800;
+    text-decoration: none;
 }
 
 .employee-profile-key-card {
@@ -2189,7 +2225,7 @@ body.light-theme .employee-row-actions button {
 
 .employee-profile-issue-form {
     display: grid;
-    grid-template-columns: 1fr .8fr 1fr auto;
+    grid-template-columns: 1fr;
     gap: 12px;
     align-items: end;
     padding: 16px 18px 19px;
@@ -2207,16 +2243,48 @@ body.light-theme .employee-row-actions button {
 .employee-profile-issue-form input,
 .employee-profile-issue-form select {
     width: 100%;
-    height: 44px;
-    min-height: 44px;
+    height: var(--control-height);
+    min-height: var(--control-height);
     font-size: 12px;
 }
 
 .employee-profile-issue-form .btn {
-    height: 44px;
-    min-height: 44px;
+    height: var(--control-height);
+    min-height: var(--control-height);
     border-radius: 9px;
     white-space: nowrap;
+}
+
+.employee-missing-key {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 0 18px 14px;
+    padding: 13px 15px;
+    border: 1px solid var(--warning, #f4aa23);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--warning, #f4aa23) 9%, var(--surface));
+}
+.employee-missing-key > div { display: flex; gap: 10px; align-items: center; }
+.employee-missing-key > div:first-child { display: grid; gap: 3px; }
+.employee-missing-key span { color: var(--muted); font-size: 11px; }
+.employee-missing-key button { min-height: 38px; white-space: nowrap; }
+
+.employee-create-key-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    padding: 18px;
+}
+.employee-create-key-form label { display: grid; gap: 6px; color: var(--muted); font-weight: 800; }
+.employee-create-key-form .is-wide { grid-column: 1 / -1; }
+
+@media (max-width: 720px) {
+    .employee-missing-key,
+    .employee-missing-key > div { align-items: stretch; flex-direction: column; }
+    .employee-create-key-form { grid-template-columns: 1fr; }
+    .employee-create-key-form .is-wide { grid-column: auto; }
 }
 
 .employee-profile-history-scroll {
@@ -2243,10 +2311,11 @@ body.light-theme .employee-row-actions button {
 }
 
 .employee-profile-history td {
-    padding: 11px 12px;
+    padding: 13px 14px;
     border-bottom: 1px solid var(--line-soft);
     color: var(--text);
-    font-size: 11px;
+    font-size: 13px;
+    line-height: 1.4;
 }
 
 .employee-profile-history td b,
@@ -2255,9 +2324,13 @@ body.light-theme .employee-row-actions button {
 }
 
 .employee-profile-history td small {
-    margin-top: 3px;
+    margin-top: 5px;
     color: var(--muted);
+    font-size: 12px;
 }
+
+.employee-profile-history td b { color: var(--text-strong); font-size: 13px; }
+.employee-profile-history td code { font-size: 12px; white-space: nowrap; }
 
 .employee-profile-history-empty {
     padding: 34px 18px;
@@ -2288,9 +2361,17 @@ body.light-theme .employee-row-actions button {
     display: grid;
     grid-template-columns: 1fr auto;
     gap: 9px;
+    align-items: center;
+}
+
+.employee-profile-dismiss form input,
+.employee-profile-dismiss form .btn {
+    height: var(--control-height);
+    min-height: var(--control-height);
 }
 
 body.light-theme .employee-profile-data,
+body.light-theme .employee-profile-summary,
 body.light-theme .employee-profile-active-keys,
 body.light-theme .employee-profile-issue,
 body.light-theme .employee-profile-history,
@@ -2304,13 +2385,12 @@ body.light-theme .employee-profile-history th {
 }
 
 @media (max-width: 1100px) {
-    .employee-profile-grid {
+    .employee-profile-grid,
+    .employee-profile-work-grid {
         grid-template-columns: 1fr;
     }
 
-    .employee-profile-issue-form {
-        grid-template-columns: 1fr 1fr;
-    }
+    .employee-profile-key-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 760px) {
@@ -2336,6 +2416,8 @@ body.light-theme .employee-profile-history th {
     .employee-profile-dismiss form {
         min-width: 0;
     }
+
+    .employee-profile-key-list { grid-template-columns: 1fr; }
 }
 /* Исправление положения статуса "Действующий" */
 .employee-active-key-card {

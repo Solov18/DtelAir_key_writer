@@ -43,7 +43,6 @@ def find_keys(number_or_hex: str, key_type_id: int | None = None) -> list[dict]:
             _key_select()
             + f"""
                 WHERE LOWER(k.number) = LOWER(?)
-                  AND TRIM(k.hex_value) <> ''
                 {type_filter}
                 ORDER BY LOWER(kt.name), kt.name, k.id
             """,
@@ -54,13 +53,19 @@ def find_keys(number_or_hex: str, key_type_id: int | None = None) -> list[dict]:
             return [dict(row) for row in number_rows]
 
         if re.fullmatch(r"[0-9A-F]{6,16}", hex_value):
+            hex_params: list = [hex_value]
+            hex_type_filter = ""
+            if key_type_id:
+                hex_type_filter = " AND k.key_type_id = ?"
+                hex_params.append(key_type_id)
             hex_rows = conn.execute(
                 _key_select()
-                + """
+                + f"""
                     WHERE UPPER(k.hex_value) = ?
+                    {hex_type_filter}
                     ORDER BY LOWER(kt.name), kt.name, k.id
                 """,
-                (hex_value,),
+                hex_params,
             ).fetchall()
             return [dict(row) for row in hex_rows]
 

@@ -103,6 +103,36 @@ class SystemSafetyTests(PostgreSQLTestCase):
         writer.assert_not_called()
         self.assertIn("Не выбрана ни одна панель", response.body.decode("utf-8"))
 
+    def test_manual_write_keeps_assignment_address_and_tracks_panel_sources(self):
+        request = self._request("/write/manual/write")
+        key = {"id": 1, "number": "973", "hex_value": "AABBCCDD", "status": "free"}
+        panels = [
+            {"id": 10, "address": "ул. Ясногорская 16/2", "mac": "08:13:CD:00:00:10"},
+            {"id": 11, "address": "ул. Ясногорская 16/2", "mac": "08:13:CD:00:00:11"},
+            {"id": 20, "address": "ул. Роз 6/6А", "mac": "08:13:CD:00:00:20"},
+            {"id": 21, "address": "ул. Роз 6/6А", "mac": "08:13:CD:00:00:21"},
+        ]
+        with (
+            patch("app.routers.manual_write.find_key", return_value=key),
+            patch("app.routers.manual_write.get_panels", return_value=panels),
+            patch("app.routers.manual_write.write_key_to_panels", return_value=[]) as writer,
+        ):
+            manual_write_execute(
+                request=request,
+                key_query="973",
+                address="ул. Ясногорская 16/2",
+                apartment="4",
+                inner=1,
+                panel_ids=[10, 11, 20, 21],
+                automatic_panel_ids=[10, 11],
+                manual_panel_ids=[20, 21, 20],
+                key_type_id=0,
+            )
+        kwargs = writer.call_args.kwargs
+        self.assertEqual(kwargs["address"], "ул. Ясногорская 16/2")
+        self.assertEqual(kwargs["automatic_panel_ids"], {10, 11})
+        self.assertEqual(kwargs["manual_panel_ids"], {20, 21})
+
     def test_partial_panel_write_keeps_success_and_reports_each_failure(self):
         key = {
             "id": 999,

@@ -34,10 +34,20 @@ def write_key_to_panels(
     known_panel_ids: set[int] | None = None,
     write_option: str = "",
     previous_assignment: str = "",
+    automatic_panel_ids: set[int] | None = None,
+    manual_panel_ids: set[int] | None = None,
 ):
     results = []
     known_panel_ids = {int(value) for value in (known_panel_ids or set())}
     selected_panel_ids = [int(panel["id"]) for panel in panels if panel.get("id")]
+    automatic_panel_ids = {
+        int(value) for value in (automatic_panel_ids or set())
+        if int(value) in selected_panel_ids
+    }
+    manual_panel_ids = {
+        int(value) for value in (manual_panel_ids or set())
+        if int(value) in selected_panel_ids and int(value) not in automatic_panel_ids
+    }
 
     user = request.session.get("user", {}) if request else {}
     training_mode = bool(
@@ -87,6 +97,8 @@ def write_key_to_panels(
         unavailable_reason = (
             "У ключа не указан HEX"
             if not (key_item.get("hex_value") or "").strip()
+            else "У панели не указан MAC"
+            if not (panel.get("mac") or "").strip()
             else UNAVAILABLE_KEY_STATUSES.get(key_item.get("status", ""))
         )
         if training_mode:
@@ -333,6 +345,8 @@ def write_key_to_panels(
                 ),
                 "old_panel_ids": sorted(known_panel_ids),
                 "selected_panel_ids": selected_panel_ids,
+                "automatic_panel_ids": sorted(automatic_panel_ids),
+                "manual_panel_ids": sorted(manual_panel_ids),
                 "new_panel_ids": newly_written_panel_ids,
                 "successful_panel_ids": [
                     int(result["panel"]["id"])

@@ -7,7 +7,7 @@ from tests.postgres_test_case import PostgreSQLTestCase
 
 from app.db import db
 from app.repositories import uk_repository
-from app.routers.uk import uk_credentials_reveal, uk_page
+from app.routers.uk import uk_available_keys, uk_credentials_reveal, uk_detail, uk_page
 from app.services import uk_keys
 from app.services.search import get_search_suggestions
 
@@ -115,6 +115,100 @@ class UkRegistryTests(PostgreSQLTestCase):
             "status": "SUCCESS",
             "response": "Ключ успешно записан",
         }
+
+    def test_available_key_picker_returns_and_filters_all_database_types(self):
+        group_id = uk_repository.save_group("УК для выбора ключей")
+        created = []
+        with db() as conn:
+            for index, type_name in enumerate(
+                ("Оранжевый", "Уникальный", "Стикер", "Премиальный"),
+                start=1,
+            ):
+                existing_type = conn.execute(
+                    "SELECT id FROM key_types WHERE name = ?",
+                    (type_name,),
+                ).fetchone()
+                type_id = int(existing_type["id"]) if existing_type else int(
+                    conn.execute(
+                        """
+                        INSERT INTO key_types(name, color, enabled)
+                        VALUES (?, ?, 1)
+                        """,
+                        (type_name, f"#00{index}aff"),
+                    ).lastrowid
+                )
+                key_id = int(
+                    conn.execute(
+                        """
+                        INSERT INTO keys(key_type_id, number, hex_value, key_type, status)
+                        VALUES (?, ?, ?, ?, 'free')
+                        """,
+                        (type_id, f"00{index}57", f"A1B2C3{index:02d}", type_name),
+                    ).lastrowid
+                )
+                created.append((type_id, key_id, type_name))
+
+        items = uk_repository.get_available_keys(limit=20)
+        self.assertEqual({item["type_name"] for item in items}, {item[2] for item in created})
+
+        sticker_type_id = next(item[0] for item in created if item[2] == "Стикер")
+        filtered = uk_repository.get_available_keys(
+            "стикер 00357",
+            key_type_id=sticker_type_id,
+            limit=20,
+        )
+        self.assertEqual(len(filtered), 1)
+        self.assertEqual(filtered[0]["type_name"], "Стикер")
+
+        response = uk_available_keys(
+            self._request(user_id=1),
+            group_id,
+            q="A1B2",
+            key_type_id=None,
+            limit=20,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(__import__("json").loads(response.body)["items"]), 4)
+
+    def test_available_key_search_ranks_exact_number_before_partial_matches(self):
+        with db() as conn:
+            type_id = int(
+                conn.execute(
+                    "INSERT INTO key_types(name, color, enabled) VALUES (?, '#ef4444', 1)",
+                    ("Стикер",),
+                ).lastrowid
+            )
+            for number in ["134", "135", "136", "137", "138", "139", "3"]:
+                conn.execute(
+                    """
+                    INSERT INTO keys(key_type_id, number, hex_value, key_type, status)
+                    VALUES (?, ?, ?, 'Стикер', 'free')
+                    """,
+                    (type_id, number, f"A9F0{int(number):04X}"),
+                )
+
+        items = uk_repository.get_available_keys("3", key_type_id=type_id, limit=3)
+
+        self.assertGreaterEqual(len(items), 1)
+        self.assertEqual(items[0]["number"], "3")
+        self.assertTrue(all(item["type_id"] == type_id for item in items))
+
+    def test_group_panel_search_filters_complete_linked_panel_set(self):
+        group_id, _, _, _, _ = self._company_with_panels()
+        wicket = self._panel(
+            "ул. Тепличная 71",
+            "калитка 1",
+            "08:13:CD:00:71:01",
+        )
+        uk_repository.add_panel(group_id, wicket, "1", "Общая калитка")
+
+        street = uk_repository.search_group_panels(group_id, "тепличная")
+        exact = uk_repository.search_group_panels(group_id, "тепличная 71 калитка")
+        by_mac = uk_repository.search_group_panels(group_id, "08 13 cd 00 71 01")
+
+        self.assertEqual(len(street), 3)
+        self.assertEqual([item["panel_id"] for item in exact], [wicket])
+        self.assertEqual([item["panel_id"] for item in by_mac], [wicket])
 
     def test_company_crud_search_and_credentials_are_not_in_safe_queries(self):
         group_id = uk_repository.save_group(
@@ -300,6 +394,88 @@ class UkRegistryTests(PostgreSQLTestCase):
                 issued["issue_id"],
                 other_link,
             )
+
+    def test_issue_key_to_multiple_panels_creates_one_issue(self):
+        group_id, _, _, first_link, second_link = self._company_with_panels()
+        key_id = self._key("456899", "ABCDEF12")
+        with patch(
+            "app.services.uk_keys.crm_add_key_for_company",
+            side_effect=[self._crm_success(), self._crm_success()],
+        ) as crm_call:
+            result = uk_keys.issue_key(
+                group_id=group_id,
+                key_id=key_id,
+                panel_link_ids=[first_link, second_link, first_link],
+            )
+        self.assertEqual(result["status"], "SUCCESS")
+        self.assertEqual(len(result["results"]), 2)
+        self.assertEqual(crm_call.call_count, 2)
+        issues = uk_repository.get_group_keys(group_id)
+        self.assertEqual(len(issues), 1)
+        self.assertEqual(
+            len(uk_repository.get_issue_programmings(result["issue_id"])),
+            2,
+        )
+
+    def test_issue_key_continues_after_one_panel_error(self):
+        group_id, _, _, first_link, second_link = self._company_with_panels()
+        key_id = self._key("456900", "ABCDEF13")
+        failed = {"ok": False, "status": "ERROR", "response": "Панель недоступна"}
+        with patch(
+            "app.services.uk_keys.crm_add_key_for_company",
+            side_effect=[failed, self._crm_success()],
+        ) as crm_call:
+            result = uk_keys.issue_key(
+                group_id=group_id,
+                key_id=key_id,
+                panel_link_ids=[first_link, second_link],
+            )
+        self.assertEqual(result["status"], "PARTIAL")
+        self.assertEqual(result["success_count"], 1)
+        self.assertEqual(result["error_count"], 1)
+        self.assertEqual(crm_call.call_count, 2)
+
+    def test_issue_key_to_forty_panels(self):
+        group_id = uk_repository.save_group(
+            "УК на сорок панелей",
+            crm_login="uk-login",
+            crm_password="top-secret",
+        )
+        links = []
+        for index in range(40):
+            panel_id = self._panel(
+                f"Тестовая {index // 4 + 1}",
+                f"Точка {index + 1}",
+                f"08:13:CD:01:{index // 256:02X}:{index % 256:02X}",
+            )
+            links.append(uk_repository.add_panel(group_id, panel_id, str(index + 1)))
+        key_id = self._key("456901", "ABCDEF14")
+        with patch(
+            "app.services.uk_keys.crm_add_key_for_company",
+            return_value=self._crm_success(),
+        ) as crm_call:
+            result = uk_keys.issue_key(
+                group_id=group_id,
+                key_id=key_id,
+                panel_link_ids=links,
+            )
+        self.assertEqual(result["status"], "SUCCESS")
+        self.assertEqual(result["success_count"], 40)
+        self.assertEqual(crm_call.call_count, 40)
+        self.assertEqual(len(uk_repository.get_group_keys(group_id)), 1)
+
+    def test_issue_modal_renders_multi_panel_picker(self):
+        group_id, _, _, _, _ = self._company_with_panels()
+        self._key("456902", "ABCDEF15")
+        response = uk_detail(self._request(), group_id, notice="")
+        html = response.body.decode("utf-8")
+        self.assertIn("Панели для записи", html)
+        self.assertIn(f'data-source="/uk/{group_id}/available-panels"', html)
+        self.assertIn('data-uk-panels-list', html)
+        self.assertIn('data-uk-panels-find', html)
+        self.assertIn("Выбрать все", html)
+        self.assertIn("Снять все", html)
+        self.assertIn("Выбрано панелей", html)
 
     def test_apartment_override_requires_explicit_confirmation(self):
         group_id, _, _, first_link, _ = self._company_with_panels()

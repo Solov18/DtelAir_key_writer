@@ -538,6 +538,7 @@ def get_keys_page(
                 ka.assigned_at,
                 ka.note AS assignment_note,
                 e.full_name AS employee_name,
+                e.position AS employee_position,
                 ug.name AS uk_name
             FROM keys k
             {joins}
@@ -578,6 +579,7 @@ def get_key(key_id: int) -> dict | None:
                 ka.assigned_by,
                 ka.note AS assignment_note,
                 e.full_name AS employee_name,
+                e.position AS employee_position,
                 ug.name AS uk_name
             FROM keys k
             JOIN key_types kt ON kt.id = k.key_type_id

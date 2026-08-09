@@ -18,22 +18,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function openModal(modal) {
         if (!modal) return;
+        if (window.AppModal) {
+            window.AppModal.open(modal, document.activeElement);
+            return;
+        }
         modal.hidden = false;
         document.body.classList.add("modal-open");
         window.setTimeout(() => modal.querySelector("input:not([type='hidden']), button")?.focus(), 30);
     }
 
-    function closeModal(modal) {
-        if (!modal) return;
-        modal.hidden = true;
-        if (!document.querySelector(".panels-modal:not([hidden])")) document.body.classList.remove("modal-open");
-    }
-
     document.querySelectorAll("[data-open-modal]").forEach((button) => {
         button.addEventListener("click", () => openModal(document.getElementById(button.dataset.openModal)));
-    });
-    document.querySelectorAll("[data-close-modal]").forEach((button) => {
-        button.addEventListener("click", () => closeModal(button.closest(".panels-modal")));
     });
 
     document.querySelectorAll(".panels-table tbody tr[data-panel-url]").forEach((row) => {

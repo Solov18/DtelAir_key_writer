@@ -170,7 +170,7 @@
                 <tbody>
                 {% for row in result.operation_results %}
                 <tr>
-                    <td>{{ row.created_at }}</td>
+                    <td>{{ row.created_at|datetime_seconds }}</td>
                     <td><b>{{ row.action_name }}</b></td>
                     <td>{{ row.object_name_view }}</td>
                     <td>{{ row.address or '—' }}{% if row.apartment or row.flat_num %}, кв. {{ row.apartment or row.flat_num }}{% endif %}</td>

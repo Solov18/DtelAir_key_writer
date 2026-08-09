@@ -3,25 +3,6 @@
     const messageText = document.getElementById("messageText");
     const messageSubmit = document.getElementById("messageSubmit");
     const parserState = document.querySelector(".message-parser-state");
-    const exampleButton = document.querySelector("[data-message-example]");
-
-    const exampleText = [
-        "Прописать 2 ключа №39107, №39300",
-        "Сочи, ул. Тепличная, д. 65, корп. 1, кв. 10",
-        "+7 999 000-00-00",
-    ].join("\n");
-
-    if (exampleButton && messageText) {
-        exampleButton.addEventListener("click", () => {
-            messageText.value = exampleText;
-            messageText.dispatchEvent(new Event("input", { bubbles: true }));
-            messageText.focus();
-            messageText.setSelectionRange(
-                messageText.value.length,
-                messageText.value.length
-            );
-        });
-    }
 
     if (messageText && parserState) {
         const updateParserState = () => {
@@ -83,14 +64,18 @@
         return;
     }
 
-    const panelCheckboxes = Array.from(
-        document.querySelectorAll(
-            "input[name='panel_ids_preview'][type='checkbox']"
-        )
-    );
+    const panelCheckboxes = () => Array.from(document.querySelectorAll(
+        "input[name='panel_ids_preview'][type='checkbox']"
+    ));
+    const panelList = document.getElementById("messagePanelList");
+    const manualPanelList = document.getElementById("messageManualPanelList");
+    const manualPanelSection = document.getElementById("manualPanelSection");
+    const panelsEmpty = document.getElementById("messagePanelsEmpty");
     const selectAllButton = document.getElementById("select-all-panels");
     const clearAllButton = document.getElementById("clear-all-panels");
     const selectedCount = document.getElementById("selectedPanelCount");
+    const automaticSummary = document.getElementById("automaticPanelsSummary");
+    const manualSummary = document.getElementById("manualPanelsSummary");
     const selectedPanelsContainer = document.getElementById(
         "selectedPanelsContainer"
     );
@@ -154,7 +139,7 @@
     }
 
     function updateWriteState() {
-        const checkedPanels = panelCheckboxes.filter(
+        const checkedPanels = panelCheckboxes().filter(
             (checkbox) => checkbox.checked
         );
         const unresolved = unresolvedTypes();
@@ -164,6 +149,19 @@
 
         if (selectedCount) {
             selectedCount.textContent = String(checkedPanels.length);
+        }
+        if (automaticSummary) {
+            automaticSummary.textContent = String(checkedPanels.filter(
+                (checkbox) => checkbox.dataset.panelSource === "automatic"
+            ).length);
+        }
+        if (manualSummary) {
+            manualSummary.textContent = String(checkedPanels.filter(
+                (checkbox) => checkbox.dataset.panelSource === "manual"
+            ).length);
+        }
+        if (panelsEmpty) {
+            panelsEmpty.hidden = checkedPanels.length > 0;
         }
 
         document.querySelectorAll(".panel-option").forEach((option) => {
@@ -206,7 +204,7 @@
     }
 
     function setAllPanels(checked) {
-        panelCheckboxes.forEach((checkbox) => {
+        panelCheckboxes().forEach((checkbox) => {
             checkbox.checked = checked;
         });
         updateWriteState();
@@ -214,8 +212,196 @@
 
     selectAllButton?.addEventListener("click", () => setAllPanels(true));
     clearAllButton?.addEventListener("click", () => setAllPanels(false));
-    panelCheckboxes.forEach((checkbox) => {
-        checkbox.addEventListener("change", updateWriteState);
+    document.addEventListener("change", (event) => {
+        if (event.target.matches("input[name='panel_ids_preview']")) {
+            updateWriteState();
+        }
+    });
+
+    const picker = document.getElementById("messagePanelPicker");
+    const openPickerButton = document.getElementById("open-panel-picker");
+    const closePickerButton = document.getElementById("close-panel-picker");
+    const cancelPickerButton = document.getElementById("cancel-panel-picker");
+    const panelSearch = document.getElementById("messagePanelSearch");
+    const searchResults = document.getElementById("messagePanelSearchResults");
+    const searchStatus = document.getElementById("messagePanelSearchStatus");
+    const addSelectedButton = document.getElementById("add-selected-panels");
+    const pickerCount = document.getElementById("messagePanelPickerCount");
+    const pickerSelection = document.getElementById("messagePanelPickerSelection");
+    const pickerChips = document.getElementById("messagePanelPickerChips");
+    let pickerRequest = null;
+    let pickerTimer = 0;
+
+    function escapeHtml(value) {
+        const node = document.createElement("span");
+        node.textContent = String(value ?? "");
+        return node.innerHTML;
+    }
+
+    function selectedPickerPanels() {
+        return Array.from(searchResults?.querySelectorAll(
+            "input[data-picker-panel]:checked"
+        ) || []);
+    }
+
+    function updatePickerState() {
+        const selected = selectedPickerPanels();
+        const count = selected.length;
+        if (pickerCount) pickerCount.textContent = String(count);
+        if (addSelectedButton) addSelectedButton.disabled = count === 0;
+        if (pickerSelection) pickerSelection.hidden = count === 0;
+        if (pickerChips) {
+            pickerChips.innerHTML = selected.map((checkbox) => {
+                try {
+                    const panel = JSON.parse(decodeURIComponent(checkbox.dataset.panel || "%7B%7D"));
+                    return `<span>${escapeHtml(panel.address || "Адрес не указан")} · ${escapeHtml(panel.entrance || panel.name || "Точка доступа")}</span>`;
+                } catch (_error) {
+                    return "";
+                }
+            }).join("");
+        }
+    }
+
+    function openPicker() {
+        if (!picker) return;
+        picker.hidden = false;
+        picker.setAttribute("aria-hidden", "false");
+        document.body.classList.add("modal-open");
+        window.setTimeout(() => panelSearch?.focus(), 30);
+    }
+
+    function closePicker() {
+        if (!picker) return;
+        picker.hidden = true;
+        picker.setAttribute("aria-hidden", "true");
+        document.body.classList.remove("modal-open");
+        openPickerButton?.focus();
+    }
+
+    function panelAlreadySelected(panelId) {
+        return Boolean(document.querySelector(
+            `[data-panel-id="${CSS.escape(String(panelId))}"]`
+        ));
+    }
+
+    function renderPanelSearch(items, total) {
+        if (!searchResults || !searchStatus) return;
+        if (!items.length) {
+            searchResults.replaceChildren();
+            searchStatus.textContent = "Панели не найдены. Уточните адрес или назначение точки доступа.";
+            updatePickerState();
+            return;
+        }
+        searchStatus.textContent = `Найдено: ${total}. Показаны первые ${items.length}.`;
+        searchResults.innerHTML = items.map((panel) => {
+            const exists = panelAlreadySelected(panel.id);
+            const disabled = exists || !panel.selectable;
+            const reason = exists ? "Панель уже выбрана" : panel.unavailable_reason;
+            const title = panel.entrance || panel.name || "Точка доступа";
+            return `
+                <label class="message-panel-picker__item ${disabled ? "is-disabled" : ""}">
+                    <span class="message-panel-picker__body">
+                        <b>${escapeHtml(panel.address || "Адрес не указан")}</b>
+                        <span>${escapeHtml(title)}</span>
+                        <small>${escapeHtml(panel.mac || "MAC не указан")}</small>
+                    </span>
+                    <span class="badge ${escapeHtml(panel.status_tone)}">${escapeHtml(panel.status_name)}</span>
+                    <input type="checkbox" data-picker-panel
+                        data-panel="${encodeURIComponent(JSON.stringify(panel))}"
+                        aria-label="Выбрать ${escapeHtml(panel.address || title)}"
+                        ${disabled ? "disabled" : ""}>
+                    ${reason ? `<em>${escapeHtml(reason)}</em>` : ""}
+                </label>`;
+        }).join("");
+        updatePickerState();
+    }
+
+    async function searchPanels() {
+        const query = panelSearch?.value.trim() || "";
+        if (query.length < 2) {
+            searchResults?.replaceChildren();
+            if (searchStatus) searchStatus.textContent = "Введите не менее двух символов.";
+            updatePickerState();
+            return;
+        }
+        pickerRequest?.abort();
+        pickerRequest = new AbortController();
+        if (searchStatus) searchStatus.textContent = "Ищем панели…";
+        try {
+            const response = await fetch(
+                `/message/panels/search?query=${encodeURIComponent(query)}`,
+                { signal: pickerRequest.signal, globalLoader: false }
+            );
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const payload = await response.json();
+            renderPanelSearch(payload.items || [], Number(payload.total || 0));
+        } catch (error) {
+            if (error.name === "AbortError") return;
+            console.error("message.panel_search.error", error);
+            searchResults?.replaceChildren();
+            if (searchStatus) searchStatus.textContent = "Не удалось выполнить поиск. Повторите попытку.";
+            updatePickerState();
+        }
+    }
+
+    function createManualPanel(panel) {
+        if (!manualPanelList || panelAlreadySelected(panel.id)) return;
+        const article = document.createElement("article");
+        article.className = "panel-option is-selected";
+        article.dataset.panelId = String(panel.id);
+        article.dataset.panelSource = "manual";
+        const checkboxId = `manual-panel-${String(panel.id).replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+        article.innerHTML = `
+            <label class="panel-card__content" for="${escapeHtml(checkboxId)}">
+                <span class="panel-option-body">
+                    <span class="panel-option-title">${escapeHtml(panel.entrance || panel.name || "Точка доступа")}</span>
+                    <span class="panel-option-meta">${escapeHtml(panel.address || "Адрес не указан")}</span>
+                    <span class="panel-option-mac">${escapeHtml(panel.mac || "MAC не указан")}</span>
+                    <span class="message-panel-source is-manual">Добавлена вручную</span>
+                </span>
+            </label>
+            <div class="panel-card__actions">
+                <input class="panel-card__checkbox" id="${escapeHtml(checkboxId)}" type="checkbox" name="panel_ids_preview" value="${escapeHtml(panel.id)}" data-panel-source="manual" aria-label="Выбрать панель ${escapeHtml(panel.entrance || panel.name || panel.address || panel.id)}" checked>
+                <button type="button" class="message-manual-panel-remove" data-remove-manual-panel aria-label="Удалить из выбранных" title="Удалить из выбранных">×</button>
+            </div>`;
+        manualPanelList.appendChild(article);
+        if (manualPanelSection) manualPanelSection.hidden = false;
+        if (panelsEmpty) panelsEmpty.hidden = true;
+    }
+
+    openPickerButton?.addEventListener("click", openPicker);
+    closePickerButton?.addEventListener("click", closePicker);
+    cancelPickerButton?.addEventListener("click", closePicker);
+    document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && picker && !picker.hidden) {
+            event.preventDefault();
+            closePicker();
+        }
+    });
+    panelSearch?.addEventListener("input", () => {
+        window.clearTimeout(pickerTimer);
+        pickerTimer = window.setTimeout(searchPanels, 260);
+    });
+    searchResults?.addEventListener("change", updatePickerState);
+    addSelectedButton?.addEventListener("click", () => {
+        selectedPickerPanels().forEach((checkbox) => {
+            try {
+                createManualPanel(JSON.parse(decodeURIComponent(checkbox.dataset.panel || "%7B%7D")));
+            } catch (error) {
+                console.error("message.panel_picker.invalid_item", error);
+            }
+        });
+        updateWriteState();
+        closePicker();
+    });
+    manualPanelList?.addEventListener("click", (event) => {
+        const removeButton = event.target.closest("[data-remove-manual-panel]");
+        if (!removeButton) return;
+        removeButton.closest(".panel-option")?.remove();
+        if (!manualPanelList.querySelector(".panel-option") && manualPanelSection) {
+            manualPanelSection.hidden = true;
+        }
+        updateWriteState();
     });
 
     typeSelectors.forEach((select) => {
@@ -239,7 +425,7 @@
         updateWriteState();
         if (writeInFlight || writeButton?.disabled) return;
 
-        const checkedPanels = panelCheckboxes.filter(
+        const checkedPanels = panelCheckboxes().filter(
             (checkbox) => checkbox.checked
         );
         const keyCount = Number(writeForm.dataset.keyCount || 0);
@@ -291,6 +477,14 @@
             hiddenInput.name = "panel_ids";
             hiddenInput.value = checkbox.value;
             selectedPanelsContainer?.appendChild(hiddenInput);
+
+            const sourceInput = document.createElement("input");
+            sourceInput.type = "hidden";
+            sourceInput.name = checkbox.dataset.panelSource === "manual"
+                ? "manual_panel_ids"
+                : "automatic_panel_ids";
+            sourceInput.value = checkbox.value;
+            selectedPanelsContainer?.appendChild(sourceInput);
         });
 
         console.info("key_write.submit", {

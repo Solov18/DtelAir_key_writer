@@ -54,7 +54,7 @@
         </div>
     </section>
 
-    <div class="keys-console-workspace">
+    <div class="keys-console-workspace detail-layout">
         <section class="panel keys-console-main">
             <div class="keys-console-toolbar">
                 <button type="button" class="btn" data-keys-modal="keyTypesModal">
@@ -145,21 +145,23 @@
                         <td><span class="key-status is-{{ key.status_tone }}">{{ key.status_name }}</span></td>
                         <td>
                             <span class="keys-assignment-main">
-                                {% if key.assignment_type %}{{ key.assignment_address or key.assignment_text }}{% else %}—{% endif %}
+                                {% if key.assignment_type == 'employee' %}Сотрудник
+                                {% elif key.assignment_type %}{{ key.assignment_address or key.assignment_text }}{% else %}—{% endif %}
                             </span>
-                            {% if key.assignment_type %}<small>{{ key.assignment_type_name }}{% if key.assignment_note %} · {{ key.assignment_note }}{% endif %}</small>{% endif %}
+                            {% if key.assignment_type == 'employee' %}<small>{{ key.employee_position or 'Должность не указана' }}</small>
+                            {% elif key.assignment_type %}<small>{{ key.assignment_type_name }}{% if key.assignment_note %} · {{ key.assignment_note }}{% endif %}</small>{% endif %}
                         </td>
                         <td>
                             <span class="keys-assignment-detail">
                                 {% if key.assignment_apartment %}кв. {{ key.assignment_apartment }}
-                                {% elif key.employee_name %}{{ key.employee_name }}
+                                {% elif key.employee_name %}{{ key.employee_name }}<small>{{ key.employee_position or 'Должность не указана' }}</small>
                                 {% elif key.uk_name %}{{ key.uk_name }}
                                 {% elif key.assignment_note %}{{ key.assignment_note }}
                                 {% elif key.assignment_type %}{{ key.assignment_type_name }}
                                 {% else %}—{% endif %}
                             </span>
                         </td>
-                        <td><span class="keys-date">{{ key.created_at[:16] if key.created_at else '—' }}</span></td>
+                        <td><span class="keys-date">{{ key.created_at|datetime }}</span></td>
                         <td>
                             <div class="keys-row-actions">
                                 <a href="/keys?{{ row_query }}&selected_key_id={{ key.id }}" class="keys-icon-action" title="Показать справа" aria-label="Показать ключ">
@@ -207,7 +209,7 @@
             </footer>
         </section>
 
-        <aside class="keys-console-sidebar">
+        <aside class="keys-console-sidebar detail-sidebar">
             {% if selected_key %}
             <section class="panel keys-side-card keys-selected-card">
                 <header>
@@ -217,12 +219,12 @@
                 </header>
                 <dl class="keys-side-facts">
                     <div><dt>Тип ключа</dt><dd><span class="key-type-chip"><i style="--key-type-color: {{ selected_key.type_color }}"></i>{{ selected_key.type_name }}</span></dd></div>
-                    <div><dt>Номер</dt><dd>{{ selected_key.number }}</dd></div>
-                    <div><dt>HEX</dt><dd><code>{{ selected_key.hex_value or 'Не считан' }}</code></dd></div>
+                    <div><dt>Номер</dt><dd class="keys-copy-value"><span class="keys-technical-value">{{ selected_key.number }}</span><button type="button" class="keys-copy-button" data-copy-value="{{ selected_key.number|e }}" aria-label="Скопировать номер ключа" title="Скопировать номер ключа">⧉</button></dd></div>
+                    <div><dt>HEX</dt><dd class="keys-copy-value"><code class="keys-technical-value">{{ selected_key.hex_value or 'Не считан' }}</code>{% if selected_key.hex_value %}<button type="button" class="keys-copy-button" data-copy-value="{{ selected_key.hex_value|e }}" aria-label="Скопировать HEX" title="Скопировать HEX">⧉</button>{% endif %}</dd></div>
                     <div><dt>Статус</dt><dd><span class="key-status is-{{ selected_key.status_tone }}">{{ selected_key.status_name }}</span></dd></div>
-                    <div><dt>Комментарий</dt><dd>{{ selected_key.note or '—' }}</dd></div>
-                    <div><dt>Дата добавления</dt><dd>{{ selected_key.created_at[:16] if selected_key.created_at else '—' }}</dd></div>
-                    <div><dt>Кем добавлен</dt><dd>{{ selected_key.created_by or 'Система' }}</dd></div>
+                    <div class="is-multiline"><dt>Комментарий</dt><dd>{{ selected_key.note or '—' }}</dd></div>
+                    <div><dt>Дата добавления</dt><dd>{{ selected_key.created_at|datetime }}</dd></div>
+                    <div class="is-multiline"><dt>Кем добавлен</dt><dd>{{ selected_key.created_by or 'Система' }}</dd></div>
                 </dl>
             </section>
 
@@ -230,8 +232,8 @@
                 <header><div><small>Состояние</small><h2>Текущее назначение</h2></div><span class="key-status is-{{ selected_key.status_tone }}">{{ selected_key.status_name }}</span></header>
                 {% if selected_key.assignment_type %}
                 <div class="keys-current-summary">
-                    <b>{{ selected_key.assignment_text }}</b>
-                    <span>Назначен {{ selected_key.assigned_at[:16] if selected_key.assigned_at else '—' }}</span>
+                    <div class="keys-current-assignment-value"><b>{{ selected_key.assignment_text }}</b><button type="button" class="keys-copy-button" data-copy-value="{{ selected_key.assignment_text|e }}" aria-label="Скопировать текущее назначение" title="Скопировать адрес и назначение">⧉</button></div>
+                    <span>Назначен {{ selected_key.assigned_at|datetime }}</span>
                 </div>
                 <form method="post" action="/keys/{{ selected_key.id }}/release" class="keys-side-release">
                     <input type="hidden" name="note" value="Освобождён из реестра ключей">
@@ -251,7 +253,7 @@
                     {% for item in selected_history %}
                     <article>
                         <i class="is-{{ item.status_tone }}"></i>
-                        <div><b>{{ item.action_name }}</b><span>{{ item.details_view }}</span><small>{{ item.created_at[:16] if item.created_at else '—' }} · {{ item.user_name }}</small></div>
+                        <div><b>{{ item.action_name }}</b><span>{{ item.details_view }}</span><small>{{ item.created_at|datetime }} · {{ item.user_name }}</small></div>
                     </article>
                     {% else %}
                     <p class="keys-side-empty">Для этого ключа пока нет операций.</p>
@@ -410,36 +412,6 @@
 </div>
 
 <script>
-document.querySelectorAll("[data-keys-modal]").forEach((button) => {
-    button.addEventListener("click", () => {
-        const modal = document.getElementById(button.dataset.keysModal);
-        if (modal) modal.classList.add("active");
-    });
-});
-
-document.querySelectorAll(".modal-close").forEach((button) => {
-    button.addEventListener("click", () => {
-        const modal = document.getElementById(button.dataset.close);
-        if (modal) modal.classList.remove("active");
-    });
-});
-
-document.querySelectorAll(".modal-backdrop").forEach((modal) => {
-    modal.addEventListener("click", (event) => {
-        if (event.target === modal && modal.dataset.dismiss !== "explicit") {
-            modal.classList.remove("active");
-        }
-    });
-});
-
-document.addEventListener("keydown", (event) => {
-    const explicitModal = document.querySelector('.modal-backdrop[data-dismiss="explicit"].active');
-    if (event.key === "Escape" && explicitModal) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-    }
-}, true);
-
 const prepareKeyType = document.getElementById("prepareKeyType");
 const prepareStartNumber = document.getElementById("prepareStartNumber");
 const lastKeyNumber = document.getElementById("lastKeyNumber");
@@ -486,6 +458,40 @@ document.querySelectorAll("[data-select-url]").forEach((row) => {
         if (event.target.closest("a, button, input, select, label")) return;
         window.location.href = row.dataset.selectUrl;
     });
+});
+
+async function copyKeySidebarValue(button) {
+    const value = button.dataset.copyValue || "";
+    if (!value) return;
+    try {
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(value);
+        } else {
+            const helper = document.createElement("textarea");
+            helper.value = value;
+            helper.setAttribute("readonly", "");
+            helper.style.position = "fixed";
+            helper.style.opacity = "0";
+            document.body.appendChild(helper);
+            helper.select();
+            document.execCommand("copy");
+            helper.remove();
+        }
+        const previous = button.textContent;
+        button.textContent = "✓";
+        button.classList.add("is-copied");
+        window.setTimeout(() => {
+            button.textContent = previous;
+            button.classList.remove("is-copied");
+        }, 1200);
+    } catch (error) {
+        button.classList.add("is-copy-error");
+        window.setTimeout(() => button.classList.remove("is-copy-error"), 1200);
+    }
+}
+
+document.querySelectorAll(".keys-copy-button[data-copy-value]").forEach((button) => {
+    button.addEventListener("click", () => copyKeySidebarValue(button));
 });
 </script>
 {% endblock %}

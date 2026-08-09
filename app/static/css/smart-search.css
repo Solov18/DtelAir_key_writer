@@ -78,6 +78,14 @@
     font-style: normal;
 }
 
+.smart-search-empty {
+    padding: 14px 16px;
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1.35;
+    text-align: center;
+}
+
 body.light-theme .smart-search-menu {
     color: var(--color-text);
     border-color: var(--border-default);

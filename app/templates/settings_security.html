@@ -20,7 +20,7 @@
                 <tbody>
                 {% for row in rows %}
                 <tr>
-                    <td>{{ row.created_at or row.date or '—' }}</td>
+                    <td>{{ (row.created_at or row.date)|datetime_seconds }}</td>
                     <td>{{ row.user_name or row.username or 'Система' }}</td>
                     <td>{{ row.action }}</td>
                     <td>{{ row.object_name or '—' }}</td>

@@ -483,6 +483,217 @@ def extract_key_type(text: str) -> str:
     return compact(value)
 
 
+_KEY_TYPE_ALIASES = {
+    "оранж": ("оранжев",),
+    "оранжевый": ("оранжев",),
+    "уник": ("уникальн",),
+    "уникальный": ("уникальн",),
+    "стикер": ("стикер",),
+    "sticker": ("стикер",),
+    "розовый": ("розов",),
+    "бесплатный розовый": ("бесплат", "розов"),
+    "прост": ("прост",),
+    "простой": ("прост",),
+    "премиум": ("преми",),
+    "премиальный": ("преми",),
+}
+
+_KEY_GROUP_MARKERS = {
+    "оранжевые": ("оранжев",),
+    "оранжевый": ("оранжев",),
+    "стикеры": ("стикер",),
+    "стикер": ("стикер",),
+    "уникальные": ("уникальн",),
+    "уникальный": ("уникальн",),
+    "простые": ("прост",),
+    "простой": ("прост",),
+    "премиальные": ("преми",),
+    "премиальный": ("преми",),
+}
+
+
+def _normalized_key_type(value: str) -> str:
+    value = unicodedata.normalize("NFKC", str(value or "")).casefold().replace("ё", "е")
+    return compact(re.sub(r"[^0-9a-zа-я]+", " ", value))
+
+
+def _key_type_catalog() -> list[dict]:
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT id, name FROM key_types WHERE enabled = 1 ORDER BY LENGTH(name) DESC, LOWER(name)"
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def _type_aliases(type_name: str) -> set[str]:
+    normalized = _normalized_key_type(type_name)
+    aliases = {normalized}
+    for alias, markers in _KEY_TYPE_ALIASES.items():
+        if all(marker in normalized for marker in markers):
+            aliases.add(alias)
+    return {alias for alias in aliases if alias}
+
+
+def _catalog_type_by_markers(catalog: list[dict], markers: tuple[str, ...]) -> dict | None:
+    matches = [
+        item for item in catalog
+        if all(marker in _normalized_key_type(item["name"]) for marker in markers)
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _extract_grouped_key_requests(source: str, catalog: list[dict]) -> list[dict]:
+    """Parse one-line key groups while preserving printed numbers and their types."""
+    grouped: list[dict] = []
+    line_pattern = re.compile(
+        r"(?im)^\s*(ключи|оранжевые?|стикеры?|уникальные?|простые|простой|"
+        r"премиальные|премиальный)\s*[:\-—–]\s*([^\r\n]*)"
+    )
+    suffix_markers = {
+        "ор": ("оранжев",), "оранж": ("оранжев",), "оранжевый": ("оранжев",),
+        "ст": ("стикер",), "стикер": ("стикер",),
+        "уник": ("уникальн",), "уникальный": ("уникальн",),
+        "прост": ("прост",), "простой": ("прост",),
+        "прем": ("преми",), "премиальный": ("преми",),
+    }
+
+    for match in line_pattern.finditer(source):
+        label = _normalized_key_type(match.group(1))
+        value = match.group(2).strip()
+        if not value or re.fullmatch(r"[-—–\s]*", value):
+            continue
+        markers = _KEY_GROUP_MARKERS.get(label)
+        if markers:
+            key_type = _catalog_type_by_markers(catalog, markers)
+            if not key_type:
+                continue
+            for number_match in re.finditer(r"(?<!\d)(\d{1,7})(?!\d)", value):
+                grouped.append({
+                    "number": number_match.group(1), "type_id": int(key_type["id"]),
+                    "type_name": key_type["name"], "type_text": match.group(1),
+                    "hex_value": "", "position": match.start(2) + number_match.start(),
+                })
+            continue
+
+        for number_match in re.finditer(r"(?<!\d)(\d{1,7})(?!\d)\s*([a-zа-я]+)?", value, re.IGNORECASE):
+            suffix = _normalized_key_type(number_match.group(2) or "")
+            key_type = _catalog_type_by_markers(catalog, suffix_markers[suffix]) if suffix in suffix_markers else None
+            if key_type:
+                grouped.append({
+                    "number": number_match.group(1), "type_id": int(key_type["id"]),
+                    "type_name": key_type["name"], "type_text": number_match.group(2) or "",
+                    "hex_value": "", "position": match.start(2) + number_match.start(),
+                })
+    return grouped
+
+
+def extract_key_requests(
+    text: str,
+    excluded_house_numbers: set[str] | None = None,
+) -> list[dict]:
+    """Return typed key references without converting printed numbers to integers."""
+    source = unicodedata.normalize("NFKC", str(text or ""))
+    occupied: list[tuple[int, int]] = []
+    requests: list[dict] = []
+
+    catalog = _key_type_catalog()
+    requests.extend(_extract_grouped_key_requests(source, catalog))
+    alias_candidates: dict[str, list[dict]] = {}
+    for key_type in catalog:
+        for alias in _type_aliases(key_type["name"]):
+            alias_candidates.setdefault(alias, []).append(key_type)
+
+    alias_rows: list[tuple[str, dict]] = []
+    for alias, candidates in alias_candidates.items():
+        exact = [item for item in candidates if _normalized_key_type(item["name"]) == alias]
+        if len(exact) == 1:
+            alias_rows.append((alias, exact[0]))
+        elif len(candidates) == 1:
+            alias_rows.append((alias, candidates[0]))
+        # An alias shared by several catalog types is intentionally ignored:
+        # the operator must name the type more precisely.
+    alias_rows.sort(key=lambda item: len(item[0]), reverse=True)
+
+    for alias, key_type in alias_rows:
+        alias_pattern = r"\s+".join(re.escape(part) for part in alias.split())
+        pattern = re.compile(
+            rf"(?<![\w])({alias_pattern})(?![\w])\s*(?:[-—–:]\s*)?(?:№|#)?\s*(\d{{1,7}})(?!\d)",
+            re.IGNORECASE,
+        )
+        for match in pattern.finditer(source):
+            if any(start < match.end() and match.start() < end for start, end in occupied):
+                continue
+            number = match.group(2)
+            requests.append(
+                {
+                    "number": number,
+                    "type_id": int(key_type["id"]),
+                    "type_name": key_type["name"],
+                    "type_text": match.group(1),
+                    "hex_value": (
+                        re.search(
+                            r"(?:hex|uid|код)\s*[:№#-]?\s*([0-9a-f]{6,16})",
+                            source[match.end():match.end() + 48],
+                            re.IGNORECASE,
+                        ).group(1).upper()
+                        if re.search(
+                            r"(?:hex|uid|код)\s*[:№#-]?\s*([0-9a-f]{6,16})",
+                            source[match.end():match.end() + 48],
+                            re.IGNORECASE,
+                        )
+                        else ""
+                    ),
+                    "position": match.start(),
+                }
+            )
+            occupied.append((match.start(), match.end()))
+
+    typed_numbers = {item["number"] for item in requests}
+    for number in extract_key_numbers(source, excluded_house_numbers):
+        if number in typed_numbers:
+            continue
+        match = re.search(rf"(?<!\d){re.escape(number)}(?!\d)", source)
+        requests.append(
+            {
+                "number": number,
+                "type_id": None,
+                "type_name": "",
+                "type_text": "",
+                "hex_value": "",
+                "position": match.start() if match else len(source),
+            }
+        )
+
+    if not requests:
+        hex_match = re.search(
+            r"(?:hex|uid|код)\s*[:№#-]?\s*([0-9a-f]{6,16})",
+            source,
+            re.IGNORECASE,
+        )
+        if hex_match:
+            value = hex_match.group(1).upper()
+            requests.append(
+                {
+                    "number": value,
+                    "type_id": None,
+                    "type_name": "",
+                    "type_text": "",
+                    "hex_value": value,
+                    "position": hex_match.start(),
+                }
+            )
+
+    requests.sort(key=lambda item: item.pop("position"))
+    unique: list[dict] = []
+    fingerprints: set[tuple[int | None, str]] = set()
+    for request in requests:
+        fingerprint = (request["type_id"], request["number"])
+        if fingerprint not in fingerprints:
+            fingerprints.add(fingerprint)
+            unique.append(request)
+    return unique
+
+
 def parse_message(text: str) -> dict:
     address_candidates = find_address_candidates(text)
     address, address_status = _select_detected_address(address_candidates)
@@ -492,6 +703,7 @@ def parse_message(text: str) -> dict:
         if candidate["confidence"] >= 0.7
     }
 
+    key_requests = extract_key_requests(text, excluded_houses)
     return {
         "address": address,
         "address_status": address_status,
@@ -499,7 +711,10 @@ def parse_message(text: str) -> dict:
         "address_hint": remove_noise(text),
         "apartment": extract_apartment(text),
         "entrance": extract_entrance(text),
-        "key_numbers": extract_key_numbers(text, excluded_houses),
-        "key_type": extract_key_type(text),
+        "key_numbers": [item["number"] for item in key_requests],
+        "key_requests": key_requests,
+        "key_type": ", ".join(dict.fromkeys(
+            item["type_name"] for item in key_requests if item["type_name"]
+        )) or extract_key_type(text),
         "phones": extract_phones(text),
     }

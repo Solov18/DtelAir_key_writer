@@ -144,6 +144,24 @@ class UniversalSearchTests(PostgreSQLTestCase):
         script = Path("app/static/js/smart-search.js").read_text(encoding="utf-8")
         self.assertIn("input.value = item.value", script)
 
+    def test_suggestion_selection_is_shared_for_pointer_keyboard_and_submit(self):
+        script = Path("app/static/js/smart-search.js").read_text(encoding="utf-8")
+        message = Path("app/templates/message_preview.html").read_text(encoding="utf-8")
+        manual = Path("app/templates/manual_write.html").read_text(encoding="utf-8")
+        employee = Path("app/templates/employee_detail.html").read_text(encoding="utf-8")
+
+        self.assertIn('"smart-autocomplete:select"', script)
+        self.assertIn('option.addEventListener("pointerdown"', script)
+        self.assertIn('event.key === "Enter"', script)
+        self.assertIn('event.key === "Escape"', script)
+        self.assertIn("chooseSuggestion(input, selected, \"keyboard\")", script)
+        self.assertIn("form.requestSubmit(submitter || undefined)", script)
+        self.assertIn("state.selecting = true", script)
+        self.assertIn("Ничего не найдено", script)
+        self.assertIn('data-smart-submit="messageCorrectionForm"', message)
+        self.assertIn('data-smart-submit="manualPreviewForm"', manual)
+        self.assertIn('data-smart-submit="false"', employee)
+
     def test_panel_address_suggestion_groups_all_entrances(self):
         with db() as conn:
             for index in range(1, 5):

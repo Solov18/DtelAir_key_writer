@@ -45,7 +45,7 @@
                     </label>
                     <label class="field-address">
                         <span>Адрес из реестра панелей</span>
-                        <input name="address" value="{{ address }}" placeholder="Улица, дом, корпус или литер" data-smart-search="panels" autocomplete="off" required>
+                        <input name="address" value="{{ address }}" placeholder="Улица, дом, корпус или литер" data-smart-search="panels" data-smart-submit="manualPreviewForm" autocomplete="off" required>
                     </label>
                     <label>
                         <span>Квартира</span>
@@ -106,19 +106,41 @@
                 <input type="hidden" name="inner" value="1">
 
                 <div class="manual-panel-toolbar">
-                    <div><b>Панели дома</b><span><strong id="selectedPanelCount">{{ panels|length }}</strong> из {{ panels|length }} выбрано</span></div>
-                    <div><button type="button" class="btn-small" id="select-all-panels">Выбрать все</button><button type="button" class="btn-small btn-ghost" id="clear-all-panels">Снять все</button></div>
+                    <div><b>Панели основного адреса</b><span>Автоматически найдены по адресу назначения</span></div>
+                    <div>
+                        <button type="button" class="btn-small btn-ghost" id="open-manual-panel-picker">+ Добавить панель</button>
+                        <button type="button" class="btn-small" id="select-all-panels">Выбрать все</button>
+                        <button type="button" class="btn-small btn-ghost" id="clear-all-panels">Снять все</button>
+                    </div>
                 </div>
-                <div class="manual-panel-list">
+                <div class="manual-panel-list" id="automaticPanelList">
                     {% for p in panels %}
-                    <label class="manual-panel-option">
-                        <input type="checkbox" name="panel_ids" value="{{ p.id }}" checked>
-                        <span class="panel-check"></span>
-                        <span><b>{{ p.entrance or p.name or 'Вход' }}</b><small>{{ p.address }}</small></span>
-                        <code>{{ p.mac }}</code>
+                    <label class="manual-panel-option" data-panel-id="{{ p.id }}" data-panel-source="automatic">
+                        <input type="checkbox" name="panel_ids" value="{{ p.id }}" data-panel-source="automatic" checked>
+                        <span class="manual-panel-content">
+                            <b class="manual-panel-name">{{ p.entrance or p.name or 'Вход' }}</b>
+                            <span class="manual-panel-address">{{ p.address }}</span>
+                            <code class="manual-panel-mac">{{ p.mac }}</code>
+                        </span>
+                        <span class="manual-panel-choice" aria-hidden="true">
+                            <span class="panel-check"></span>
+                            <span class="manual-panel-source">Автоподбор</span>
+                        </span>
                     </label>
                     {% endfor %}
                 </div>
+                <section class="manual-added-panels" id="manualPanelSection" hidden>
+                    <div class="manual-added-panels__head">
+                        <div><b>Добавлены вручную</b><span>Дополнительные точки доступа не меняют основной адрес ключа</span></div>
+                    </div>
+                    <div class="manual-panel-list" id="manualPanelList"></div>
+                </section>
+                <div class="manual-panel-summary" aria-live="polite">
+                    <span>Автоматически выбрано: <b id="automaticPanelCount">{{ panels|length }}</b></span>
+                    <span>Добавлено вручную и выбрано: <b id="manualPanelCount">0</b></span>
+                    <strong>Всего будет записано: <b id="selectedPanelCount">{{ panels|length }}</b></strong>
+                </div>
+                <div id="selectedPanelSources"></div>
                 <label class="manual-confirm">
                     <input type="checkbox" id="confirmManualWrite">
                     <span>Данные и выбранные панели проверены</span>
@@ -132,8 +154,37 @@
     </section>
     {% endif %}
 </div>
+
+{% if key and panels and not error %}
+<div class="manual-panel-picker" id="manualPanelPicker" hidden aria-hidden="true">
+    <section class="manual-panel-picker__dialog panel modal-scroll" role="dialog" aria-modal="true" aria-labelledby="manualPanelPickerTitle">
+        <header>
+            <div><span class="page-eyebrow">Все панели CRM</span><h2 id="manualPanelPickerTitle">Добавить дополнительные панели</h2></div>
+            <button type="button" class="manual-panel-picker__close" id="close-manual-panel-picker" aria-label="Закрыть">×</button>
+        </header>
+        <p class="manual-panel-picker__note">Основной адрес <b>{{ address }}</b>{% if apartment %}, кв. {{ apartment }}{% endif %} останется без изменений.</p>
+        <div class="manual-panel-picker__search-row">
+            <label class="search-field manual-panel-picker__search">
+                <span class="search-icon" aria-hidden="true">⌕</span>
+                <input id="manualPanelSearch" type="search" placeholder="Адрес, калитка, парковка, лифт или MAC" autocomplete="off">
+            </label>
+            <button type="button" class="btn" id="find-manual-panels">Найти</button>
+        </div>
+        <div class="manual-panel-picker__status" id="manualPanelSearchStatus">Введите не менее двух символов.</div>
+        <div class="manual-panel-picker__results custom-scroll" id="manualPanelSearchResults"></div>
+        <div class="manual-panel-picker__selection" id="manualPanelPickerSelection" hidden>
+            <span>Выбрано: <b id="manualPanelPickerCount">0</b></span>
+            <div class="manual-panel-picker__chips" id="manualPanelPickerChips"></div>
+        </div>
+        <footer>
+            <button type="button" class="btn btn-ghost" id="cancel-manual-panel-picker">Отмена</button>
+            <button type="button" class="btn" id="add-manual-panels" disabled>Добавить выбранные</button>
+        </footer>
+    </section>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/manual-write.js?v=4"></script>
+<script src="/static/js/manual-write.js?v=5"></script>
 {% endblock %}

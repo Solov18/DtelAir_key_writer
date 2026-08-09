@@ -1,4 +1,13 @@
 (() => {
+    document.querySelectorAll("[data-employee-choose-other]").forEach((button) => {
+        button.addEventListener("click", () => {
+            const input = document.querySelector("#issue-key input[name='key_value']");
+            if (!input) return;
+            input.value = "";
+            input.focus();
+            input.scrollIntoView({behavior: "smooth", block: "center"});
+        });
+    });
     const normalize = window.smartSearchNormalize || ((value) => (
         String(value || "")
             .normalize("NFKC")
@@ -11,6 +20,10 @@
         if (!modal) {
             return;
         }
+        if (window.AppModal) {
+            window.AppModal.open(modal, document.activeElement);
+            return;
+        }
 
         modal.classList.add("is-open");
         modal.setAttribute("aria-hidden", "false");
@@ -18,19 +31,6 @@
 
         const firstField = modal.querySelector("input, select, textarea");
         window.setTimeout(() => firstField?.focus(), 50);
-    }
-
-    function closeModal(modal) {
-        if (!modal) {
-            return;
-        }
-
-        modal.classList.remove("is-open");
-        modal.setAttribute("aria-hidden", "true");
-
-        if (!document.querySelector(".employee-modal.is-open")) {
-            document.body.classList.remove("employee-modal-open");
-        }
     }
 
     document.querySelectorAll("[data-open-employee-modal]").forEach((trigger) => {
@@ -72,26 +72,6 @@
                 document.getElementById(trigger.dataset.openEmployeeModal)
             );
         });
-    });
-
-    document.querySelectorAll("[data-close-employee-modal]").forEach((trigger) => {
-        trigger.addEventListener("click", () => {
-            closeModal(trigger.closest(".employee-modal"));
-        });
-    });
-
-    document.querySelectorAll(".employee-modal").forEach((modal) => {
-        modal.addEventListener("mousedown", (event) => {
-            if (event.target === modal) {
-                closeModal(modal);
-            }
-        });
-    });
-
-    document.addEventListener("keydown", (event) => {
-        if (event.key === "Escape") {
-            closeModal(document.querySelector(".employee-modal.is-open"));
-        }
     });
 
     document.querySelectorAll("[data-employee-row]").forEach((row) => {

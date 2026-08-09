@@ -5,8 +5,9 @@ from starlette.requests import Request
 
 from tests.postgres_test_case import PostgreSQLTestCase
 
-from app.repositories import panel_repository
-from app.routers.message import message_write
+from app.repositories import key_repository, panel_repository
+from app.routers.message import _build_key_rows, message_write
+from app.services.keys import find_keys
 from app.services.panels import find_panels_by_address
 from app.services.parser import find_address_candidates, parse_message
 from app.services.search import get_search_suggestions
@@ -23,6 +24,105 @@ class MessageParserTests(PostgreSQLTestCase):
             entrance=entrance,
             mac=f"08:13:CD:00:10:{suffix:02X}",
         )
+
+    @staticmethod
+    def _create_type(name: str, color: str = "#2299EE") -> int:
+        return key_repository.create_key_type(name, color)
+
+    def test_typed_key_is_never_substituted_by_same_number_of_other_type(self):
+        orange_id = self._create_type("Оранжевый", "#FF982A")
+        self._create_type("Бесплатный розовый", "#EE77AA")
+        key_repository.save_prepared_key(orange_id, "001185", "AABBCCDD")
+
+        parsed = parse_message("Ключ: Бесплатный розовый — 001185")
+        rows = _build_key_rows(parsed["key_requests"])
+
+        self.assertEqual(parsed["key_numbers"], ["001185"])
+        self.assertEqual(parsed["key_requests"][0]["type_name"], "Бесплатный розовый")
+        self.assertEqual(parsed["key_requests"][0]["number"], "001185")
+        self.assertIsNone(rows[0]["item"])
+        self.assertFalse(rows[0]["ambiguous"])
+
+    def test_multiple_typed_keys_are_parsed_with_leading_zeroes(self):
+        self._create_type("Оранжевый", "#FF982A")
+        self._create_type("Уникальный", "#22B889")
+        self._create_type("Стикер", "#9B72E8")
+
+        parsed = parse_message(
+            "Ключи: оранжевый 001185, уникальный 112, стикер 00341"
+        )
+
+        self.assertEqual(
+            [(item["type_name"], item["number"]) for item in parsed["key_requests"]],
+            [("Оранжевый", "001185"), ("Уникальный", "112"), ("Стикер", "00341")],
+        )
+
+    def test_grouped_message_extracts_all_six_keys_with_types(self):
+        self._create_type("Оранжевый", "#FF982A")
+        self._create_type("Стикер", "#9B72E8")
+        self._create_type("Уникальный", "#22B889")
+        message = (
+            "Адрес: Роз 6/6а\nКвартира: 12\n"
+            "ФИО собственник: Багдасарян Римма\nФИО кто получил:\n"
+            "Номер тел:8988-360-77-71\nНомер тел2:\nПровайдер: бил\n"
+            "Ключи:003049 ор\nПростые -\nПремиальные -\n"
+            "Стикеры -396, 379, 211\nУникальные -1057, 918"
+        )
+
+        parsed = parse_message(message)
+
+        self.assertEqual(
+            [(item["type_name"], item["number"]) for item in parsed["key_requests"]],
+            [
+                ("Оранжевый", "003049"),
+                ("Стикер", "396"),
+                ("Стикер", "379"),
+                ("Стикер", "211"),
+                ("Уникальный", "1057"),
+                ("Уникальный", "918"),
+            ],
+        )
+
+    def test_type_aliases_come_back_to_real_catalog_types(self):
+        orange_id = self._create_type("Оранжевый", "#FF982A")
+        unique_id = self._create_type("Уникальный", "#22B889")
+        sticker_id = self._create_type("Стикер", "#9B72E8")
+
+        parsed = parse_message("оранж 00012, уник 00013, sticker 00014")
+
+        self.assertEqual(
+            [item["type_id"] for item in parsed["key_requests"]],
+            [orange_id, unique_id, sticker_id],
+        )
+
+    def test_hex_lookup_respects_explicit_key_type(self):
+        orange_id = self._create_type("Оранжевый", "#FF982A")
+        sticker_id = self._create_type("Стикер", "#9B72E8")
+        key_repository.save_prepared_key(orange_id, "001185", "AABBCCDD")
+
+        self.assertEqual(find_keys("AABBCCDD", orange_id)[0]["number"], "001185")
+        self.assertEqual(find_keys("AABBCCDD", sticker_id), [])
+
+    def test_hex_has_priority_but_number_conflict_is_not_silent(self):
+        orange_id = self._create_type("Оранжевый", "#FF982A")
+        key_repository.save_prepared_key(orange_id, "001186", "AABBCCDD")
+
+        parsed = parse_message("Оранжевый 001185, HEX: AABBCCDD")
+        rows = _build_key_rows(parsed["key_requests"])
+
+        self.assertEqual(rows[0]["item"]["number"], "001186")
+        self.assertTrue(rows[0]["identity_conflict"])
+
+    def test_untyped_duplicate_number_requires_type_choice(self):
+        orange_id = self._create_type("Оранжевый", "#FF982A")
+        sticker_id = self._create_type("Стикер", "#9B72E8")
+        key_repository.save_prepared_key(orange_id, "001185", "AABBCCDD")
+        key_repository.save_prepared_key(sticker_id, "001185", "11223344")
+
+        rows = _build_key_rows(parse_message("Ключ №001185")["key_requests"])
+
+        self.assertTrue(rows[0]["ambiguous"])
+        self.assertEqual(len(rows[0]["matches"]), 2)
 
     def test_free_form_message_finds_address_apartment_keys_and_phone(self):
         self._create_panel(
@@ -201,6 +301,52 @@ class MessageParserTests(PostgreSQLTestCase):
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["url"], "/message")
         self.assertIn("<!DOCTYPE html>", payload["html"])
+
+    def test_message_write_keeps_assignment_address_separate_from_manual_panels(self):
+        request = Request(
+            {
+                "type": "http",
+                "method": "POST",
+                "path": "/message/write",
+                "headers": [],
+                "client": ("127.0.0.1", 50000),
+                "session": {"user": {"login": "test", "role": "admin"}},
+            }
+        )
+        key = {"id": 91, "number": "12345", "hex_value": "ABCD1234", "status": "free"}
+        panels = [
+            {"id": 10, "address": "Бамбуковая 34", "mac": "08:13:CD:00:00:10"},
+            {"id": 11, "address": "Бамбуковая 44", "mac": "08:13:CD:00:00:11"},
+        ]
+        with (
+            patch("app.routers.message.find_key", return_value=key),
+            patch("app.routers.message.is_ambiguous_key", return_value=False),
+            patch("app.routers.message.get_panels", return_value=panels) as get_panels_mock,
+            patch(
+                "app.routers.message.get_key_write_contexts",
+                return_value={91: {"is_used": False, "panel_ids": []}},
+            ),
+            patch("app.routers.message.write_key_to_panels", return_value=[]) as writer,
+        ):
+            message_write(
+                request=request,
+                address="Бамбуковая 34",
+                apartment="15",
+                source_text="",
+                key_numbers=["12345"],
+                key_type_ids=[0],
+                panel_ids=[10, 11, 11],
+                automatic_panel_ids=[10],
+                manual_panel_ids=[11, 11],
+                occupied_action="",
+            )
+
+        get_panels_mock.assert_called_once_with(panel_ids=[10, 11])
+        kwargs = writer.call_args.kwargs
+        self.assertEqual(kwargs["address"], "Бамбуковая 34")
+        self.assertEqual(kwargs["flat_num"], "15")
+        self.assertEqual(kwargs["automatic_panel_ids"], {10})
+        self.assertEqual(kwargs["manual_panel_ids"], {11})
 
     def test_used_key_requires_explicit_operator_choice_before_write(self):
         request = Request(

@@ -507,12 +507,33 @@ def get_employee_key_history(employee_id: int) -> list[dict]:
                 ek.created_at,
                 ek.updated_at,
 
+                e.full_name AS employee_name,
+                (
+                    SELECT COALESCE(NULLIF(ol.user_full_name, ''), ol.username)
+                    FROM operation_log ol
+                    WHERE ol.employee_id = ek.employee_id
+                      AND ol.key_id = ek.key_id
+                      AND ol.action = 'employee_key_issue'
+                    ORDER BY ol.created_at DESC, ol.id DESC
+                    LIMIT 1
+                ) AS issued_by,
+                (
+                    SELECT COALESCE(NULLIF(ol.user_full_name, ''), ol.username)
+                    FROM operation_log ol
+                    WHERE ol.employee_id = ek.employee_id
+                      AND ol.key_id = ek.key_id
+                      AND ol.action IN ('employee_key_close', 'employee_key_remove')
+                    ORDER BY ol.created_at DESC, ol.id DESC
+                    LIMIT 1
+                ) AS closed_by,
+
                 k.number,
                 k.hex_value,
                 k.key_type,
                 k.note AS key_note
 
             FROM employee_keys ek
+            JOIN employees e ON e.id = ek.employee_id
             JOIN keys k ON k.id = ek.key_id
 
             WHERE ek.employee_id = ?

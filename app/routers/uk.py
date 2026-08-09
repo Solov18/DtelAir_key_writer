@@ -9,6 +9,7 @@ from app.repositories.panel_repository import get_panel_by_id
 from app.repositories.uk_repository import (
     add_panel,
     archive_group,
+    get_available_key_types,
     get_available_keys,
     get_available_panels,
     get_group,
@@ -18,6 +19,7 @@ from app.repositories.uk_repository import (
     get_group_page,
     get_group_panels,
     get_group_statistics,
+    search_group_panels,
     get_issue,
     get_issue_programmings,
     remove_panel,
@@ -264,7 +266,7 @@ def uk_detail(
             "group_panels": get_group_panels(group_id),
             "available_panels": get_available_panels(group_id),
             "group_issues": issues,
-            "available_keys": get_available_keys(limit=150),
+            "available_key_types": get_available_key_types(),
             "operations": [
                 normalize_operation_row(item)
                 for item in get_group_operations(group_id, limit=40)
@@ -272,6 +274,63 @@ def uk_detail(
             "is_admin": _is_admin(request),
             "notice": notice,
         },
+    )
+
+
+@router.get("/uk/{group_id}/available-keys")
+def uk_available_keys(
+    request: Request,
+    group_id: int,
+    q: str = Query(""),
+    key_type_id: int | None = Query(None, ge=1),
+    limit: int = Query(60, ge=1, le=100),
+):
+    if not get_group(group_id):
+        return JSONResponse({"error": "УК не найдена"}, status_code=404)
+    keys = get_available_keys(q, limit=limit, key_type_id=key_type_id)
+    return JSONResponse(
+        {
+            "items": [
+                {
+                    "id": item["id"],
+                    "number": item["number"],
+                    "hex": item["hex_value"],
+                    "type_id": item["type_id"],
+                    "type": item["type_name"],
+                    "color": item["type_color"],
+                }
+                for item in keys
+            ]
+        },
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@router.get("/uk/{group_id}/available-panels")
+def uk_available_group_panels(
+    request: Request,
+    group_id: int,
+    q: str = Query(""),
+    limit: int = Query(60, ge=1, le=100),
+):
+    if not get_group(group_id):
+        return JSONResponse({"error": "УК не найдена"}, status_code=404)
+    panels = search_group_panels(group_id, q, limit=limit)
+    return JSONResponse(
+        {
+            "items": [
+                {
+                    "link_id": item["link_id"],
+                    "panel_id": item["panel_id"],
+                    "address": item.get("address") or "Адрес не указан",
+                    "point": item.get("entrance") or item.get("name") or "Точка доступа",
+                    "mac": item.get("mac") or "MAC не указан",
+                    "status": item.get("status") or "unknown",
+                }
+                for item in panels
+            ]
+        },
+        headers={"Cache-Control": "no-store"},
     )
 
 
@@ -359,7 +418,7 @@ def uk_key_issue(
     request: Request,
     group_id: int,
     key_id: int = Form(...),
-    panel_link_id: int = Form(...),
+    panel_link_ids: list[int] = Form(...),
     apartment_override: str = Form(""),
     override_confirmed: int = Form(0),
     comment: str = Form(""),
@@ -368,7 +427,7 @@ def uk_key_issue(
         result = issue_key(
             group_id=group_id,
             key_id=key_id,
-            panel_link_id=panel_link_id,
+            panel_link_ids=panel_link_ids,
             apartment_override=apartment_override,
             override_confirmed=bool(override_confirmed),
             comment=comment,
@@ -379,7 +438,12 @@ def uk_key_issue(
         return _redirect(group_id, notice="key_issue_error")
     return _redirect(
         group_id,
-        notice="key_dry_run" if result["status"] == "DRY_RUN" else "key_issued",
+        notice=(
+            "key_dry_run" if result["status"] == "DRY_RUN"
+            else "key_issue_partial" if result["status"] == "PARTIAL"
+            else "key_issue_error" if result["status"] == "ERROR"
+            else "key_issued"
+        ),
     )
 
 

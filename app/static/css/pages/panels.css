@@ -222,7 +222,7 @@ a.panel-stat.is-error.is-active {
 
 .panels-main-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 420px;
+    grid-template-columns: minmax(0, 1fr) var(--detail-sidebar-width, 420px);
     min-width: 0;
 }
 
@@ -526,17 +526,6 @@ body.light-theme .panels-page .panel-row-actions button:hover { color: #0879bd; 
 body.light-theme .panels-pagination a { background: #fff; }
 body.light-theme .panel-camera-placeholder { background: #f2f8fc; }
 body.light-theme .panel-detail-list .is-problem { background: #fff1f3; }
-body.light-theme .panels-table-scroll,
-body.light-theme .panel-inspector {
-    scrollbar-color: rgba(18, 151, 224, .62) rgba(219, 235, 246, .85);
-}
-body.light-theme .panels-table-scroll::-webkit-scrollbar-track,
-body.light-theme .panel-inspector::-webkit-scrollbar-track { background: rgba(219, 235, 246, .85); }
-body.light-theme .panels-table-scroll::-webkit-scrollbar-thumb,
-body.light-theme .panel-inspector::-webkit-scrollbar-thumb {
-    border-color: rgba(219, 235, 246, .85);
-    background: rgba(18, 151, 224, .62);
-}
 body.light-theme .panels-modal { background: rgba(32, 49, 64, .42); }
 body.light-theme .panels-modal .modal-card { background: #fff; box-shadow: 0 24px 80px rgba(36,70,100,.25); }
 body.light-theme .panel-modal-form input,
@@ -548,7 +537,7 @@ body.light-theme .panel-modal-note { background: #eff8ff; }
     .panel-stat { padding: 13px; }
     .panel-stat-icon { width: 40px; height: 40px; }
     .panel-stat b { font-size: 22px; }
-    .panels-main-grid { grid-template-columns: minmax(0, 1fr) 380px; }
+    .panels-main-grid { grid-template-columns: minmax(0, 1fr) var(--detail-sidebar-width, 390px); }
 }
 
 @media (max-width: 1380px) {

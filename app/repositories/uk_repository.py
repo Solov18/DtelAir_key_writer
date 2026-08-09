@@ -1,4 +1,5 @@
 import math
+import re
 
 from sqlalchemy.exc import IntegrityError
 
@@ -554,41 +555,125 @@ def add_panels(group_id: int, panel_ids: list[int]) -> None:
         raise ValueError("Для каждой панели необходимо указать отдельную квартиру.")
 
 
-def get_available_keys(query: str = "", limit: int = 100) -> list[dict]:
+def get_available_keys(
+    query: str = "",
+    limit: int = 100,
+    *,
+    key_type_id: int | None = None,
+) -> list[dict]:
     normalized = normalize_search_text(query)
-    params: list[object] = []
+    raw_query = _clean(query)
+    compact_query = re.sub(r"[^0-9A-Za-zА-Яа-яЁё]+", "", raw_query).upper()
+    numeric_query = compact_query if compact_query.isdigit() else ""
+    numeric_unpadded = numeric_query.lstrip("0") or ("0" if numeric_query else "")
+    filter_params: list[object] = []
     condition = ""
     if normalized:
-        condition = (
-            "AND (SMART_NORM(k.number) LIKE ? OR SMART_NORM(k.hex_value) LIKE ? "
-            "OR SMART_NORM(kt.name) LIKE ?)"
-        )
-        params.extend([f"%{normalized}%"] * 3)
-    params.append(max(1, min(int(limit), 200)))
+        condition = "AND SMART_NORM(CONCAT_WS(' ', kt.name, k.number, k.hex_value)) LIKE ?"
+        filter_params.append(f"%{normalized}%")
+    type_condition = ""
+    if key_type_id is not None:
+        type_condition = "AND kt.id = ?"
+        filter_params.append(int(key_type_id))
+    query_limit = max(1, min(int(limit), 200))
 
     with db() as conn:
         return [
             dict(row)
             for row in conn.execute(
                 f"""
-                SELECT k.id, k.number, k.hex_value, k.status,
-                       kt.name AS type_name, kt.color AS type_color
-                FROM keys k
-                JOIN key_types kt ON kt.id = k.key_type_id
-                WHERE BTRIM(k.hex_value) <> ''
-                  AND k.status = 'free'
-                  AND NOT EXISTS (
-                      SELECT 1 FROM uk_key_issues ki
-                      WHERE ki.key_id = k.id
-                        AND ki.status IN ('pending', 'active')
-                  )
-                  {condition}
-                ORDER BY LOWER(kt.name), LOWER(k.number), k.id
+                WITH available AS (
+                    SELECT k.id, k.number, k.hex_value, k.status,
+                           kt.id AS type_id, kt.name AS type_name,
+                           kt.color AS type_color,
+                           CASE
+                               WHEN UPPER(REGEXP_REPLACE(k.hex_value, '[^0-9A-Za-z]', '', 'g')) = ? THEN 0
+                               WHEN ? <> '' AND COALESCE(NULLIF(LTRIM(k.number, '0'), ''), '0') = ? THEN 0
+                               WHEN SMART_NORM(k.number) = ? THEN 1
+                               WHEN SMART_NORM(kt.name) = ? THEN 2
+                               ELSE 3
+                           END AS search_rank
+                    FROM keys k
+                    JOIN key_types kt ON kt.id = k.key_type_id
+                    WHERE BTRIM(k.hex_value) <> ''
+                      AND k.status = 'free'
+                      AND kt.enabled = 1
+                      AND NOT EXISTS (
+                          SELECT 1 FROM uk_key_issues ki
+                          WHERE ki.key_id = k.id
+                            AND ki.status IN ('pending', 'active')
+                      )
+                      {condition}
+                      {type_condition}
+                )
+                SELECT id, number, hex_value, status,
+                       type_id, type_name, type_color
+                FROM available
+                ORDER BY search_rank, LOWER(type_name),
+                         LENGTH(number), LOWER(number), id
                 LIMIT ?
                 """,
-                params,
+                [compact_query, numeric_unpadded, numeric_unpadded, normalized, normalized]
+                + filter_params
+                + [query_limit],
             )
         ]
+
+
+def search_group_panels(group_id: int, query: str = "", limit: int = 60) -> list[dict]:
+    """Search every active panel linked to one UK; LIMIT is applied after matching."""
+
+    normalized = normalize_search_text(query)
+    params: list[object] = [group_id]
+    condition = ""
+    if normalized:
+        condition = """
+          AND SMART_NORM(CONCAT_WS(' ', p.address, p.entrance, p.name, p.mac, p.id)) LIKE ?
+        """
+        params.append(f"%{normalized}%")
+    params.append(max(1, min(int(limit), 100)))
+    with db() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT pl.id AS link_id, pl.panel_id, p.address, p.entrance,
+                   p.name, p.mac, p.api_status AS status, p.enabled
+            FROM uk_panel_links pl
+            JOIN panels p ON p.id = pl.panel_id
+            WHERE pl.uk_group_id = ? AND pl.active IS TRUE
+              {condition}
+            ORDER BY
+              CASE WHEN SMART_NORM(p.address) = ? THEN 0 ELSE 1 END,
+              LOWER(p.address), LOWER(COALESCE(p.entrance, '')),
+              LOWER(COALESCE(p.name, '')), p.id
+            LIMIT ?
+            """,
+            params[:-1] + [normalized, params[-1]],
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_available_key_types() -> list[dict]:
+    """Return database key types which currently have issuable keys."""
+
+    with db() as conn:
+        rows = conn.execute(
+            """
+            SELECT kt.id, kt.name, kt.color, COUNT(k.id) AS free_count
+            FROM key_types kt
+            JOIN keys k ON k.key_type_id = kt.id
+            WHERE kt.enabled = 1
+              AND k.status = 'free'
+              AND BTRIM(k.hex_value) <> ''
+              AND NOT EXISTS (
+                  SELECT 1 FROM uk_key_issues ki
+                  WHERE ki.key_id = k.id
+                    AND ki.status IN ('pending', 'active')
+              )
+            GROUP BY kt.id, kt.name, kt.color
+            ORDER BY LOWER(kt.name), kt.id
+            """
+        ).fetchall()
+    return [dict(row) for row in rows]
 
 
 def get_group_keys(group_id: int, *, include_closed: bool = False) -> list[dict]:

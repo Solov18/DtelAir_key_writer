@@ -43,7 +43,7 @@
     <section class="panel employee-profile-archive">
         <div>
             <h2>Архивная карточка</h2>
-            <p class="subtitle">Сотрудник уволен {{ employee.dismissed_at or '' }}. Ключи освобождены, история сохранена.</p>
+            <p class="subtitle">Сотрудник уволен {{ employee.dismissed_at|datetime }}. Ключи освобождены, история сохранена.</p>
         </div>
         <form method="post" action="/employees/{{ employee.id }}/restore" data-confirm="Восстановить сотрудника и вернуть его в активный реестр?" data-confirm-action="Восстановить">
             <button class="btn" type="submit">Восстановить</button>
@@ -86,6 +86,22 @@
             {% endif %}
         </section>
 
+        <aside class="panel employee-profile-summary" aria-label="Состояние сотрудника">
+            <header class="employee-profile-section-head">
+                <div><span class="page-eyebrow">Состояние</span><h2>Кратко</h2></div>
+                <span class="employee-status {% if is_dismissed %}is-dismissed{% else %}is-active{% endif %}"><i></i>{{ 'Уволен' if is_dismissed else 'Активен' }}</span>
+            </header>
+            <dl>
+                <div><dt>Должность</dt><dd>{{ employee.position or 'Должность не указана' }}</dd></div>
+                <div><dt>Подразделение</dt><dd>{{ employee.department or 'Не указано' }}</dd></div>
+                <div><dt>Активных ключей</dt><dd>{{ active_keys|length }}</dd></div>
+                <div><dt>Дата добавления</dt><dd>{{ employee.created_at|datetime }}</dd></div>
+            </dl>
+        </aside>
+    </div>
+
+    <div class="employee-profile-work-grid">
+
         <section class="panel employee-profile-active-keys">
             <header class="employee-profile-section-head">
                 <div>
@@ -108,6 +124,7 @@
                             <span>{{ key.key_type or 'Без типа' }}</span>
                             <b>Ключ №{{ key.number }}</b>
                             <small>HEX: {{ key.hex_value }}</small>
+                            <small>Выдан: {{ key.issued_at|datetime }}</small>
                         </div>
                         <em>Активен</em>
                     </div>
@@ -115,6 +132,8 @@
                     {% if key.comment %}
                     <p>{{ key.comment }}</p>
                     {% endif %}
+
+                    <a class="employee-key-open" href="/keys/{{ key.key_id }}">Открыть карточку ключа →</a>
 
                     {% if not is_dismissed %}
                     <details>
@@ -151,7 +170,6 @@
                 {% endfor %}
             </div>
         </section>
-    </div>
 
     {% if not is_dismissed %}
     <section class="panel employee-profile-issue" id="issue-key">
@@ -166,6 +184,16 @@
             Уже назначенные ключи останутся активными. Новый ключ должен быть сохранён в базе с HEX и не назначен другому владельцу.
         </p>
 
+        {% if missing_key %}
+        <div class="employee-missing-key" role="alert">
+            <div><b>Ключ не найден в базе CRM</b><span>Проверьте номер или HEX либо сначала создайте ключ только в локальной базе.</span></div>
+            <div>
+                <button type="button" data-employee-choose-other>Выбрать другой ключ</button>
+                <button class="btn" type="button" data-modal-open="employeeCreateKeyModal">Добавить ключ в базу</button>
+            </div>
+        </div>
+        {% endif %}
+
         <form method="post" action="/employees/{{ employee.id }}/keys/issue" class="employee-profile-issue-form">
             <label>Номер или HEX ключа
                 <input
@@ -174,6 +202,7 @@
                     autocomplete="off"
                     placeholder="Например: 1523 или 363FFAD7"
                     data-smart-search="keys"
+                    data-smart-submit="false"
                 >
             </label>
             <label>Тип ключа
@@ -193,6 +222,29 @@
         </form>
     </section>
     {% endif %}
+    </div>
+
+    <div class="employee-modal" id="employeeCreateKeyModal" aria-hidden="true">
+        <div class="employee-modal-card panel custom-scroll" role="dialog" aria-modal="true" aria-labelledby="employeeCreateKeyTitle">
+            <header>
+                <div><span class="page-eyebrow">Только учёт в CRM</span><h2 id="employeeCreateKeyTitle">Добавить ключ в базу</h2></div>
+                <button type="button" aria-label="Закрыть" data-modal-close>×</button>
+            </header>
+            <form method="post" action="/employees/{{ employee.id }}/keys/create-and-issue" class="employee-create-key-form">
+                <label>Тип ключа
+                    <select name="key_type_id" required>
+                        <option value="">Выберите тип</option>
+                        {% for key_type in key_types %}<option value="{{ key_type.id }}" {% if missing_key and missing_key.key_type_id == key_type.id %}selected{% endif %}>{{ key_type.name }}</option>{% endfor %}
+                    </select>
+                </label>
+                <label>Номер<input name="number" required inputmode="numeric" value="{{ missing_key.value if missing_key else '' }}"></label>
+                <label class="is-wide">HEX<input name="hex_value" required autocomplete="off" pattern="[0-9A-Fa-f]{6,16}" placeholder="6–16 символов 0–9/A–F"></label>
+                <label class="is-wide">Комментарий<input name="comment" value="{{ missing_key.comment if missing_key else '' }}"></label>
+                <p class="employee-modal-note is-wide">Ключ будет создан и назначен сотруднику только в CRM. Запросы на физические панели не выполняются.</p>
+                <div class="employee-modal-actions is-wide"><button type="button" data-modal-close>Отмена</button><button class="btn" type="submit">Создать и выдать</button></div>
+            </form>
+        </div>
+    </div>
 
     <section class="panel employee-profile-history">
         <header class="employee-profile-section-head">
@@ -208,23 +260,25 @@
             <table>
                 <thead>
                     <tr>
+                        <th>Дата</th>
                         <th>Ключ</th>
                         <th>HEX</th>
                         <th>Статус</th>
-                        <th>Выдан</th>
-                        <th>Закрыт</th>
-                        <th>Причина</th>
+                        <th>Сотрудник / владелец</th>
+                        <th>Причина / комментарий</th>
+                        <th>Кто выполнил</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for key in key_history %}
                     <tr>
+                        <td><b>{{ key.issued_at|datetime }}</b><small>Закрыт: {{ key.closed_at|datetime }}</small></td>
                         <td><b>№{{ key.number }}</b><small>{{ key.key_type or 'Без типа' }}</small></td>
                         <td>{{ key.hex_value }}</td>
                         <td><span class="employee-key-status {{ key.status }}">{{ status_labels.get(key.status, key.status) }}</span></td>
-                        <td>{{ key.issued_at or '—' }}</td>
-                        <td>{{ key.closed_at or '—' }}</td>
-                        <td>{{ key.close_reason or '—' }}</td>
+                        <td><b>{{ key.employee_name or employee.full_name }}</b><small>Выдал: {{ key.issued_by or 'Не указано' }}</small></td>
+                        <td><b>{{ key.close_reason or 'Причина не указана' }}</b><small>{{ key.comment or 'Комментарий отсутствует' }}</small></td>
+                        <td>{{ key.closed_by or 'Не указано' }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -233,6 +287,33 @@
         {% else %}
         <div class="employee-profile-history-empty">Закрытых ключей пока нет.</div>
         {% endif %}
+    </section>
+
+    <section class="panel employee-profile-history employee-profile-operations">
+        <header class="employee-profile-section-head">
+            <div><span class="page-eyebrow">Неизменяемый журнал</span><h2>История операций</h2></div>
+            <strong>{{ operations|length }}</strong>
+        </header>
+        {% if operations %}
+        <div class="employee-profile-history-scroll custom-scroll">
+            <table>
+                <thead><tr><th>Дата</th><th>Операция</th><th>Ключ</th><th>HEX</th><th>Сотрудник / владелец</th><th>Причина / комментарий</th><th>Результат</th></tr></thead>
+                <tbody>
+                    {% for operation in operations %}
+                    <tr>
+                        <td>{{ operation.created_at|datetime_seconds }}</td>
+                        <td><b>{{ operation.action_name }}</b><small>{{ operation.object_type_view }}</small></td>
+                        <td>{{ operation.printed_number or '—' }}</td>
+                        <td><code>{{ operation.hex_value or '—' }}</code></td>
+                        <td>{{ operation.object_name_view or employee.full_name }}</td>
+                        <td>{{ operation.details_view or '—' }}</td>
+                        <td><span class="badge {{ operation.status_tone }}">{{ operation.status_name }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}<div class="employee-profile-history-empty">Операций по сотруднику пока нет.</div>{% endif %}
     </section>
 
     {% if not is_dismissed %}
