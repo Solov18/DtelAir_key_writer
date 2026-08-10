@@ -121,6 +121,9 @@
             option.setAttribute("role", "option");
             option.dataset.index = String(index);
             option.id = `${state.menu.id}-option-${index}`;
+            option.disabled = Boolean(item.disabled);
+            option.classList.toggle("is-disabled", Boolean(item.disabled));
+            option.setAttribute("aria-disabled", item.disabled ? "true" : "false");
 
             const text = document.createElement("span");
             const label = document.createElement("b");
@@ -134,7 +137,7 @@
             }
 
             const arrow = document.createElement("i");
-            arrow.textContent = "↵";
+            arrow.textContent = item.disabled ? "Недоступен" : "↵";
             option.append(text, arrow);
 
             option.addEventListener("pointerdown", (event) => {
@@ -155,9 +158,14 @@
             return;
         }
 
-        state.activeIndex = (
-            nextIndex + state.items.length
-        ) % state.items.length;
+        let candidate = (nextIndex + state.items.length) % state.items.length;
+        let attempts = 0;
+        while (state.items[candidate]?.disabled && attempts < state.items.length) {
+            candidate = (candidate + (nextIndex >= state.activeIndex ? 1 : -1) + state.items.length) % state.items.length;
+            attempts += 1;
+        }
+        if (attempts >= state.items.length) return;
+        state.activeIndex = candidate;
 
         state.menu.querySelectorAll(".smart-search-option").forEach(
             (option, index) => {
@@ -180,6 +188,7 @@
         if (!input || stateByInput.has(input)) return;
         const menu = document.createElement("div");
         menu.className = "smart-search-menu";
+        menu.dataset.scope = input.dataset.smartSearch || "universal";
         menu.setAttribute("role", "listbox");
         menu.hidden = true;
         menu.id = `smart-search-${Math.random().toString(36).slice(2)}`;
@@ -200,44 +209,65 @@
         };
         stateByInput.set(input, state);
 
-        input.addEventListener("input", () => {
-            if (state.selecting) return;
+        const buildRequest = (query) => {
+            const params = new URLSearchParams({
+                q: query,
+                limit: input.dataset.smartSearchLimit || "8",
+            });
+            if (!input.dataset.smartSearchUrl) {
+                params.set("scope", input.dataset.smartSearch || "universal");
+            }
+            const mappings = (input.dataset.smartSearchParams || "")
+                .split(",")
+                .map((value) => value.trim())
+                .filter(Boolean);
+            mappings.forEach((mapping) => {
+                const [selector, parameter] = mapping.split(":");
+                const value = document.querySelector(selector)?.value;
+                if (parameter && value) params.set(parameter, value);
+            });
+            return {
+                url: `${input.dataset.smartSearchUrl || "/api/search/suggestions"}?${params}`,
+                params,
+            };
+        };
+
+        const runSearch = async (immediate = false) => {
             window.clearTimeout(state.timer);
             state.request?.abort();
-
             const query = input.value.trim();
-            if (normalize(query).length < 2) {
+            const minimum = Number(input.dataset.smartSearchMinLength || 2);
+            if (normalize(query).length < minimum) {
                 closeSuggestions(input);
+                input.dispatchEvent(new CustomEvent("smart-autocomplete:idle", {bubbles: true}));
                 return;
             }
-
-            state.timer = window.setTimeout(async () => {
+            const execute = async () => {
                 state.request = new AbortController();
-                const params = new URLSearchParams({
-                    q: query,
-                    scope: input.dataset.smartSearch || "universal",
-                    limit: "8",
-                });
-
+                const request = buildRequest(query);
+                input.dispatchEvent(new CustomEvent("smart-autocomplete:loading", {bubbles: true}));
                 try {
-                    const response = await fetch(
-                        `/api/search/suggestions?${params}`,
-                        {
-                            signal: state.request.signal,
-                            headers: { Accept: "application/json" },
-                        }
-                    );
-                    if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}`);
-                    }
-                    const payload = await response.json();
-                    renderSuggestions(input, payload.items || []);
+                    const payload = await fetchJson(request.url, {signal: state.request.signal});
+                    const items = Array.isArray(payload.items) ? payload.items : [];
+                    renderSuggestions(input, items);
+                    input.dispatchEvent(new CustomEvent("smart-autocomplete:loaded", {
+                        bubbles: true,
+                        detail: {items},
+                    }));
                 } catch (error) {
                     if (error.name !== "AbortError") {
                         closeSuggestions(input);
+                        input.dispatchEvent(new CustomEvent("smart-autocomplete:error", {bubbles: true}));
                     }
                 }
-            }, 180);
+            };
+            if (immediate) await execute();
+            else state.timer = window.setTimeout(execute, 180);
+        };
+
+        input.addEventListener("input", () => {
+            if (state.selecting) return;
+            runSearch(false);
         });
 
         input.addEventListener("keydown", (event) => {
@@ -256,11 +286,14 @@
                     ? state.items[state.activeIndex]
                     : exact || (!state.menu.hidden ? state.items[0] : null);
                 if (selected) chooseSuggestion(input, selected, "keyboard");
+                else runSearch(true);
             } else if (event.key === "Escape") {
                 event.preventDefault();
                 closeSuggestions(input);
             }
         });
+
+        state.runSearch = runSearch;
 
         input.addEventListener("focus", () => {
             if (state.items.length && normalize(input.value).length >= 2) {
@@ -280,6 +313,10 @@
     window.SmartAutocomplete = {
         enhance: initialize,
         close: closeSuggestions,
+        search(input) {
+            const state = stateByInput.get(input);
+            return state?.runSearch?.(true);
+        },
         normalize,
         fetchJson,
     };

@@ -169,6 +169,85 @@ def get_key_type(key_type_id: int) -> dict | None:
         return dict(row) if row else None
 
 
+def search_keys_for_selection(
+    query: str,
+    *,
+    key_type_id: int | None = None,
+    only_free: bool = False,
+    limit: int = 12,
+) -> list[dict]:
+    """Search the full key registry for picker/autocomplete components.
+
+    Numbers remain strings so leading zeroes are never discarded.  Availability
+    is calculated by the database and consumers may display occupied matches
+    without allowing them to be selected.
+    """
+
+    raw_query = (query or "").strip()
+    normalized = normalize_search_text(raw_query)
+    if not normalized and not only_free:
+        return []
+
+    compact = re.sub(r"[^0-9A-Za-zА-Яа-яЁё]+", "", raw_query).upper()
+    numeric = compact if compact.isdigit() else ""
+    numeric_unpadded = numeric.lstrip("0") or ("0" if numeric else "")
+    conditions = [
+        "BTRIM(k.hex_value) <> ''",
+        "kt.enabled = 1",
+    ]
+    params: list[object] = []
+    if normalized:
+        conditions.append("SMART_NORM(CONCAT_WS(' ', kt.name, k.number, k.hex_value)) LIKE ?")
+        params.append(f"%{normalized}%")
+    if key_type_id is not None:
+        conditions.append("kt.id = ?")
+        params.append(int(key_type_id))
+    if only_free:
+        conditions.append("k.status = 'free'")
+        conditions.append(
+            """NOT EXISTS (
+                SELECT 1 FROM uk_key_issues ki
+                WHERE ki.key_id = k.id
+                  AND ki.status IN ('pending', 'active')
+            )"""
+        )
+
+    query_limit = max(1, min(int(limit), 50))
+    with db() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT k.id, k.number, k.hex_value, k.status,
+                   kt.id AS type_id, kt.name AS type_name,
+                   kt.color AS type_color,
+                   (
+                       k.status = 'free' AND NOT EXISTS (
+                           SELECT 1 FROM uk_key_issues ki
+                           WHERE ki.key_id = k.id
+                             AND ki.status IN ('pending', 'active')
+                       )
+                   ) AS available,
+                   CASE
+                       WHEN UPPER(REGEXP_REPLACE(k.hex_value, '[^0-9A-Za-z]', '', 'g')) = ? THEN 0
+                       WHEN ? <> '' AND COALESCE(NULLIF(LTRIM(k.number, '0'), ''), '0') = ? THEN 0
+                       WHEN SMART_NORM(k.number) = ? THEN 1
+                       WHEN SMART_NORM(k.hex_value) = ? THEN 1
+                       ELSE 2
+                   END AS search_rank
+            FROM keys k
+            JOIN key_types kt ON kt.id = k.key_type_id
+            WHERE {' AND '.join(conditions)}
+            ORDER BY search_rank,
+                     CASE WHEN k.status = 'free' THEN 0 ELSE 1 END,
+                     LOWER(kt.name), LENGTH(k.number), LOWER(k.number), k.id
+            LIMIT ?
+            """,
+            [compact, numeric_unpadded, numeric_unpadded, normalized, normalized]
+            + params
+            + [query_limit],
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def get_missing_key_numbers(
     key_type_id: int,
     start_number: str = "",
@@ -626,6 +705,7 @@ def get_key_write_contexts(key_ids: list[int]) -> dict[int, dict]:
             LEFT JOIN employees e ON e.id = ka.employee_id
             LEFT JOIN uk_groups ug ON ug.id = ka.uk_group_id
             WHERE k.id IN ({placeholders})
+            ORDER BY k.id, ka.assigned_at DESC, ka.id DESC
             """,
             clean_ids,
         ).fetchall()
@@ -668,20 +748,35 @@ def get_key_write_contexts(key_ids: list[int]) -> dict[int, dict]:
             or item.get("uk_name")
             or ""
         )
-        contexts[int(item["key_id"])] = {
-            **item,
+        key_id = int(item["key_id"])
+        assignment = {
+            "id": item.get("assignment_id"),
+            "assignment_type": assignment_type,
             "assignment_type_name": ASSIGNMENT_TYPE_NAMES.get(
                 assignment_type,
                 assignment_type or "—",
             ),
+            "assignment_address": item.get("assignment_address") or "",
+            "assignment_apartment": item.get("assignment_apartment") or "",
             "owner_name": owner,
-            "is_used": bool(
-                item.get("assignment_id")
-                or item.get("key_status") not in {"", "free"}
-            ),
-            "panels": [],
-            "panel_ids": [],
+            "assigned_at": item.get("assigned_at"),
         }
+        context = contexts.get(key_id)
+        if context is None:
+            context = {
+                **item,
+                **assignment,
+                "is_used": bool(
+                    item.get("assignment_id")
+                    or item.get("key_status") not in {"", "free"}
+                ),
+                "assignments": [],
+                "panels": [],
+                "panel_ids": [],
+            }
+            contexts[key_id] = context
+        if assignment["id"]:
+            context["assignments"].append(assignment)
 
     removal_markers = ("remove", "delete", "unlink")
     for row in panel_rows:
@@ -691,8 +786,11 @@ def get_key_write_contexts(key_ids: list[int]) -> dict[int, dict]:
             continue
         context = contexts.setdefault(
             int(item["key_id"]),
-            {"is_used": False, "panels": [], "panel_ids": []},
+            {"is_used": True, "assignments": [], "panels": [], "panel_ids": []},
         )
+        # A recorded physical-panel relation also means the key is already in
+        # use, including legacy/imported rows without an active assignment.
+        context["is_used"] = True
         panel = {
             "id": int(item["panel_id"]),
             "address": item.get("address") or "",

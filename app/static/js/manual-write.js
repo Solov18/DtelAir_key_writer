@@ -14,6 +14,8 @@
     const confirmation = document.getElementById("confirmManualWrite");
     const submit = document.getElementById("manualWriteButton");
     const hint = document.getElementById("manualSubmitHint");
+    const occupiedContainer = form.querySelector("[data-occupied-key]");
+    const occupiedActions = Array.from(form.querySelectorAll('input[name="occupied_action"]'));
 
     const picker = document.getElementById("manualPanelPicker");
     const openPickerButton = document.getElementById("open-manual-panel-picker");
@@ -53,11 +55,15 @@
         if (automaticCount) automaticCount.textContent = String(autoSelected);
         if (manualCount) manualCount.textContent = String(manualSelected);
         if (totalCount) totalCount.textContent = String(selected);
-        const ready = selected > 0 && Boolean(confirmation?.checked);
+        const occupiedAction = occupiedActions.find((item) => item.checked)?.value || "";
+        const occupiedReady = !occupiedContainer || Boolean(occupiedAction);
+        const ready = selected > 0 && Boolean(confirmation?.checked) && occupiedReady;
         if (submit) submit.disabled = !ready || writeInFlight;
         if (hint) {
             hint.textContent = selected === 0
                 ? "Выберите хотя бы одну панель."
+                : !occupiedReady
+                    ? "Выберите действие для уже используемого ключа."
                 : confirmation?.checked
                     ? `К записи готовы ${selected} пан. Основной адрес назначения не изменится.`
                     : "Подтвердите проверку данных, чтобы продолжить.";
@@ -185,7 +191,7 @@
     }
 
     form.addEventListener("change", (event) => {
-        if (event.target.matches('input[name="panel_ids"], #confirmManualWrite')) updateState();
+        if (event.target.matches('input[name="panel_ids"], input[name="occupied_action"], #confirmManualWrite')) updateState();
     });
     selectAll?.addEventListener("click", () => {
         panelCheckboxes("automatic").forEach((item) => { item.checked = true; });
@@ -243,7 +249,30 @@
     form.addEventListener("submit", async (event) => {
         event.preventDefault();
         const checkedPanels = panelCheckboxes().filter((item) => item.checked);
-        if (writeInFlight || !checkedPanels.length || !confirmation?.checked) {
+        const occupiedAction = occupiedActions.find((item) => item.checked)?.value || "";
+        if (writeInFlight || !checkedPanels.length || !confirmation?.checked || (occupiedContainer && !occupiedAction)) {
+            updateState();
+            return;
+        }
+        let confirmed = true;
+        if (occupiedAction === "reassign") {
+            confirmed = await window.showDangerConfirm({
+                title: "Переназначить ключ?",
+                message: "Ключ уже назначен другому адресу. Его текущее назначение в CRM будет заменено новым. Запись на старых панелях сохранится, пока ключ не будет удалён с них отдельной операцией.",
+                confirmText: "Переназначить и записать",
+                cancelText: "Отмена",
+                source: submit,
+            });
+        } else if (occupiedAction === "add_panels") {
+            confirmed = await window.showConfirm({
+                title: "Добавить доступ на панели?",
+                message: "Ключ уже используется. Он будет дополнительно записан на выбранные панели без изменения текущего назначения.",
+                confirmText: "Добавить на панели",
+                cancelText: "Отмена",
+                source: submit,
+            });
+        }
+        if (!confirmed) {
             updateState();
             return;
         }

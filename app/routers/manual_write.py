@@ -8,6 +8,8 @@ from app.services import (
     get_panels,
     is_ambiguous_key,
     write_key_to_panels,
+    get_key_write_context,
+    resolve_key_write_decision,
 )
 from app.response_utils import async_document_response
 from app.templates_config import templates
@@ -52,6 +54,7 @@ def manual_write_form(
             "address": "",
             "apartment": "",
             "error": None,
+            "write_context": {},
         },
     )
 
@@ -84,6 +87,8 @@ def manual_write_preview(
     if panels:
         address = panels[0].get("address") or address
 
+    write_context = get_key_write_context(key["id"], panels) if key else {}
+
     return templates.TemplateResponse(
         "manual_write.html",
         {
@@ -96,6 +101,7 @@ def manual_write_preview(
             "address": address,
             "apartment": apartment,
             "error": error,
+            "write_context": write_context,
         },
     )
 
@@ -111,6 +117,7 @@ def manual_write_execute(
     automatic_panel_ids: list[int] = Form([]),
     manual_panel_ids: list[int] = Form([]),
     key_type_id: int = Form(0),
+    occupied_action: str = Form(""),
 ):
     key = find_key(key_query, key_type_id or None)
 
@@ -136,14 +143,18 @@ def manual_write_execute(
     all_results = []
 
     warning = None
+    context = get_key_write_context(key["id"], panels) if key else {}
+    decision = resolve_key_write_decision(context, occupied_action)
     if not key:
         warning = "Ключ не найден или его тип не определён."
     elif not apartment.strip():
         warning = "Квартира не указана. Запись не выполнялась."
     elif not panels:
         warning = "Не выбрана ни одна панель. Запись не выполнялась."
+    elif decision["action_required"]:
+        warning = "Ключ уже используется. Выберите: переназначить его или только добавить на выбранные панели."
 
-    if key and apartment.strip() and panels:
+    if key and apartment.strip() and panels and not decision["action_required"]:
         all_results.append(
             {
                 "key": key,
@@ -155,6 +166,11 @@ def manual_write_execute(
                     inner=inner,
                     address=address,
                     request=request,
+                    assignment_type="resident",
+                    assignment_policy=decision["assignment_policy"],
+                    known_panel_ids=decision["known_panel_ids"],
+                    write_option=decision["write_option"],
+                    previous_assignment=decision["previous_assignment"],
                     automatic_panel_ids=set(automatic_panel_ids),
                     manual_panel_ids=set(manual_panel_ids),
                 ),

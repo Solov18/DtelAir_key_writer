@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from app.db import db
 from app.repositories.key_repository import (
     release_key_on_connection,
+    search_keys_for_selection,
     set_key_assignment_on_connection,
 )
 from app.search_utils import normalize_search_text
@@ -561,63 +562,12 @@ def get_available_keys(
     *,
     key_type_id: int | None = None,
 ) -> list[dict]:
-    normalized = normalize_search_text(query)
-    raw_query = _clean(query)
-    compact_query = re.sub(r"[^0-9A-Za-zА-Яа-яЁё]+", "", raw_query).upper()
-    numeric_query = compact_query if compact_query.isdigit() else ""
-    numeric_unpadded = numeric_query.lstrip("0") or ("0" if numeric_query else "")
-    filter_params: list[object] = []
-    condition = ""
-    if normalized:
-        condition = "AND SMART_NORM(CONCAT_WS(' ', kt.name, k.number, k.hex_value)) LIKE ?"
-        filter_params.append(f"%{normalized}%")
-    type_condition = ""
-    if key_type_id is not None:
-        type_condition = "AND kt.id = ?"
-        filter_params.append(int(key_type_id))
-    query_limit = max(1, min(int(limit), 200))
-
-    with db() as conn:
-        return [
-            dict(row)
-            for row in conn.execute(
-                f"""
-                WITH available AS (
-                    SELECT k.id, k.number, k.hex_value, k.status,
-                           kt.id AS type_id, kt.name AS type_name,
-                           kt.color AS type_color,
-                           CASE
-                               WHEN UPPER(REGEXP_REPLACE(k.hex_value, '[^0-9A-Za-z]', '', 'g')) = ? THEN 0
-                               WHEN ? <> '' AND COALESCE(NULLIF(LTRIM(k.number, '0'), ''), '0') = ? THEN 0
-                               WHEN SMART_NORM(k.number) = ? THEN 1
-                               WHEN SMART_NORM(kt.name) = ? THEN 2
-                               ELSE 3
-                           END AS search_rank
-                    FROM keys k
-                    JOIN key_types kt ON kt.id = k.key_type_id
-                    WHERE BTRIM(k.hex_value) <> ''
-                      AND k.status = 'free'
-                      AND kt.enabled = 1
-                      AND NOT EXISTS (
-                          SELECT 1 FROM uk_key_issues ki
-                          WHERE ki.key_id = k.id
-                            AND ki.status IN ('pending', 'active')
-                      )
-                      {condition}
-                      {type_condition}
-                )
-                SELECT id, number, hex_value, status,
-                       type_id, type_name, type_color
-                FROM available
-                ORDER BY search_rank, LOWER(type_name),
-                         LENGTH(number), LOWER(number), id
-                LIMIT ?
-                """,
-                [compact_query, numeric_unpadded, numeric_unpadded, normalized, normalized]
-                + filter_params
-                + [query_limit],
-            )
-        ]
+    return search_keys_for_selection(
+        query,
+        key_type_id=key_type_id,
+        only_free=True,
+        limit=limit,
+    )
 
 
 def search_group_panels(group_id: int, query: str = "", limit: int = 60) -> list[dict]:

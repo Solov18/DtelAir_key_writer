@@ -232,25 +232,32 @@
     <div class="uk-modal-card panel custom-scroll" role="dialog" aria-modal="true">
         <header><div><span class="page-eyebrow">Выдача физического ключа</span><h2>Выдать ключ УК</h2></div><button type="button" aria-label="Закрыть" data-close-uk-detail-modal>×</button></header>
         <form method="post" action="/uk/{{ group.id }}/keys/issue" class="uk-profile-form">
-            <section class="uk-key-picker is-wide" data-uk-key-picker data-source="/uk/{{ group.id }}/available-keys">
-                <label for="ukKeyPickerTrigger">Свободный ключ</label>
+            <section class="uk-key-search is-wide" data-uk-key-selection>
                 <input type="hidden" name="key_id" data-uk-key-value>
-                <button id="ukKeyPickerTrigger" type="button" class="uk-key-picker__trigger" data-uk-key-trigger aria-haspopup="listbox" aria-expanded="false">
-                    <span data-uk-key-label>Выберите ключ с HEX</span><span aria-hidden="true">⌄</span>
-                </button>
-                <div class="uk-key-picker__dropdown" data-uk-key-dropdown hidden>
-                    <div class="uk-key-picker__filters">
-                        <label><span>Тип ключа</span>
-                            <select data-uk-key-type data-native-select>
-                                <option value="">Все типы</option>
-                                {% for key_type in available_key_types %}<option value="{{ key_type.id }}">{{ key_type.name }}</option>{% endfor %}
-                            </select>
-                        </label>
-                        <label><span>Поиск</span><span class="uk-picker-search-row"><input type="search" data-uk-key-search autocomplete="off" placeholder="Номер, HEX или тип"><button type="button" data-uk-key-find>Найти</button></span></label>
-                    </div>
-                    <div class="uk-key-picker__results custom-scroll" data-uk-key-results role="listbox"></div>
-                    <p class="uk-key-picker__empty" data-uk-key-empty hidden>Свободные ключи не найдены</p>
+                <div class="uk-key-search__controls">
+                    <label><span>Тип ключа</span>
+                        <select id="ukIssueKeyType" data-native-select>
+                            <option value="">Все типы</option>
+                            {% for key_type in available_key_types %}<option value="{{ key_type.id }}">{{ key_type.name }}</option>{% endfor %}
+                        </select>
+                    </label>
+                    <label><span>Номер ключа или HEX</span>
+                        <span class="uk-picker-search-row">
+                            <input id="ukIssueKeySearch" type="search" autocomplete="off" placeholder="Введите номер или HEX"
+                                   data-smart-search="keys" data-smart-search-url="/api/keys/search"
+                                   data-smart-search-min-length="1" data-smart-search-limit="12"
+                                   data-smart-search-params="#ukIssueKeyType:key_type_id" data-smart-submit="false">
+                            <button type="button" data-uk-key-find>Найти</button>
+                        </span>
+                    </label>
                 </div>
+                <p class="uk-key-search__status" data-uk-key-search-status>Введите номер, HEX или название типа ключа.</p>
+                <article class="uk-key-selected" data-uk-key-selected hidden>
+                    <span class="uk-key-selected__dot" data-uk-key-color aria-hidden="true"></span>
+                    <div><small>Выбранный ключ</small><b data-uk-key-title></b><code data-uk-key-hex></code></div>
+                    <span class="status-badge success" data-uk-key-status>Свободен</span>
+                    <button type="button" data-uk-key-clear aria-label="Снять выбор">×</button>
+                </article>
             </section>
             <section class="uk-issue-panel-picker is-wide" data-uk-issue-panels data-source="/uk/{{ group.id }}/available-panels">
                 <div class="uk-issue-panel-picker__head">
@@ -274,7 +281,6 @@
             <label>Квартира только для операции<input name="apartment_override" autocomplete="off" placeholder="Оставьте пустым для автоподстановки"></label>
             <label class="uk-confirm-field"><input type="checkbox" name="override_confirmed" value="1"><span>Подтверждаю изменение квартиры только для этой операции</span></label>
             <label class="is-wide">Комментарий<textarea name="comment" rows="2"></textarea></label>
-            <div class="uk-modal-tip is-wide"><b>CRM-доступ берётся из карточки УК.</b><span>При DRY_RUN или учебном режиме внешний запрос не выполняется.</span></div>
             <div class="uk-modal-actions is-wide"><button class="btn" type="submit">Выдать и записать</button></div>
         </form>
     </div>
@@ -282,5 +288,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/uk-detail.js?v=8"></script>
+<script src="/static/js/uk-detail.js?v=9"></script>
 {% endblock %}

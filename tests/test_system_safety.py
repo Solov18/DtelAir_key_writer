@@ -86,6 +86,7 @@ class SystemSafetyTests(PostgreSQLTestCase):
         with (
             patch("app.routers.manual_write.find_key", return_value=key),
             patch("app.routers.manual_write.get_panels", return_value=[]) as panels,
+            patch("app.routers.manual_write.get_key_write_context", return_value={}),
             patch("app.routers.manual_write.find_panels_by_address") as fallback,
             patch("app.routers.manual_write.write_key_to_panels") as writer,
         ):
@@ -115,6 +116,7 @@ class SystemSafetyTests(PostgreSQLTestCase):
         with (
             patch("app.routers.manual_write.find_key", return_value=key),
             patch("app.routers.manual_write.get_panels", return_value=panels),
+            patch("app.routers.manual_write.get_key_write_context", return_value={"is_used": False, "panel_ids": []}),
             patch("app.routers.manual_write.write_key_to_panels", return_value=[]) as writer,
         ):
             manual_write_execute(
@@ -132,6 +134,72 @@ class SystemSafetyTests(PostgreSQLTestCase):
         self.assertEqual(kwargs["address"], "ул. Ясногорская 16/2")
         self.assertEqual(kwargs["automatic_panel_ids"], {10, 11})
         self.assertEqual(kwargs["manual_panel_ids"], {20, 21})
+
+    def test_manual_write_occupied_key_requires_operator_choice(self):
+        request = self._request("/write/manual/write")
+        key = {"id": 5, "number": "408", "hex_value": "FB44EDD7", "status": "issued_resident"}
+        panels = [{"id": 12, "address": "Новый дом 2", "mac": "08:13:CD:00:00:12"}]
+        context = {
+            "is_used": True, "assignment_type_name": "Жилец",
+            "assignment_address": "Старый дом 1", "assignment_apartment": "4",
+            "panel_ids": [9],
+        }
+        with (
+            patch("app.routers.manual_write.find_key", return_value=key),
+            patch("app.routers.manual_write.get_panels", return_value=panels),
+            patch("app.routers.manual_write.get_key_write_context", return_value=context),
+            patch("app.routers.manual_write.write_key_to_panels") as writer,
+        ):
+            response = manual_write_execute(
+                request=request, key_query="408", address="Новый дом 2", apartment="8",
+                inner=1, panel_ids=[12], key_type_id=0, occupied_action="",
+            )
+        writer.assert_not_called()
+        self.assertIn("Ключ уже используется", response.body.decode("utf-8"))
+
+    def test_manual_write_reassigns_through_shared_decision(self):
+        request = self._request("/write/manual/write")
+        key = {"id": 5, "number": "408", "hex_value": "FB44EDD7", "status": "issued_resident"}
+        panels = [{"id": 12, "address": "Новый дом 2", "mac": "08:13:CD:00:00:12"}]
+        context = {
+            "is_used": True, "assignment_type_name": "Жилец",
+            "assignment_address": "Старый дом 1", "assignment_apartment": "4",
+            "panel_ids": [9],
+        }
+        with (
+            patch("app.routers.manual_write.find_key", return_value=key),
+            patch("app.routers.manual_write.get_panels", return_value=panels),
+            patch("app.routers.manual_write.get_key_write_context", return_value=context),
+            patch("app.routers.manual_write.write_key_to_panels", return_value=[]) as writer,
+        ):
+            manual_write_execute(
+                request=request, key_query="408", address="Новый дом 2", apartment="8",
+                inner=1, panel_ids=[12], key_type_id=0, occupied_action="reassign",
+            )
+        kwargs = writer.call_args.kwargs
+        self.assertEqual(kwargs["assignment_policy"], "replace")
+        self.assertEqual(kwargs["write_option"], "reassign_to_new_address")
+        self.assertEqual(kwargs["known_panel_ids"], {9})
+
+    def test_manual_write_adds_panels_without_changing_assignment(self):
+        request = self._request("/write/manual/write")
+        key = {"id": 5, "number": "408", "hex_value": "FB44EDD7", "status": "issued_resident"}
+        panels = [{"id": 12, "address": "Новый дом 2", "mac": "08:13:CD:00:00:12"}]
+        context = {"is_used": True, "assignment_type_name": "Жилец", "panel_ids": [9]}
+        with (
+            patch("app.routers.manual_write.find_key", return_value=key),
+            patch("app.routers.manual_write.get_panels", return_value=panels),
+            patch("app.routers.manual_write.get_key_write_context", return_value=context),
+            patch("app.routers.manual_write.write_key_to_panels", return_value=[]) as writer,
+        ):
+            manual_write_execute(
+                request=request, key_query="408", address="Новый дом 2", apartment="8",
+                inner=1, panel_ids=[12], key_type_id=0, occupied_action="add_panels",
+            )
+        kwargs = writer.call_args.kwargs
+        self.assertEqual(kwargs["assignment_policy"], "preserve")
+        self.assertEqual(kwargs["write_option"], "add_selected_panels")
+        self.assertEqual(kwargs["known_panel_ids"], {9})
 
     def test_partial_panel_write_keeps_success_and_reports_each_failure(self):
         key = {

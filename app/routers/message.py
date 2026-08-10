@@ -11,9 +11,11 @@ from app.services import (
     get_panels,
     is_ambiguous_key,
     write_key_to_panels,
+    enrich_key_write_rows,
+    get_key_write_context,
+    resolve_key_write_decision,
 )
 from app.response_utils import async_document_response
-from app.repositories.key_repository import get_key_write_contexts
 from app.repositories.panel_repository import get_panel_page
 from app.templates_config import templates
 
@@ -95,54 +97,6 @@ def _build_key_rows(requests: list[dict] | list[str]) -> list[dict]:
     return keys
 
 
-def _write_context_description(context: dict) -> str:
-    parts = [context.get("assignment_type_name") or "Назначение"]
-    if context.get("assignment_address"):
-        parts.append(context["assignment_address"])
-    apartment = (context.get("assignment_apartment") or "").strip()
-    if apartment:
-        parts.append(f"кв. {apartment}")
-    if context.get("owner_name"):
-        parts.append(context["owner_name"])
-    return ", ".join(parts)
-
-
-def _enrich_key_write_rows(keys: list[dict], panels: list[dict]) -> bool:
-    key_ids = [row["item"]["id"] for row in keys if row.get("item")]
-    contexts = get_key_write_contexts(key_ids)
-    selected_panel_ids = {int(panel["id"]) for panel in panels}
-    has_used_keys = False
-    for row in keys:
-        item = row.get("item") or {}
-        context = contexts.get(int(item.get("id") or 0), {})
-        known_panel_ids = {int(value) for value in context.get("panel_ids", [])}
-        selected_known_ids = known_panel_ids & selected_panel_ids
-        is_used = bool(context.get("is_used"))
-        has_used_keys = has_used_keys or is_used
-        if row.get("ambiguous"):
-            write_state = "conflict"
-        elif not item:
-            write_state = "missing"
-        elif selected_panel_ids and selected_known_ids == selected_panel_ids:
-            write_state = "all_selected"
-        elif selected_known_ids:
-            write_state = "partial_selected"
-        elif is_used:
-            write_state = "used"
-        else:
-            write_state = "free"
-        row["write_context"] = {
-            **context,
-            "is_used": is_used,
-            "write_state": write_state,
-            "description": _write_context_description(context) if is_used else "",
-            "known_panel_ids_csv": ",".join(
-                str(value) for value in sorted(known_panel_ids)
-            ),
-        }
-    return has_used_keys
-
-
 @router.get("/message", response_class=HTMLResponse)
 def message_form(
     request: Request,
@@ -199,7 +153,7 @@ def message_preview(
         if len(canonical_addresses) == 1:
             parsed["address"] = canonical_addresses.pop()
 
-    has_used_keys = _enrich_key_write_rows(keys, panels)
+    has_used_keys = enrich_key_write_rows(keys, panels)
 
     missing_keys = [
         " ".join(filter(None, [item.get("requested_type_name"), f"№{item['number']}"]))
@@ -309,9 +263,9 @@ def message_write(
             item = None
 
         if item and panels and apartment:
-            context = get_key_write_contexts([item["id"]]).get(item["id"], {})
-            is_used = bool(context.get("is_used"))
-            if is_used and occupied_action not in {"reassign", "add_panels"}:
+            context = get_key_write_context(item["id"], panels)
+            decision = resolve_key_write_decision(context, occupied_action)
+            if decision["action_required"]:
                 all_results.append(
                     {
                         "key": item,
@@ -320,18 +274,6 @@ def message_write(
                     }
                 )
                 continue
-            assignment_policy = (
-                "preserve"
-                if is_used and occupied_action == "add_panels"
-                else "replace"
-            )
-            write_option = (
-                "add_selected_panels"
-                if assignment_policy == "preserve"
-                else "reassign_to_new_address"
-                if is_used
-                else "write_free_key"
-            )
             all_results.append(
                 {
                     "key": item,
@@ -344,10 +286,10 @@ def message_write(
                         address=address,
                         request=request,
                         assignment_type="resident",
-                        assignment_policy=assignment_policy,
-                        known_panel_ids=set(context.get("panel_ids", [])),
-                        write_option=write_option,
-                        previous_assignment=_write_context_description(context),
+                        assignment_policy=decision["assignment_policy"],
+                        known_panel_ids=decision["known_panel_ids"],
+                        write_option=decision["write_option"],
+                        previous_assignment=decision["previous_assignment"],
                         automatic_panel_ids=set(automatic_panel_ids),
                         manual_panel_ids=set(manual_panel_ids),
                     ),

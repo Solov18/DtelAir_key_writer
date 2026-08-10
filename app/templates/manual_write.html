@@ -89,13 +89,48 @@
                 <div class="manual-key-head">
                     <span class="manual-key-dot" style="--key-color: {{ key.type_color or '#2A9DF4' }}"></span>
                     <div><small>{{ key.type_name or key.key_type or 'Ключ' }}</small><h3>Ключ №{{ key.number or 'по HEX' }}</h3></div>
-                    <span class="badge success">Найден</span>
+                    {% if write_context.write_state == 'all_selected' %}
+                    <span class="badge warning">Уже записан на выбранных панелях</span>
+                    {% elif write_context.write_state == 'partial_selected' %}
+                    <span class="badge warning">Частично записан</span>
+                    {% elif write_context.is_used %}
+                    <span class="badge warning">Уже используется</span>
+                    {% else %}
+                    <span class="badge success">Свободен</span>
+                    {% endif %}
                 </div>
                 <dl>
                     <div><dt>HEX</dt><dd>{{ key.hex_value }}</dd></div>
                     <div><dt>Адрес</dt><dd>{{ address }}</dd></div>
                     <div><dt>Квартира</dt><dd>{{ apartment }}</dd></div>
                 </dl>
+                {% if write_context.is_used %}
+                <section class="manual-occupied-summary" aria-label="Текущее использование ключа">
+                    <span class="manual-occupied-summary__eyebrow">Внимание</span>
+                    <h4>Ключ уже используется</h4>
+                    {% if write_context.assignments %}
+                    <div class="manual-current-assignments">
+                        {% for assignment in write_context.assignments %}
+                        <article>
+                            <b>{{ assignment.assignment_type_name }}</b>
+                            {% if assignment.owner_name %}<span>{{ assignment.owner_name }}</span>{% endif %}
+                            {% if assignment.assignment_address %}<span>{{ assignment.assignment_address }}{% if assignment.assignment_apartment %}, кв. {{ assignment.assignment_apartment }}{% endif %}</span>{% endif %}
+                        </article>
+                        {% endfor %}
+                    </div>
+                    {% elif write_context.description %}
+                    <p>{{ write_context.description }}</p>
+                    {% endif %}
+                    {% if write_context.panels %}
+                    <div class="manual-known-panels">
+                        <b>Уже записан на панелях:</b>
+                        {% for panel in write_context.panels %}
+                        <span>{{ panel.address }} — {{ panel.entrance or panel.name or 'точка доступа' }}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </section>
+                {% endif %}
             </div>
 
             <form method="post" action="/write/manual/write" id="manualWriteForm">
@@ -141,6 +176,19 @@
                     <strong>Всего будет записано: <b id="selectedPanelCount">{{ panels|length }}</b></strong>
                 </div>
                 <div id="selectedPanelSources"></div>
+                {% if write_context.is_used %}
+                <fieldset class="manual-occupied-actions" data-occupied-key>
+                    <legend>Выберите действие для занятого ключа</legend>
+                    <label>
+                        <input type="radio" name="occupied_action" value="reassign">
+                        <span><b>Переназначить ключ</b><small>Заменить текущее назначение в CRM новым адресом и квартирой. Старые записи на физических панелях сохранятся.</small></span>
+                    </label>
+                    <label>
+                        <input type="radio" name="occupied_action" value="add_panels">
+                        <span><b>Только добавить на выбранные панели</b><small>Сохранить владельца и текущее назначение. Записать ключ только на панели, где его ещё нет.</small></span>
+                    </label>
+                </fieldset>
+                {% endif %}
                 <label class="manual-confirm">
                     <input type="checkbox" id="confirmManualWrite">
                     <span>Данные и выбранные панели проверены</span>
@@ -186,5 +234,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/manual-write.js?v=5"></script>
+<script src="/static/js/manual-write.js?v=6"></script>
 {% endblock %}

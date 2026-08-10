@@ -3654,6 +3654,80 @@ a.uk-summary-card:hover {
 
 .uk-key-picker.is-loading .uk-key-picker__results { opacity: .55; }
 
+.uk-key-search {
+    display: grid;
+    gap: 10px;
+    min-width: 0;
+}
+
+.uk-key-search__controls {
+    display: grid;
+    grid-template-columns: minmax(180px, .34fr) minmax(320px, 1fr);
+    gap: 12px;
+    align-items: end;
+}
+
+.uk-key-search__controls label {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+    color: var(--color-text-muted);
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.uk-key-search__controls select,
+.uk-key-search__controls input,
+.uk-key-search__controls button {
+    min-height: var(--control-height, 42px);
+}
+
+.uk-key-search__status {
+    min-height: 18px;
+    margin: 0;
+    color: var(--color-text-muted);
+    font-size: 12px;
+}
+
+.uk-key-selected {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 14px;
+    border: 1px solid var(--control-border-focus);
+    border-radius: 12px;
+    background: var(--control-option-active);
+}
+
+.uk-key-selected[hidden] { display: none; }
+
+.uk-key-selected__dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--key-type-color, var(--accent));
+    box-shadow: 0 0 12px color-mix(in srgb, var(--key-type-color, var(--accent)) 70%, transparent);
+}
+
+.uk-key-selected div { display: grid; gap: 2px; min-width: 0; }
+.uk-key-selected small { color: var(--color-text-muted); font-size: 10px; }
+.uk-key-selected b { color: var(--color-heading); font-size: 14px; }
+.uk-key-selected code { color: var(--color-text); font-size: 12px; user-select: text; }
+.uk-key-selected > button {
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    padding: 0;
+    border-radius: 9px;
+}
+
+@media (max-width: 760px) {
+    .uk-key-search__controls { grid-template-columns: 1fr; }
+    .uk-key-selected { grid-template-columns: auto minmax(0, 1fr) auto; }
+    .uk-key-selected .status-badge { grid-column: 2; justify-self: start; }
+}
+
 body.light-theme .uk-key-picker__dropdown {
     box-shadow: 0 18px 42px rgba(41, 78, 109, .2);
 }

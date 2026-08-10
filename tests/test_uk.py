@@ -7,6 +7,8 @@ from tests.postgres_test_case import PostgreSQLTestCase
 
 from app.db import db
 from app.repositories import uk_repository
+from app.repositories.key_repository import search_keys_for_selection
+from app.routers.search import key_picker_search
 from app.routers.uk import uk_available_keys, uk_credentials_reveal, uk_detail, uk_page
 from app.services import uk_keys
 from app.services.search import get_search_suggestions
@@ -192,6 +194,55 @@ class UkRegistryTests(PostgreSQLTestCase):
         self.assertGreaterEqual(len(items), 1)
         self.assertEqual(items[0]["number"], "3")
         self.assertTrue(all(item["type_id"] == type_id for item in items))
+
+    def test_common_key_picker_search_preserves_zeroes_and_marks_used_keys(self):
+        with db() as conn:
+            sticker_type_id = int(
+                conn.execute(
+                    "INSERT INTO key_types(name, color, enabled) VALUES (?, '#ef4444', 1)",
+                    ("Стикер",),
+                ).lastrowid
+            )
+            free_id = int(
+                conn.execute(
+                    """
+                    INSERT INTO keys(key_type_id, number, hex_value, key_type, status)
+                    VALUES (?, '00357', 'A1B2C3D4', 'Стикер', 'free')
+                    """,
+                    (sticker_type_id,),
+                ).lastrowid
+            )
+            used_id = int(
+                conn.execute(
+                    """
+                    INSERT INTO keys(key_type_id, number, hex_value, key_type, status)
+                    VALUES (?, '00358', 'A1B2C3D5', 'Стикер', 'issued_resident')
+                    """,
+                    (sticker_type_id,),
+                ).lastrowid
+            )
+
+        by_number = search_keys_for_selection("стикер 00357", limit=12)
+        by_hex = search_keys_for_selection("A1B2", key_type_id=sticker_type_id, limit=12)
+        payload = key_picker_search(
+            q="A1B2",
+            key_type_id=sticker_type_id,
+            only_free=False,
+            limit=12,
+        )
+
+        self.assertEqual([item["id"] for item in by_number], [free_id])
+        self.assertEqual({item["id"] for item in by_hex}, {free_id, used_id})
+        self.assertEqual(payload["items"][0]["number"], "00357")
+        self.assertIn("№00357", payload["items"][0]["value"])
+        self.assertTrue(payload["items"][0]["available"])
+        used = next(item for item in payload["items"] if item["id"] == used_id)
+        self.assertFalse(used["available"])
+        self.assertTrue(used["disabled"])
+
+    def test_common_key_picker_does_not_preload_without_query(self):
+        self._key("000001", "ABCDEF01")
+        self.assertEqual(search_keys_for_selection("", limit=12), [])
 
     def test_group_panel_search_filters_complete_linked_panel_set(self):
         group_id, _, _, _, _ = self._company_with_panels()

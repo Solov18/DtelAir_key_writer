@@ -323,8 +323,8 @@ class MessageParserTests(PostgreSQLTestCase):
             patch("app.routers.message.is_ambiguous_key", return_value=False),
             patch("app.routers.message.get_panels", return_value=panels) as get_panels_mock,
             patch(
-                "app.routers.message.get_key_write_contexts",
-                return_value={91: {"is_used": False, "panel_ids": []}},
+                "app.routers.message.get_key_write_context",
+                return_value={"is_used": False, "panel_ids": []},
             ),
             patch("app.routers.message.write_key_to_panels", return_value=[]) as writer,
         ):
@@ -385,8 +385,8 @@ class MessageParserTests(PostgreSQLTestCase):
             patch("app.routers.message.is_ambiguous_key", return_value=False),
             patch("app.routers.message.get_panels", return_value=[panel]),
             patch(
-                "app.routers.message.get_key_write_contexts",
-                return_value={55: context},
+                "app.routers.message.get_key_write_context",
+                return_value=context,
             ),
             patch("app.routers.message.write_key_to_panels") as writer,
         ):

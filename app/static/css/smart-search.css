@@ -15,6 +15,15 @@
     display: none;
 }
 
+.smart-search-menu[data-scope="keys"] {
+    max-height: 300px;
+}
+
+.smart-search-menu[data-scope="keys"] .smart-search-option {
+    min-height: 42px;
+    padding-block: 6px;
+}
+
 .smart-search-option {
     width: 100%;
     min-height: 50px;
@@ -76,6 +85,18 @@
     color: var(--color-icon);
     font-size: 11px;
     font-style: normal;
+}
+
+.smart-search-option.is-disabled,
+.smart-search-option:disabled {
+    cursor: not-allowed;
+    opacity: .58;
+}
+
+.smart-search-option.is-disabled:hover,
+.smart-search-option:disabled:hover {
+    border-color: transparent;
+    background: transparent;
 }
 
 .smart-search-empty {

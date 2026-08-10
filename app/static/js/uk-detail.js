@@ -1,126 +1,81 @@
 (() => {
     const fetchSearchJson = (url) => window.SmartAutocomplete.fetchJson(url, {timeout: 10000});
 
-    document.querySelectorAll("[data-uk-key-picker]").forEach((picker) => {
+    document.querySelectorAll("[data-uk-key-selection]").forEach((picker) => {
+        const form = picker.closest("form");
         const valueInput = picker.querySelector("[data-uk-key-value]");
-        const trigger = picker.querySelector("[data-uk-key-trigger]");
-        const label = picker.querySelector("[data-uk-key-label]");
-        const dropdown = picker.querySelector("[data-uk-key-dropdown]");
-        const search = picker.querySelector("[data-uk-key-search]");
-        const type = picker.querySelector("[data-uk-key-type]");
-        const results = picker.querySelector("[data-uk-key-results]");
-        const empty = picker.querySelector("[data-uk-key-empty]");
+        const searchInput = picker.querySelector("input[data-smart-search]");
+        const typeFilter = picker.querySelector("select");
         const findButton = picker.querySelector("[data-uk-key-find]");
-        let items = [];
-        let activeIndex = -1;
-        let requestSequence = 0;
-        let debounceTimer = null;
+        const status = picker.querySelector("[data-uk-key-search-status]");
+        const selectedCard = picker.querySelector("[data-uk-key-selected]");
+        const selectedTitle = picker.querySelector("[data-uk-key-title]");
+        const selectedHex = picker.querySelector("[data-uk-key-hex]");
+        const selectedStatus = picker.querySelector("[data-uk-key-status]");
+        const selectedColor = picker.querySelector("[data-uk-key-color]");
+        const clearButton = picker.querySelector("[data-uk-key-clear]");
+        let selectedItem = null;
 
-        const optionLabel = (item) => `${item.type} · №${item.number} · ${item.hex}`;
-        const setActive = (index) => {
-            const buttons = [...results.querySelectorAll('[role="option"]')];
-            if (!buttons.length) {
-                activeIndex = -1;
-                return;
-            }
-            activeIndex = (index + buttons.length) % buttons.length;
-            buttons.forEach((button, current) => button.classList.toggle("is-active", current === activeIndex));
-            buttons[activeIndex].scrollIntoView({block: "nearest"});
+        const clearSelection = ({clearSearch = false} = {}) => {
+            selectedItem = null;
+            valueInput.value = "";
+            selectedCard.hidden = true;
+            if (clearSearch) searchInput.value = "";
         };
-        const close = ({focus = false} = {}) => {
-            dropdown.hidden = true;
-            trigger.setAttribute("aria-expanded", "false");
-            picker.classList.remove("is-open");
-            if (focus) trigger.focus();
-        };
+
         const choose = (item) => {
+            if (!item?.available) return;
+            selectedItem = item;
             valueInput.value = String(item.id);
-            label.textContent = optionLabel(item);
-            valueInput.dispatchEvent(new Event("change", {bubbles: true}));
-            close({focus: true});
-        };
-        const render = () => {
-            results.replaceChildren(...items.map((item, index) => {
-                const button = document.createElement("button");
-                button.type = "button";
-                button.setAttribute("role", "option");
-                button.dataset.index = String(index);
-                button.innerHTML = `<span class="uk-key-picker__type"></span><b></b><code></code>`;
-                button.querySelector(".uk-key-picker__type").textContent = item.type;
-                button.querySelector("b").textContent = `№${item.number}`;
-                button.querySelector("code").textContent = item.hex;
-                button.style.setProperty("--key-type-color", item.color || "var(--accent)");
-                button.addEventListener("pointerdown", (event) => event.preventDefault());
-                button.addEventListener("click", () => choose(item));
-                return button;
-            }));
-            empty.hidden = items.length !== 0;
-            results.hidden = items.length === 0;
-            setActive(items.length ? 0 : -1);
-        };
-        const load = async () => {
-            const sequence = ++requestSequence;
-            const params = new URLSearchParams({q: search.value.trim(), limit: "60"});
-            if (type.value) params.set("key_type_id", type.value);
-            picker.classList.add("is-loading");
-            try {
-                const payload = await fetchSearchJson(`${picker.dataset.source}?${params}`);
-                if (sequence !== requestSequence) return;
-                items = Array.isArray(payload.items) ? payload.items : [];
-                render();
-            } catch {
-                if (sequence !== requestSequence) return;
-                items = [];
-                render();
-                empty.textContent = "Не удалось загрузить свободные ключи";
-                empty.hidden = false;
-            } finally {
-                if (sequence === requestSequence) picker.classList.remove("is-loading");
-            }
-        };
-        const open = () => {
-            dropdown.hidden = false;
-            trigger.setAttribute("aria-expanded", "true");
-            picker.classList.add("is-open");
-            empty.textContent = "Свободные ключи не найдены";
-            load();
-            window.setTimeout(() => search.focus(), 0);
+            selectedTitle.textContent = `${item.type} · №${item.number}`;
+            selectedHex.textContent = item.hex;
+            selectedStatus.textContent = item.status_name || "Свободен";
+            selectedColor.style.setProperty("--key-type-color", item.color || "var(--accent)");
+            selectedCard.hidden = false;
+            status.textContent = "Ключ выбран. Можно выбрать панели и продолжить выдачу.";
         };
 
-        trigger.addEventListener("click", () => dropdown.hidden ? open() : close({focus: true}));
-        search.addEventListener("input", () => {
-            window.clearTimeout(debounceTimer);
-            debounceTimer = window.setTimeout(load, 180);
-        });
-        findButton?.addEventListener("click", load);
-        type.addEventListener("change", load);
-        search.addEventListener("keydown", (event) => {
-            if (event.key !== "Enter") return;
+        searchInput.addEventListener("smart-autocomplete:select", (event) => {
             event.preventDefault();
-            event.stopPropagation();
-            if (activeIndex >= 0 && items[activeIndex]) choose(items[activeIndex]);
-            else load();
+            choose(event.detail.item);
         });
-        dropdown.addEventListener("keydown", (event) => {
-            if (event.key === "Escape") {
-                event.preventDefault();
-                close({focus: true});
-            } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-                event.preventDefault();
-                setActive(activeIndex + (event.key === "ArrowDown" ? 1 : -1));
-            } else if (event.key === "Enter" && activeIndex >= 0) {
-                event.preventDefault();
-                choose(items[activeIndex]);
+        searchInput.addEventListener("smart-autocomplete:loading", () => {
+            status.textContent = "Поиск…";
+        });
+        searchInput.addEventListener("smart-autocomplete:loaded", (event) => {
+            const items = event.detail.items || [];
+            if (!items.length) status.textContent = "Ключи не найдены";
+            else if (!items.some((item) => item.available)) {
+                status.textContent = "Найдены только уже используемые ключи. Выберите свободный ключ.";
+            } else {
+                status.textContent = `Найдено вариантов: ${items.length}. Выберите свободный ключ.`;
             }
         });
-        document.addEventListener("pointerdown", (event) => {
-            if (!dropdown.hidden && !picker.contains(event.target)) close();
+        searchInput.addEventListener("smart-autocomplete:error", () => {
+            status.textContent = "Не удалось выполнить поиск. Попробуйте ещё раз.";
         });
-        picker.closest("form")?.addEventListener("submit", (event) => {
+        searchInput.addEventListener("input", () => {
+            if (selectedItem && searchInput.value !== selectedItem.value) clearSelection();
+        });
+        typeFilter.addEventListener("change", () => {
+            clearSelection();
+            if (searchInput.value.trim()) window.SmartAutocomplete.search(searchInput);
+        });
+        findButton.addEventListener("click", () => window.SmartAutocomplete.search(searchInput));
+        clearButton.addEventListener("click", () => {
+            clearSelection({clearSearch: true});
+            status.textContent = "Введите номер, HEX или название типа ключа.";
+            searchInput.focus();
+        });
+        form?.addEventListener("submit", (event) => {
             if (valueInput.value) return;
             event.preventDefault();
-            open();
-            window.showAlert?.({title: "Выберите ключ", text: "Найдите и выберите свободный ключ с HEX."});
+            status.textContent = "Сначала найдите и выберите свободный ключ с HEX.";
+            searchInput.focus();
+            window.showAlert?.({
+                title: "Выберите ключ",
+                text: "Введите номер или HEX и выберите свободный ключ из найденных вариантов.",
+            });
         });
     });
 
