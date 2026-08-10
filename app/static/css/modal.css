@@ -9,6 +9,32 @@ body.modal-open {
     scrollbar-gutter: stable;
 }
 
+.modal-shell {
+    width: min(var(--modal-shell-width, 680px), 100%);
+    padding: 0;
+}
+
+.modal-shell--sm { --modal-shell-width: 480px; }
+.modal-shell--md { --modal-shell-width: 680px; }
+.modal-shell--wide { --modal-shell-width: 960px; }
+
+.modal-shell__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+.modal-shell__title { margin: 0; }
+.modal-shell__close { flex: 0 0 auto; }
+
+.modal-shell__footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
 .app-modal-surface [data-modal-close],
 .app-modal-surface [data-close-uk-modal],
 .app-modal-surface [data-close-uk-detail-modal] {

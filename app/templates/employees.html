@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% from 'macros/modal.html' import modal_shell, modal_footer %}
 
 {% block page_name %}Сотрудники{% endblock %}
 
@@ -19,31 +20,31 @@
     </header>
 
     <section class="employee-summary-grid" aria-label="Сводка по сотрудникам">
-        <a class="employee-summary-card is-blue" href="/employees">
+        <a class="employee-summary-card entity-card entity-card--compact is-blue" href="/employees">
             <span class="employee-summary-icon">
                 <svg viewBox="0 0 24 24"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>
             </span>
             <span><small>Всего сотрудников</small><b>{{ statistics.total }}</b></span>
         </a>
-        <a class="employee-summary-card is-green" href="/employees">
+        <a class="employee-summary-card entity-card entity-card--compact is-green" href="/employees">
             <span class="employee-summary-icon">
                 <svg viewBox="0 0 24 24"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/><path d="m17 16 2 2 4-5"/></svg>
             </span>
             <span><small>Активные</small><b>{{ statistics.active }}</b></span>
         </a>
-        <a class="employee-summary-card is-red" href="/employees/dismissed">
+        <a class="employee-summary-card entity-card entity-card--compact is-red" href="/employees/dismissed">
             <span class="employee-summary-icon">
                 <svg viewBox="0 0 24 24"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/><path d="M8 17h8"/></svg>
             </span>
             <span><small>Уволены / неактивны</small><b>{{ statistics.dismissed }}</b></span>
         </a>
-        <a class="employee-summary-card is-violet" href="/employees?key_status=with_keys">
+        <a class="employee-summary-card entity-card entity-card--compact is-violet" href="/employees?key_status=with_keys">
             <span class="employee-summary-icon">
                 <svg viewBox="0 0 24 24"><circle cx="7.5" cy="14.5" r="4.5"/><path d="m11 11 9-9M16 6l3 3M14 8l2 2"/></svg>
             </span>
             <span><small>С ключами</small><b>{{ statistics.with_keys }}</b></span>
         </a>
-        <a class="employee-summary-card is-cyan" href="/employees?key_status=without_keys">
+        <a class="employee-summary-card entity-card entity-card--compact is-cyan" href="/employees?key_status=without_keys">
             <span class="employee-summary-icon">
                 <svg viewBox="0 0 24 24"><path d="M12 22s7-6 7-12a7 7 0 0 0-14 0c0 6 7 12 7 12z"/><path d="m9 10 6 0"/></svg>
             </span>
@@ -56,16 +57,16 @@
             <div class="employee-register-toolbar">
                 <div class="employee-register-actions">
                     {% if current_view == 'active' %}
-                    <button class="btn employee-primary-action" type="button" data-open-employee-modal="employeeAddModal">
+                    <button class="btn btn-primary employee-primary-action" type="button" data-open-employee-modal="employeeAddModal">
                         <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
                         Добавить сотрудника
                     </button>
-                    <a class="btn btn-ghost employee-archive-link" href="/employees/dismissed">
+                    <a class="btn btn-secondary employee-archive-link" href="/employees/dismissed">
                         Архив
                         {% if statistics.dismissed %}<span>{{ statistics.dismissed }}</span>{% endif %}
                     </a>
                     {% else %}
-                    <a class="btn employee-primary-action" href="/employees">← Вернуться к активным</a>
+                    <a class="btn btn-primary employee-primary-action" href="/employees">← Вернуться к активным</a>
                     {% endif %}
                 </div>
 
@@ -303,7 +304,7 @@
             <div class="employee-inspector-actions">
                 <a class="btn" href="/employees/{{ selected_employee.id }}">Полная карточка</a>
                 {% if selected_employee.enabled %}
-                <button class="btn btn-ghost" type="button" data-open-employee-modal="employeeEditModal">Редактировать</button>
+                <button class="btn btn-secondary" type="button" data-open-employee-modal="employeeEditModal">Редактировать</button>
                 <form method="post" action="/employees/{{ selected_employee.id }}/dismiss" data-confirm="Сотрудник будет уволен, а все его активные ключи — освобождены." data-confirm-title="Уволить сотрудника?" data-confirm-action="Уволить и освободить ключи" data-confirm-variant="danger">
                     <input type="hidden" name="comment" value="Сотрудник уволен">
                     <button class="btn employee-danger-action" type="submit">Уволить / деактивировать</button>
@@ -326,15 +327,7 @@
 </div>
 
 {% if current_view == 'active' %}
-<div class="employee-modal" id="employeeAddModal" aria-hidden="true">
-    <div class="employee-modal-card panel modal-scroll" role="dialog" aria-modal="true" aria-labelledby="employeeAddTitle">
-        <header>
-            <div>
-                <span class="page-eyebrow">Новая карточка</span>
-                <h2 id="employeeAddTitle">Добавить сотрудника</h2>
-            </div>
-            <button type="button" data-close-employee-modal aria-label="Закрыть">×</button>
-        </header>
+{% call modal_shell('employeeAddModal', 'Добавить сотрудника', 'Новая карточка', 'md', 'employee-modal', 'employee-modal-card panel modal-scroll', 'employee') %}
         <form method="post" action="/employees/add" class="employee-profile-form">
             <label class="is-wide">ФИО<input name="full_name" autocomplete="off" required placeholder="Иванов Сергей Петрович"></label>
             <label>Должность<input name="position" autocomplete="off" placeholder="Инженер"></label>
@@ -342,23 +335,14 @@
             <label>Телефон<input name="phone" autocomplete="off" placeholder="+7 999 123-45-67"></label>
             <label>Email<input name="email" type="email" autocomplete="off" placeholder="employee@dtel.ru"></label>
             <label class="is-wide">Комментарий<textarea name="note" rows="3" placeholder="Дополнительная информация"></textarea></label>
-            <div class="employee-modal-actions is-wide">
-                <button type="submit" class="btn">Добавить сотрудника</button>
-            </div>
+            {% call modal_footer('employee-modal-actions is-wide') %}
+                <button type="submit" class="btn btn-primary">Добавить сотрудника</button>
+            {% endcall %}
         </form>
-    </div>
-</div>
+{% endcall %}
 
 {% if selected_employee %}
-<div class="employee-modal" id="employeeEditModal" aria-hidden="true">
-    <div class="employee-modal-card panel modal-scroll" role="dialog" aria-modal="true" aria-labelledby="employeeEditTitle">
-        <header>
-            <div>
-                <span class="page-eyebrow">Карточка №{{ selected_employee.id }}</span>
-                <h2 id="employeeEditTitle">Редактировать сотрудника</h2>
-            </div>
-            <button type="button" data-close-employee-modal aria-label="Закрыть">×</button>
-        </header>
+{% call modal_shell('employeeEditModal', 'Редактировать сотрудника', 'Карточка №' ~ selected_employee.id, 'md', 'employee-modal', 'employee-modal-card panel modal-scroll', 'employee') %}
         <form method="post" action="/employees/{{ selected_employee.id }}/edit" class="employee-profile-form">
             <input type="hidden" name="return_to" value="list">
             <label class="is-wide">ФИО<input name="full_name" value="{{ selected_employee.full_name }}" autocomplete="off" required></label>
@@ -367,12 +351,11 @@
             <label>Телефон<input name="phone" value="{{ selected_employee.phone or '' }}" autocomplete="off"></label>
             <label>Email<input name="email" type="email" value="{{ selected_employee.email or '' }}" autocomplete="off"></label>
             <label class="is-wide">Комментарий<textarea name="note" rows="3">{{ selected_employee.note or '' }}</textarea></label>
-            <div class="employee-modal-actions is-wide">
-                <button type="submit" class="btn">Сохранить изменения</button>
-            </div>
+            {% call modal_footer('employee-modal-actions is-wide') %}
+                <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+            {% endcall %}
         </form>
-    </div>
-</div>
+{% endcall %}
 {% endif %}
 {% endif %}
 {% endblock %}

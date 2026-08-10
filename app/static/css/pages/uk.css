@@ -844,60 +844,15 @@ body.light-theme .modal-backdrop {
 
     scroll-behavior: smooth;
 
-    scrollbar-width: thin;
-    scrollbar-color:
-        rgba(0, 170, 255, .85)
-        rgba(0, 30, 55, .55);
 }
 
 
 /* Chrome, Edge */
 
-.uk-cards-scroll::-webkit-scrollbar {
-    width: 8px;
-}
-
-.uk-cards-scroll::-webkit-scrollbar-track {
-    border-radius: 999px;
-
-    background: rgba(0, 30, 55, .55);
-
-    box-shadow:
-        inset 0 0 5px rgba(0, 0, 0, .35);
-}
-
-.uk-cards-scroll::-webkit-scrollbar-thumb {
-    border: 2px solid rgba(0, 30, 55, .55);
-    border-radius: 999px;
-
-    background:
-        linear-gradient(
-            180deg,
-            rgba(0, 200, 255, .95),
-            rgba(0, 105, 255, .90)
-        );
-
-    box-shadow:
-        0 0 10px rgba(0, 170, 255, .55);
-}
-
-.uk-cards-scroll::-webkit-scrollbar-thumb:hover {
-    background:
-        linear-gradient(
-            180deg,
-            rgba(50, 220, 255, 1),
-            rgba(0, 135, 255, 1)
-        );
-}
 
 
 /* Светлая тема */
 
-body.light-theme .uk-cards-scroll {
-    scrollbar-color:
-        rgba(0, 125, 220, .80)
-        rgba(190, 215, 235, .60);
-}
 
 
 /* Адаптив */
@@ -1321,8 +1276,6 @@ body.light-theme .uk-card-meta > div {
 .uk-table-scroll {
     width: 100%;
     overflow-x: auto;
-    scrollbar-width: thin;
-    scrollbar-color: var(--line-soft) transparent;
 }
 
 .uk-table {

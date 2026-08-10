@@ -1,0 +1,20 @@
+{% macro modal_shell(id, title, eyebrow='', size='md', wrapper_class='app-modal', card_class='panel modal-scroll', close_hook='default') -%}
+<div class="{{ wrapper_class }}" id="{{ id }}" aria-hidden="true">
+    <div class="{{ card_class }} modal-shell modal-shell--{{ size }}" role="dialog" aria-modal="true" aria-labelledby="{{ id }}Title">
+        <header class="modal-shell__header">
+            <div>
+                {% if eyebrow %}<span class="page-eyebrow">{{ eyebrow }}</span>{% endif %}
+                <h2 class="modal-shell__title" id="{{ id }}Title">{{ title }}</h2>
+            </div>
+            <button class="btn btn-secondary btn-icon modal-shell__close" type="button"
+                    {% if close_hook == 'employee' %}data-close-employee-modal{% else %}data-modal-close{% endif %}
+                    aria-label="Закрыть">×</button>
+        </header>
+        {{ caller() }}
+    </div>
+</div>
+{%- endmacro %}
+
+{% macro modal_footer(extra_class='') -%}
+<div class="modal-shell__footer {{ extra_class }}">{{ caller() }}</div>
+{%- endmacro %}

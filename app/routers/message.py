@@ -14,9 +14,11 @@ from app.services import (
     enrich_key_write_rows,
     get_key_write_context,
     resolve_key_write_decision,
+    KeyWriteResult,
 )
 from app.response_utils import async_document_response
-from app.repositories.panel_repository import get_panel_page
+from app.repositories.panel_repository import normalize_panel_row
+from app.services.panel_search import PanelSearchProfile, PanelSearchService
 from app.templates_config import templates
 
 router = APIRouter()
@@ -30,9 +32,26 @@ def message_panel_search(
     if len(query.strip()) < 2:
         return {"items": [], "total": 0}
 
-    page = get_panel_page(query=query, page=1, page_size=60)
+    page = PanelSearchService.search_page(
+        query,
+        profile=PanelSearchProfile.PICKER_ALL,
+        scope="all",
+        limit=60,
+    )
     items = []
-    for panel in page["items"]:
+    for result in page.items:
+        panel = normalize_panel_row(
+            {
+                "id": result.id,
+                "address": result.address,
+                "entrance": result.entrance,
+                "name": result.point_name,
+                "mac": result.mac,
+                "ip": result.ip,
+                "enabled": 1 if result.active else 0,
+                "api_status": result.status,
+            }
+        )
         has_mac = bool((panel.get("mac") or "").strip())
         enabled = bool(panel.get("enabled"))
         items.append(
@@ -52,7 +71,7 @@ def message_panel_search(
                 ),
             }
         )
-    return {"items": items, "total": page["total"]}
+    return {"items": items, "total": page.total}
 
 
 def _key_values_from_override(value: str) -> list[str]:
@@ -274,25 +293,28 @@ def message_write(
                     }
                 )
                 continue
+            legacy_results = write_key_to_panels(
+                "message",
+                item,
+                panels,
+                flat_num=apartment,
+                inner=1,
+                address=address,
+                request=request,
+                assignment_type="resident",
+                assignment_policy=decision["assignment_policy"],
+                known_panel_ids=decision["known_panel_ids"],
+                write_option=decision["write_option"],
+                previous_assignment=decision["previous_assignment"],
+                automatic_panel_ids=set(automatic_panel_ids),
+                manual_panel_ids=set(manual_panel_ids),
+            )
+            write_result = KeyWriteResult.from_writer(item.get("id"), legacy_results)
             all_results.append(
                 {
                     "key": item,
-                    "results": write_key_to_panels(
-                        "message",
-                        item,
-                        panels,
-                        flat_num=apartment,
-                        inner=1,
-                        address=address,
-                        request=request,
-                        assignment_type="resident",
-                        assignment_policy=decision["assignment_policy"],
-                        known_panel_ids=decision["known_panel_ids"],
-                        write_option=decision["write_option"],
-                        previous_assignment=decision["previous_assignment"],
-                        automatic_panel_ids=set(automatic_panel_ids),
-                        manual_panel_ids=set(manual_panel_ids),
-                    ),
+                    "results": write_result.to_legacy_results(),
+                    "write_result": write_result,
                 }
             )
         else:

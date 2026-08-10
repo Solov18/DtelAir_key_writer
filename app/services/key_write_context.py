@@ -1,10 +1,11 @@
 from app.repositories.key_repository import get_key_write_contexts
+from app.services.key_write_models import KeyWriteAction, KeyWriteContext, KeyWriteDecision
 
 
 OCCUPIED_ACTIONS = {"reassign", "add_panels"}
 
 
-def describe_key_write_context(context: dict) -> str:
+def describe_key_write_context(context) -> str:
     parts = [context.get("assignment_type_name") or "Назначение"]
     if context.get("assignment_address"):
         parts.append(context["assignment_address"])
@@ -24,7 +25,10 @@ def enrich_key_write_rows(rows: list[dict], panels: list[dict]) -> bool:
 
     for row in rows:
         item = row.get("item") or {}
-        context = contexts.get(int(item.get("id") or 0), {})
+        context = {
+            **item,
+            **contexts.get(int(item.get("id") or 0), {}),
+        }
         known_panel_ids = {int(value) for value in context.get("panel_ids", [])}
         selected_known_ids = known_panel_ids & selected_panel_ids
         is_used = bool(context.get("is_used"))
@@ -43,25 +47,22 @@ def enrich_key_write_rows(rows: list[dict], panels: list[dict]) -> bool:
         else:
             write_state = "free"
 
-        row["write_context"] = {
-            **context,
-            "is_used": is_used,
-            "write_state": write_state,
-            "description": describe_key_write_context(context) if is_used else "",
-            "known_panel_ids_csv": ",".join(
-                str(value) for value in sorted(known_panel_ids)
-            ),
-        }
+        row["write_context"] = KeyWriteContext.from_legacy(
+            context,
+            selected_panel_ids=selected_panel_ids,
+            write_state=write_state,
+            description=describe_key_write_context(context) if is_used else "",
+        )
     return has_used_keys
 
 
-def get_key_write_context(key_id: int, panels: list[dict] | None = None) -> dict:
+def get_key_write_context(key_id: int, panels: list[dict] | None = None) -> KeyWriteContext:
     row = {"item": {"id": int(key_id)}}
     enrich_key_write_rows([row], panels or [])
     return row["write_context"]
 
 
-def resolve_key_write_decision(context: dict, occupied_action: str = "") -> dict:
+def resolve_key_write_decision(context, occupied_action: str = "") -> KeyWriteDecision:
     is_used = bool(context.get("is_used"))
     action_required = is_used and occupied_action not in OCCUPIED_ACTIONS
     assignment_policy = (
@@ -74,10 +75,22 @@ def resolve_key_write_decision(context: dict, occupied_action: str = "") -> dict
         if is_used
         else "write_free_key"
     )
-    return {
-        "action_required": action_required,
-        "assignment_policy": assignment_policy,
-        "write_option": write_option,
-        "known_panel_ids": {int(value) for value in context.get("panel_ids", [])},
-        "previous_assignment": describe_key_write_context(context),
-    }
+    action = (
+        KeyWriteAction(occupied_action)
+        if occupied_action in OCCUPIED_ACTIONS
+        else KeyWriteAction.INVALID if action_required
+        else KeyWriteAction.NO_ACTION
+    )
+    allowed = (
+        (KeyWriteAction.REASSIGN, KeyWriteAction.ADD_PANELS)
+        if is_used else (KeyWriteAction.NO_ACTION,)
+    )
+    return KeyWriteDecision(
+        action=action,
+        action_required=action_required,
+        assignment_policy=assignment_policy,
+        write_option=write_option,
+        known_panel_ids=frozenset(int(value) for value in context.get("panel_ids", [])),
+        previous_assignment=describe_key_write_context(context),
+        allowed_actions=allowed,
+    )

@@ -29,8 +29,6 @@
     const pickerCount = document.getElementById("manualPanelPickerCount");
     const pickerChips = document.getElementById("manualPanelPickerChips");
     const addSelectedButton = document.getElementById("add-manual-panels");
-    let pickerRequest = null;
-    let pickerTimer = null;
     let writeInFlight = false;
 
     const escapeHtml = (value) => String(value ?? "").replace(/[&<>'\"]/g, (symbol) => ({
@@ -70,87 +68,6 @@
         }
     }
 
-    function selectedPickerPanels() {
-        return Array.from(searchResults?.querySelectorAll("[data-picker-panel]:checked") || []);
-    }
-
-    function updatePickerState() {
-        const selected = selectedPickerPanels();
-        if (pickerCount) pickerCount.textContent = String(selected.length);
-        if (addSelectedButton) addSelectedButton.disabled = selected.length === 0;
-        if (pickerSelection) pickerSelection.hidden = selected.length === 0;
-        if (pickerChips) {
-            pickerChips.innerHTML = selected.map((checkbox) => {
-                const panel = JSON.parse(decodeURIComponent(checkbox.dataset.panel || "%7B%7D"));
-                return `<span>${escapeHtml(panel.address || "Панель")} · ${escapeHtml(panel.entrance || panel.name || panel.id)}</span>`;
-            }).join("");
-        }
-    }
-
-    function renderPanelSearch(items, total) {
-        if (!searchResults || !searchStatus) return;
-        if (!items.length) {
-            searchResults.replaceChildren();
-            searchStatus.textContent = "Панели не найдены. Уточните адрес или название точки доступа.";
-            updatePickerState();
-            return;
-        }
-        searchStatus.textContent = `Найдено: ${total}. Показаны первые ${items.length}.`;
-        searchResults.innerHTML = items.map((panel) => {
-            const exists = panelAlreadySelected(panel.id);
-            const disabled = exists || !panel.selectable;
-            const reason = exists ? "Панель уже выбрана" : panel.unavailable_reason;
-            const title = panel.entrance || panel.name || "Точка доступа";
-            return `<label class="manual-panel-picker__item ${disabled ? "is-disabled" : ""}">
-                <span class="manual-panel-picker__body">
-                    <b>${escapeHtml(panel.address || "Адрес не указан")}</b>
-                    <span>${escapeHtml(title)}</span>
-                    <small>${escapeHtml(panel.mac || "MAC не указан")}</small>
-                </span>
-                <span class="badge ${escapeHtml(panel.status_tone)}">${escapeHtml(panel.status_name)}</span>
-                <input type="checkbox" data-picker-panel data-panel="${encodeURIComponent(JSON.stringify(panel))}" ${disabled ? "disabled" : ""}>
-                ${reason ? `<em>${escapeHtml(reason)}</em>` : ""}
-            </label>`;
-        }).join("");
-        updatePickerState();
-    }
-
-    async function searchPanels() {
-        const query = panelSearch?.value.trim() || "";
-        if (query.length < 2) {
-            searchResults?.replaceChildren();
-            if (searchStatus) searchStatus.textContent = "Введите не менее двух символов.";
-            updatePickerState();
-            return;
-        }
-        pickerRequest?.abort();
-        pickerRequest = new AbortController();
-        if (searchStatus) searchStatus.textContent = "Поиск…";
-        if (findPanelsButton) findPanelsButton.disabled = true;
-        const timeout = window.setTimeout(() => pickerRequest?.abort(), 10000);
-        try {
-            const response = await fetch(`/message/panels/search?query=${encodeURIComponent(query)}`, {
-                signal: pickerRequest.signal,
-                globalLoader: false,
-            });
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const payload = await response.json();
-            renderPanelSearch(payload.items || [], Number(payload.total || 0));
-        } catch (error) {
-            if (error.name === "AbortError") {
-                if (searchStatus) searchStatus.textContent = "Поиск остановлен или превышено время ожидания. Повторите попытку.";
-            } else {
-                console.error("manual.panel_search.error", error);
-                if (searchStatus) searchStatus.textContent = "Не удалось выполнить поиск. Основная страница остаётся доступной.";
-            }
-            searchResults?.replaceChildren();
-            updatePickerState();
-        } finally {
-            window.clearTimeout(timeout);
-            if (findPanelsButton) findPanelsButton.disabled = false;
-        }
-    }
-
     function createManualPanel(panel) {
         if (!manualList || panelAlreadySelected(panel.id)) return false;
         const article = document.createElement("article");
@@ -173,23 +90,6 @@
         return true;
     }
 
-    function openPicker() {
-        if (!picker) return;
-        picker.hidden = false;
-        picker.setAttribute("aria-hidden", "false");
-        document.body.classList.add("modal-open");
-        window.setTimeout(() => panelSearch?.focus(), 30);
-    }
-
-    function closePicker() {
-        if (!picker) return;
-        pickerRequest?.abort();
-        picker.hidden = true;
-        picker.setAttribute("aria-hidden", "true");
-        document.body.classList.remove("modal-open");
-        openPickerButton?.focus();
-    }
-
     form.addEventListener("change", (event) => {
         if (event.target.matches('input[name="panel_ids"], input[name="occupied_action"], #confirmManualWrite')) updateState();
     });
@@ -201,49 +101,42 @@
         panelCheckboxes("automatic").forEach((item) => { item.checked = false; });
         updateState();
     });
-    manualList?.addEventListener("click", (event) => {
-        const button = event.target.closest("[data-remove-manual-panel]");
-        if (!button) return;
-        button.closest(".manual-panel-option")?.remove();
-        if (!manualList.querySelector(".manual-panel-option") && manualSection) manualSection.hidden = true;
-        updateState();
-    });
-
-    openPickerButton?.addEventListener("click", openPicker);
-    closePickerButton?.addEventListener("click", closePicker);
-    cancelPickerButton?.addEventListener("click", closePicker);
-    findPanelsButton?.addEventListener("click", searchPanels);
-    panelSearch?.addEventListener("input", () => {
-        window.clearTimeout(pickerTimer);
-        pickerTimer = window.setTimeout(searchPanels, 280);
-    });
-    panelSearch?.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") {
-            event.preventDefault();
-            event.stopPropagation();
-            searchPanels();
-        }
-    });
-    searchResults?.addEventListener("change", updatePickerState);
-    addSelectedButton?.addEventListener("click", async () => {
-        let added = 0;
-        let duplicates = 0;
-        selectedPickerPanels().forEach((checkbox) => {
-            const panel = JSON.parse(decodeURIComponent(checkbox.dataset.panel || "%7B%7D"));
-            if (createManualPanel(panel)) added += 1;
-            else duplicates += 1;
-        });
-        updateState();
-        closePicker();
-        if (!added && duplicates) {
-            await window.showAlert?.({title: "Панель уже выбрана", message: "Выбранные панели уже присутствуют в списке.", source: openPickerButton});
-        }
-    });
-    document.addEventListener("keydown", (event) => {
-        if (event.key === "Escape" && picker && !picker.hidden) {
-            event.preventDefault();
-            closePicker();
-        }
+    new window.PanelPicker({
+        endpoint: "/message/panels/search",
+        root: picker,
+        openButton: openPickerButton,
+        closeButton: closePickerButton,
+        cancelButton: cancelPickerButton,
+        searchInput: panelSearch,
+        searchButton: findPanelsButton,
+        status: searchStatus,
+        results: searchResults,
+        selection: pickerSelection,
+        selectionCount: pickerCount,
+        chips: pickerChips,
+        addButton: addSelectedButton,
+        manualContainer: manualList,
+        manualItemSelector: ".manual-panel-option",
+        itemClass: "manual-panel-picker__item",
+        bodyClass: "manual-panel-picker__body",
+        isAlreadySelected: panelAlreadySelected,
+        addPanel: createManualPanel,
+        onPanelsAdded: async ({added, duplicates}) => {
+            updateState();
+            if (!added && duplicates) {
+                await window.showAlert?.({
+                    title: "Панель уже выбрана",
+                    message: "Выбранные панели уже присутствуют в списке.",
+                    source: openPickerButton,
+                });
+            }
+        },
+        onPanelRemoved: () => {
+            if (!manualList?.querySelector(".manual-panel-option") && manualSection) {
+                manualSection.hidden = true;
+            }
+            updateState();
+        },
     });
 
     form.addEventListener("submit", async (event) => {

@@ -171,8 +171,7 @@
                 {% for r in rows %}
                 <tr>
                     <td class="log-date-cell">
-                        <strong>{{ r.created_date or r.created_at }}</strong>
-                        {% if r.created_time %}<span>{{ r.created_time }}</span>{% endif %}
+                        <strong>{{ r.created_at|datetime_seconds }}</strong>
                     </td>
                     <td>
                         <strong>{{ r.user_name }}</strong>

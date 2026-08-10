@@ -10,6 +10,7 @@ from app.services import (
     write_key_to_panels,
     get_key_write_context,
     resolve_key_write_decision,
+    KeyWriteResult,
 )
 from app.response_utils import async_document_response
 from app.templates_config import templates
@@ -155,25 +156,28 @@ def manual_write_execute(
         warning = "Ключ уже используется. Выберите: переназначить его или только добавить на выбранные панели."
 
     if key and apartment.strip() and panels and not decision["action_required"]:
+        legacy_results = write_key_to_panels(
+            "resident_manual",
+            key,
+            panels,
+            flat_num=apartment,
+            inner=inner,
+            address=address,
+            request=request,
+            assignment_type="resident",
+            assignment_policy=decision["assignment_policy"],
+            known_panel_ids=decision["known_panel_ids"],
+            write_option=decision["write_option"],
+            previous_assignment=decision["previous_assignment"],
+            automatic_panel_ids=set(automatic_panel_ids),
+            manual_panel_ids=set(manual_panel_ids),
+        )
+        write_result = KeyWriteResult.from_writer(key.get("id"), legacy_results)
         all_results.append(
             {
                 "key": key,
-                "results": write_key_to_panels(
-                    "resident_manual",
-                    key,
-                    panels,
-                    flat_num=apartment,
-                    inner=inner,
-                    address=address,
-                    request=request,
-                    assignment_type="resident",
-                    assignment_policy=decision["assignment_policy"],
-                    known_panel_ids=decision["known_panel_ids"],
-                    write_option=decision["write_option"],
-                    previous_assignment=decision["previous_assignment"],
-                    automatic_panel_ids=set(automatic_panel_ids),
-                    manual_panel_ids=set(manual_panel_ids),
-                ),
+                "results": write_result.to_legacy_results(),
+                "write_result": write_result,
             }
         )
     elif not key:

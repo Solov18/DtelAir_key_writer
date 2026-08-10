@@ -13,63 +13,21 @@ def normalize_hex_value(value: str) -> str:
     return value
 
 
-def _key_select() -> str:
-    return """
-        SELECT
-            k.*,
-            kt.name AS type_name,
-            kt.color AS type_color,
-            kt.enabled AS type_enabled
-        FROM keys k
-        JOIN key_types kt ON kt.id = k.key_type_id
-    """
-
-
 def find_keys(number_or_hex: str, key_type_id: int | None = None) -> list[dict]:
-    raw = (number_or_hex or "").strip()
-    if not raw:
-        return []
+    from app.services.key_search import KeySearchService
 
-    hex_value = normalize_hex_value(raw)
-    params: list = [raw]
-    type_filter = ""
-
-    if key_type_id:
-        type_filter = " AND k.key_type_id = ?"
-        params.append(key_type_id)
-
-    with db() as conn:
-        number_rows = conn.execute(
-            _key_select()
-            + f"""
-                WHERE LOWER(k.number) = LOWER(?)
-                {type_filter}
-                ORDER BY LOWER(kt.name), kt.name, k.id
-            """,
-            params,
-        ).fetchall()
-
-        if number_rows:
-            return [dict(row) for row in number_rows]
-
-        if re.fullmatch(r"[0-9A-F]{6,16}", hex_value):
-            hex_params: list = [hex_value]
-            hex_type_filter = ""
-            if key_type_id:
-                hex_type_filter = " AND k.key_type_id = ?"
-                hex_params.append(key_type_id)
-            hex_rows = conn.execute(
-                _key_select()
-                + f"""
-                    WHERE UPPER(k.hex_value) = ?
-                    {hex_type_filter}
-                    ORDER BY LOWER(kt.name), kt.name, k.id
-                """,
-                hex_params,
-            ).fetchall()
-            return [dict(row) for row in hex_rows]
-
-    return []
+    return [
+        {
+            **item.as_legacy_dict(),
+            "key_type_id": item.type_id,
+            "key_type": item.type,
+            "type_enabled": 1,
+        }
+        for item in KeySearchService.exact_lookup(
+            number_or_hex,
+            type_id=key_type_id,
+        )
+    ]
 
 
 def find_key(number_or_hex: str, key_type_id: int | None = None):

@@ -183,69 +183,18 @@ def search_keys_for_selection(
     without allowing them to be selected.
     """
 
-    raw_query = (query or "").strip()
-    normalized = normalize_search_text(raw_query)
-    if not normalized and not only_free:
-        return []
+    from app.services.key_search import KeySearchProfile, KeySearchService
 
-    compact = re.sub(r"[^0-9A-Za-zА-Яа-яЁё]+", "", raw_query).upper()
-    numeric = compact if compact.isdigit() else ""
-    numeric_unpadded = numeric.lstrip("0") or ("0" if numeric else "")
-    conditions = [
-        "BTRIM(k.hex_value) <> ''",
-        "kt.enabled = 1",
-    ]
-    params: list[object] = []
-    if normalized:
-        conditions.append("SMART_NORM(CONCAT_WS(' ', kt.name, k.number, k.hex_value)) LIKE ?")
-        params.append(f"%{normalized}%")
-    if key_type_id is not None:
-        conditions.append("kt.id = ?")
-        params.append(int(key_type_id))
-    if only_free:
-        conditions.append("k.status = 'free'")
-        conditions.append(
-            """NOT EXISTS (
-                SELECT 1 FROM uk_key_issues ki
-                WHERE ki.key_id = k.id
-                  AND ki.status IN ('pending', 'active')
-            )"""
+    return [
+        item.as_legacy_dict()
+        for item in KeySearchService.search(
+            query,
+            profile=KeySearchProfile.PICKER,
+            type_id=key_type_id,
+            available_only=only_free,
+            limit=min(int(limit), 50),
         )
-
-    query_limit = max(1, min(int(limit), 50))
-    with db() as conn:
-        rows = conn.execute(
-            f"""
-            SELECT k.id, k.number, k.hex_value, k.status,
-                   kt.id AS type_id, kt.name AS type_name,
-                   kt.color AS type_color,
-                   (
-                       k.status = 'free' AND NOT EXISTS (
-                           SELECT 1 FROM uk_key_issues ki
-                           WHERE ki.key_id = k.id
-                             AND ki.status IN ('pending', 'active')
-                       )
-                   ) AS available,
-                   CASE
-                       WHEN UPPER(REGEXP_REPLACE(k.hex_value, '[^0-9A-Za-z]', '', 'g')) = ? THEN 0
-                       WHEN ? <> '' AND COALESCE(NULLIF(LTRIM(k.number, '0'), ''), '0') = ? THEN 0
-                       WHEN SMART_NORM(k.number) = ? THEN 1
-                       WHEN SMART_NORM(k.hex_value) = ? THEN 1
-                       ELSE 2
-                   END AS search_rank
-            FROM keys k
-            JOIN key_types kt ON kt.id = k.key_type_id
-            WHERE {' AND '.join(conditions)}
-            ORDER BY search_rank,
-                     CASE WHEN k.status = 'free' THEN 0 ELSE 1 END,
-                     LOWER(kt.name), LENGTH(k.number), LOWER(k.number), k.id
-            LIMIT ?
-            """,
-            [compact, numeric_unpadded, numeric_unpadded, normalized, normalized]
-            + params
-            + [query_limit],
-        ).fetchall()
-    return [dict(row) for row in rows]
+    ]
 
 
 def get_missing_key_numbers(
@@ -691,6 +640,9 @@ def get_key_write_contexts(key_ids: list[int]) -> dict[int, dict]:
             SELECT
                 k.id AS key_id,
                 k.status AS key_status,
+                k.number AS key_number,
+                k.hex_value,
+                kt.name AS key_type_name,
                 ka.id AS assignment_id,
                 ka.assignment_type,
                 ka.address AS assignment_address,
@@ -700,6 +652,7 @@ def get_key_write_contexts(key_ids: list[int]) -> dict[int, dict]:
                 e.full_name AS employee_name,
                 ug.name AS uk_name
             FROM keys k
+            JOIN key_types kt ON kt.id = k.key_type_id
             LEFT JOIN key_assignments ka
                 ON ka.key_id = k.id AND ka.active = 1
             LEFT JOIN employees e ON e.id = ka.employee_id

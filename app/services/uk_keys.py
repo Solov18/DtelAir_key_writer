@@ -6,6 +6,12 @@ from app.services.crm import (
     crm_add_key_for_company,
     crm_remove_key_for_company,
 )
+from app.services.key_write_models import KeyWriteResult
+
+
+def adapt_issue_result(key_id: int, result: dict) -> KeyWriteResult:
+    """Adapt the UK engine output without changing its side effects."""
+    return KeyWriteResult.from_uk(key_id, result)
 
 
 def _actor(request) -> str:

@@ -99,12 +99,35 @@
     background: transparent;
 }
 
-.smart-search-empty {
+.smart-search-empty,
+.smart-search-loading,
+.smart-search-error {
     padding: 14px 16px;
     color: var(--text-muted);
     font-size: 14px;
     line-height: 1.35;
     text-align: center;
+}
+
+.smart-search-loading::before {
+    content: "";
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    margin-right: 8px;
+    vertical-align: -2px;
+    border: 2px solid color-mix(in srgb, var(--color-icon) 28%, transparent);
+    border-top-color: var(--color-icon);
+    border-radius: 50%;
+    animation: smart-search-spin .7s linear infinite;
+}
+
+.smart-search-error {
+    color: var(--color-danger, #ff5b68);
+}
+
+@keyframes smart-search-spin {
+    to { transform: rotate(360deg); }
 }
 
 body.light-theme .smart-search-menu {

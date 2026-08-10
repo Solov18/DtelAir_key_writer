@@ -572,34 +572,28 @@ def get_available_keys(
 
 def search_group_panels(group_id: int, query: str = "", limit: int = 60) -> list[dict]:
     """Search every active panel linked to one UK; LIMIT is applied after matching."""
+    from app.services.panel_search import PanelSearchProfile, PanelSearchService
 
-    normalized = normalize_search_text(query)
-    params: list[object] = [group_id]
-    condition = ""
-    if normalized:
-        condition = """
-          AND SMART_NORM(CONCAT_WS(' ', p.address, p.entrance, p.name, p.mac, p.id)) LIKE ?
-        """
-        params.append(f"%{normalized}%")
-    params.append(max(1, min(int(limit), 100)))
-    with db() as conn:
-        rows = conn.execute(
-            f"""
-            SELECT pl.id AS link_id, pl.panel_id, p.address, p.entrance,
-                   p.name, p.mac, p.api_status AS status, p.enabled
-            FROM uk_panel_links pl
-            JOIN panels p ON p.id = pl.panel_id
-            WHERE pl.uk_group_id = ? AND pl.active IS TRUE
-              {condition}
-            ORDER BY
-              CASE WHEN SMART_NORM(p.address) = ? THEN 0 ELSE 1 END,
-              LOWER(p.address), LOWER(COALESCE(p.entrance, '')),
-              LOWER(COALESCE(p.name, '')), p.id
-            LIMIT ?
-            """,
-            params[:-1] + [normalized, params[-1]],
-        ).fetchall()
-    return [dict(row) for row in rows]
+    return [
+        {
+            "link_id": item.link_id,
+            "panel_id": item.id,
+            "address": item.address,
+            "entrance": item.entrance,
+            "name": item.point_name,
+            "mac": item.mac,
+            "status": item.status,
+            "enabled": 1 if item.active else 0,
+        }
+        for item in PanelSearchService.search(
+            query,
+            profile=PanelSearchProfile.PICKER_UK,
+            scope="uk",
+            group_id=group_id,
+            limit=limit,
+            include_ip=False,
+        )
+    ]
 
 
 def get_available_key_types() -> list[dict]:

@@ -1,6 +1,4 @@
 (() => {
-    const fetchSearchJson = (url) => window.SmartAutocomplete.fetchJson(url, {timeout: 10000});
-
     document.querySelectorAll("[data-uk-key-selection]").forEach((picker) => {
         const form = picker.closest("form");
         const valueInput = picker.querySelector("[data-uk-key-value]");
@@ -35,33 +33,34 @@
             status.textContent = "Ключ выбран. Можно выбрать панели и продолжить выдачу.";
         };
 
-        searchInput.addEventListener("smart-autocomplete:select", (event) => {
-            event.preventDefault();
-            choose(event.detail.item);
-        });
-        searchInput.addEventListener("smart-autocomplete:loading", () => {
-            status.textContent = "Поиск…";
-        });
-        searchInput.addEventListener("smart-autocomplete:loaded", (event) => {
-            const items = event.detail.items || [];
-            if (!items.length) status.textContent = "Ключи не найдены";
-            else if (!items.some((item) => item.available)) {
-                status.textContent = "Найдены только уже используемые ключи. Выберите свободный ключ.";
-            } else {
-                status.textContent = `Найдено вариантов: ${items.length}. Выберите свободный ключ.`;
-            }
-        });
-        searchInput.addEventListener("smart-autocomplete:error", () => {
-            status.textContent = "Не удалось выполнить поиск. Попробуйте ещё раз.";
+        const keySearch = window.SmartAutocomplete.enhance(searchInput, {
+            searchButton: findButton,
+            onSelect(item) {
+                choose(item);
+                return false;
+            },
+            onLoading() {
+                status.textContent = "Поиск…";
+            },
+            onLoaded(items) {
+                if (!items.length) status.textContent = "Ключи не найдены";
+                else if (!items.some((item) => item.available)) {
+                    status.textContent = "Найдены только уже используемые ключи. Выберите свободный ключ.";
+                } else {
+                    status.textContent = `Найдено вариантов: ${items.length}. Выберите свободный ключ.`;
+                }
+            },
+            onError() {
+                status.textContent = "Не удалось выполнить поиск. Попробуйте ещё раз.";
+            },
         });
         searchInput.addEventListener("input", () => {
             if (selectedItem && searchInput.value !== selectedItem.value) clearSelection();
         });
         typeFilter.addEventListener("change", () => {
             clearSelection();
-            if (searchInput.value.trim()) window.SmartAutocomplete.search(searchInput);
+            if (searchInput.value.trim()) keySearch.search();
         });
-        findButton.addEventListener("click", () => window.SmartAutocomplete.search(searchInput));
         clearButton.addEventListener("click", () => {
             clearSelection({clearSearch: true});
             status.textContent = "Введите номер, HEX или название типа ключа.";
@@ -88,8 +87,6 @@
         const selectedText = picker.querySelector("[data-uk-panels-selected]");
         const selected = new Map();
         let items = [];
-        let requestSequence = 0;
-        let debounceTimer = 0;
 
         const updateSummary = () => {
             const values = [...selected.values()];
@@ -125,42 +122,37 @@
             empty.hidden = items.length !== 0;
             list.hidden = items.length === 0;
         };
-        const load = async () => {
-            const sequence = ++requestSequence;
-            const params = new URLSearchParams({q: searchInput.value.trim(), limit: "100"});
-            picker.classList.add("is-loading");
-            empty.textContent = "Поиск панелей…";
-            empty.hidden = false;
-            try {
-                const payload = await fetchSearchJson(`${picker.dataset.source}?${params}`);
-                if (sequence !== requestSequence) return;
-                items = Array.isArray(payload.items) ? payload.items : [];
+        const panelSearch = window.SmartAutocomplete.enhance(searchInput, {
+            endpoint: picker.dataset.source,
+            queryParameter: "q",
+            searchButton: findButton,
+            debounceMs: 220,
+            timeoutMs: 10000,
+            minimumQueryLength: 0,
+            limit: 100,
+            renderMenu: false,
+            onLoading() {
+                picker.classList.add("is-loading");
+                empty.textContent = "Поиск панелей…";
+                empty.hidden = false;
+            },
+            onLoaded(foundItems) {
+                items = foundItems;
                 empty.textContent = "Панели не найдены";
                 render();
-            } catch (error) {
-                if (sequence !== requestSequence) return;
+            },
+            onError(error) {
                 items = [];
                 render();
-                empty.textContent = error?.name === "AbortError"
+                empty.textContent = error?.smartSearchReason === "timeout"
                     ? "Поиск панелей превысил время ожидания"
                     : "Не удалось выполнить поиск панелей";
                 empty.hidden = false;
-            } finally {
-                if (sequence === requestSequence) picker.classList.remove("is-loading");
-            }
-        };
-
-        searchInput.addEventListener("input", () => {
-            window.clearTimeout(debounceTimer);
-            debounceTimer = window.setTimeout(load, 220);
+            },
+            onFinally() {
+                picker.classList.remove("is-loading");
+            },
         });
-        searchInput.addEventListener("keydown", (event) => {
-            if (event.key !== "Enter") return;
-            event.preventDefault();
-            event.stopPropagation();
-            load();
-        });
-        findButton?.addEventListener("click", load);
         picker.querySelector("[data-uk-panels-select-all]").addEventListener("click", () => {
             items.forEach((item) => selected.set(String(item.link_id), item));
             render();
@@ -188,7 +180,7 @@
             window.showAlert?.({title: "Выберите панели", text: "Отметьте хотя бы одну панель для записи ключа."});
         });
         updateSummary();
-        load();
+        panelSearch.search();
     });
 
     const search = document.getElementById("availablePanelSearch");

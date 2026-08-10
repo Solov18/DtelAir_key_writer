@@ -229,119 +229,16 @@
     const pickerCount = document.getElementById("messagePanelPickerCount");
     const pickerSelection = document.getElementById("messagePanelPickerSelection");
     const pickerChips = document.getElementById("messagePanelPickerChips");
-    let pickerRequest = null;
-    let pickerTimer = 0;
-
     function escapeHtml(value) {
         const node = document.createElement("span");
         node.textContent = String(value ?? "");
         return node.innerHTML;
     }
 
-    function selectedPickerPanels() {
-        return Array.from(searchResults?.querySelectorAll(
-            "input[data-picker-panel]:checked"
-        ) || []);
-    }
-
-    function updatePickerState() {
-        const selected = selectedPickerPanels();
-        const count = selected.length;
-        if (pickerCount) pickerCount.textContent = String(count);
-        if (addSelectedButton) addSelectedButton.disabled = count === 0;
-        if (pickerSelection) pickerSelection.hidden = count === 0;
-        if (pickerChips) {
-            pickerChips.innerHTML = selected.map((checkbox) => {
-                try {
-                    const panel = JSON.parse(decodeURIComponent(checkbox.dataset.panel || "%7B%7D"));
-                    return `<span>${escapeHtml(panel.address || "Адрес не указан")} · ${escapeHtml(panel.entrance || panel.name || "Точка доступа")}</span>`;
-                } catch (_error) {
-                    return "";
-                }
-            }).join("");
-        }
-    }
-
-    function openPicker() {
-        if (!picker) return;
-        picker.hidden = false;
-        picker.setAttribute("aria-hidden", "false");
-        document.body.classList.add("modal-open");
-        window.setTimeout(() => panelSearch?.focus(), 30);
-    }
-
-    function closePicker() {
-        if (!picker) return;
-        picker.hidden = true;
-        picker.setAttribute("aria-hidden", "true");
-        document.body.classList.remove("modal-open");
-        openPickerButton?.focus();
-    }
-
     function panelAlreadySelected(panelId) {
         return Boolean(document.querySelector(
             `[data-panel-id="${CSS.escape(String(panelId))}"]`
         ));
-    }
-
-    function renderPanelSearch(items, total) {
-        if (!searchResults || !searchStatus) return;
-        if (!items.length) {
-            searchResults.replaceChildren();
-            searchStatus.textContent = "Панели не найдены. Уточните адрес или назначение точки доступа.";
-            updatePickerState();
-            return;
-        }
-        searchStatus.textContent = `Найдено: ${total}. Показаны первые ${items.length}.`;
-        searchResults.innerHTML = items.map((panel) => {
-            const exists = panelAlreadySelected(panel.id);
-            const disabled = exists || !panel.selectable;
-            const reason = exists ? "Панель уже выбрана" : panel.unavailable_reason;
-            const title = panel.entrance || panel.name || "Точка доступа";
-            return `
-                <label class="message-panel-picker__item ${disabled ? "is-disabled" : ""}">
-                    <span class="message-panel-picker__body">
-                        <b>${escapeHtml(panel.address || "Адрес не указан")}</b>
-                        <span>${escapeHtml(title)}</span>
-                        <small>${escapeHtml(panel.mac || "MAC не указан")}</small>
-                    </span>
-                    <span class="badge ${escapeHtml(panel.status_tone)}">${escapeHtml(panel.status_name)}</span>
-                    <input type="checkbox" data-picker-panel
-                        data-panel="${encodeURIComponent(JSON.stringify(panel))}"
-                        aria-label="Выбрать ${escapeHtml(panel.address || title)}"
-                        ${disabled ? "disabled" : ""}>
-                    ${reason ? `<em>${escapeHtml(reason)}</em>` : ""}
-                </label>`;
-        }).join("");
-        updatePickerState();
-    }
-
-    async function searchPanels() {
-        const query = panelSearch?.value.trim() || "";
-        if (query.length < 2) {
-            searchResults?.replaceChildren();
-            if (searchStatus) searchStatus.textContent = "Введите не менее двух символов.";
-            updatePickerState();
-            return;
-        }
-        pickerRequest?.abort();
-        pickerRequest = new AbortController();
-        if (searchStatus) searchStatus.textContent = "Ищем панели…";
-        try {
-            const response = await fetch(
-                `/message/panels/search?query=${encodeURIComponent(query)}`,
-                { signal: pickerRequest.signal, globalLoader: false }
-            );
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const payload = await response.json();
-            renderPanelSearch(payload.items || [], Number(payload.total || 0));
-        } catch (error) {
-            if (error.name === "AbortError") return;
-            console.error("message.panel_search.error", error);
-            searchResults?.replaceChildren();
-            if (searchStatus) searchStatus.textContent = "Не удалось выполнить поиск. Повторите попытку.";
-            updatePickerState();
-        }
     }
 
     function createManualPanel(panel) {
@@ -369,39 +266,33 @@
         if (panelsEmpty) panelsEmpty.hidden = true;
     }
 
-    openPickerButton?.addEventListener("click", openPicker);
-    closePickerButton?.addEventListener("click", closePicker);
-    cancelPickerButton?.addEventListener("click", closePicker);
-    document.addEventListener("keydown", (event) => {
-        if (event.key === "Escape" && picker && !picker.hidden) {
-            event.preventDefault();
-            closePicker();
-        }
-    });
-    panelSearch?.addEventListener("input", () => {
-        window.clearTimeout(pickerTimer);
-        pickerTimer = window.setTimeout(searchPanels, 260);
-    });
-    searchResults?.addEventListener("change", updatePickerState);
-    addSelectedButton?.addEventListener("click", () => {
-        selectedPickerPanels().forEach((checkbox) => {
-            try {
-                createManualPanel(JSON.parse(decodeURIComponent(checkbox.dataset.panel || "%7B%7D")));
-            } catch (error) {
-                console.error("message.panel_picker.invalid_item", error);
+    new window.PanelPicker({
+        endpoint: "/message/panels/search",
+        root: picker,
+        openButton: openPickerButton,
+        closeButton: closePickerButton,
+        cancelButton: cancelPickerButton,
+        searchInput: panelSearch,
+        status: searchStatus,
+        results: searchResults,
+        selection: pickerSelection,
+        selectionCount: pickerCount,
+        chips: pickerChips,
+        addButton: addSelectedButton,
+        manualContainer: manualPanelList,
+        manualItemSelector: ".panel-option",
+        itemClass: "message-panel-picker__item",
+        bodyClass: "message-panel-picker__body",
+        debounceMs: 260,
+        isAlreadySelected: panelAlreadySelected,
+        addPanel: createManualPanel,
+        onPanelsAdded: () => updateWriteState(),
+        onPanelRemoved: () => {
+            if (!manualPanelList?.querySelector(".panel-option") && manualPanelSection) {
+                manualPanelSection.hidden = true;
             }
-        });
-        updateWriteState();
-        closePicker();
-    });
-    manualPanelList?.addEventListener("click", (event) => {
-        const removeButton = event.target.closest("[data-remove-manual-panel]");
-        if (!removeButton) return;
-        removeButton.closest(".panel-option")?.remove();
-        if (!manualPanelList.querySelector(".panel-option") && manualPanelSection) {
-            manualPanelSection.hidden = true;
-        }
-        updateWriteState();
+            updateWriteState();
+        },
     });
 
     typeSelectors.forEach((select) => {

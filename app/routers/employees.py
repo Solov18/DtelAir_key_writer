@@ -29,7 +29,13 @@ from app.repositories.employee_repository import (
 )
 from app.repositories.key_repository import get_key_types, save_prepared_key
 from app.repositories.log_repository import get_employee_operations
-from app.services import find_key, get_panels, is_ambiguous_key, write_key_to_panels
+from app.services import (
+    KeyWriteResult,
+    find_key,
+    get_panels,
+    is_ambiguous_key,
+    write_key_to_panels,
+)
 from app.services.audit import log_event
 from app.templates_config import templates
 
@@ -780,12 +786,19 @@ def employees_write(
         assignment_type="employee",
         employee_id=employee["id"],
     )
+    write_result = KeyWriteResult.from_writer(item.get("id"), results)
 
     return templates.TemplateResponse(
         "write_results.html",
         {
             "request": request,
             "title": f"Результат записи сотрудника: {employee_name}",
-            "all_results": [{"key": item, "results": results}],
+            "all_results": [
+                {
+                    "key": item,
+                    "results": write_result.to_legacy_results(),
+                    "write_result": write_result,
+                }
+            ],
         },
     )

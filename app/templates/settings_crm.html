@@ -133,7 +133,7 @@
             <div class="monitor-form-footer">
                 <p>
                     {% if monitor.updated_at %}
-                    Последнее изменение: {{ monitor.updated_at.strftime('%d.%m.%Y %H:%M') }}{% if monitor.updated_by %}, {{ monitor.updated_by }}{% endif %}.
+                    Последнее изменение: {{ monitor.updated_at|datetime }}{% if monitor.updated_by %}, {{ monitor.updated_by }}{% endif %}.
                     {% else %}Используются исходные значения из <code>.env</code>.{% endif %}
                 </p>
                 <button class="btn" type="submit">Сохранить мониторинг</button>

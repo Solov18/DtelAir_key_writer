@@ -6,6 +6,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from app.services import universal_search
 from app.services.search import get_search_suggestions
 from app.repositories.key_repository import search_keys_for_selection
+from app.services.panel_search import PanelSearchProfile, PanelSearchService
 from app.templates_config import templates
 
 router = APIRouter()
@@ -44,6 +45,37 @@ def key_picker_search(
             }
             for item in items
         ]
+    }
+
+
+@router.get("/api/panels/search")
+def panel_picker_search(
+    q: str = Query("", max_length=160),
+    scope: str = Query("all", pattern="^(all|uk)$"),
+    group_id: int | None = Query(None, ge=1),
+    active_only: bool = Query(False),
+    exact_address: str = Query("", max_length=200),
+    limit: int = Query(20, ge=1, le=100),
+):
+    """Neutral read-only panel search; no credentials or write state exposed."""
+    if len(q.strip()) < 2:
+        return {"items": [], "total": 0}
+    page = PanelSearchService.search_page(
+        q,
+        profile=(
+            PanelSearchProfile.PICKER_UK
+            if scope == "uk"
+            else PanelSearchProfile.PICKER_ALL
+        ),
+        scope=scope,
+        group_id=group_id,
+        active_only=active_only,
+        exact_address=exact_address,
+        limit=limit,
+    )
+    return {
+        "items": [item.as_dict() for item in page.items],
+        "total": page.total,
     }
 
 

@@ -149,6 +149,28 @@ class PresentationTests(unittest.TestCase):
             if name.endswith(".html"):
                 templates.env.get_template(name)
 
+    def test_shared_datetime_formatters_cover_supported_values(self):
+        from datetime import datetime, timezone
+
+        from app.templates_config import format_datetime, format_datetime_seconds
+
+        aware = datetime(2026, 8, 3, 20, 42, 8, 214655, tzinfo=timezone.utc)
+        self.assertEqual(format_datetime(aware), "03.08.2026 20:42")
+        self.assertEqual(format_datetime_seconds(aware), "03.08.2026 20:42:08")
+        self.assertEqual(format_datetime("2026-08-03T20:42:08.214655+03:00"), "03.08.2026 20:42")
+        self.assertEqual(format_datetime_seconds("2026-08-03T20:42:08.214655+03:00"), "03.08.2026 20:42:08")
+        self.assertEqual(format_datetime(None), "—")
+        self.assertEqual(format_datetime(""), "—")
+
+    def test_dynamic_datetime_formatter_is_loaded_globally(self):
+        script = Path("app/static/js/date-time.js").read_text(encoding="utf-8")
+        base = Path("app/templates/base.html").read_text(encoding="utf-8")
+
+        self.assertIn("window.formatDateTime = formatDateTime", script)
+        self.assertIn('value instanceof Date', script)
+        self.assertIn('options.withSeconds', script)
+        self.assertIn('/static/js/date-time.js?v=1', base)
+
     def test_selected_key_sidebar_wraps_values_and_supports_copying(self):
         template = Path("app/templates/keys.html").read_text(encoding="utf-8")
         styles = Path("app/static/css/pages/keys_log.css").read_text(encoding="utf-8")
@@ -267,7 +289,7 @@ class PresentationTests(unittest.TestCase):
         scroll = Path("app/static/css/scroll.css").read_text(encoding="utf-8")
 
         self.assertIn('/static/js/modal.js?v=1', base)
-        self.assertIn('./modal.css?v=1', style)
+        self.assertIn('./modal.css?v=2', style)
         self.assertIn('./detail-sidebar.css?v=1', style)
         self.assertIn('event.key === "Tab"', modal_script)
         self.assertIn('window.AppModal = {open, close, markClean}', modal_script)
@@ -280,11 +302,40 @@ class PresentationTests(unittest.TestCase):
         self.assertIn('Все типы', uk_detail)
         self.assertIn('html *::-webkit-scrollbar-thumb', scroll)
 
+    def test_low_risk_presentation_foundations_are_shared(self):
+        components = Path("app/static/css/components.css").read_text(encoding="utf-8")
+        modal_styles = Path("app/static/css/modal.css").read_text(encoding="utf-8")
+        modal_macro = Path("app/templates/macros/modal.html").read_text(encoding="utf-8")
+        employees = Path("app/templates/employees.html").read_text(encoding="utf-8")
+        modal_script = Path("app/static/js/modal.js").read_text(encoding="utf-8")
+
+        for class_name in (
+            ".btn-primary",
+            ".btn-secondary",
+            ".btn-danger",
+            ".btn-success",
+            ".btn-icon",
+            ".btn-sm",
+            ".entity-card",
+        ):
+            self.assertIn(class_name, components)
+
+        self.assertIn(".modal-shell__header", modal_styles)
+        self.assertIn("macro modal_shell", modal_macro)
+        self.assertEqual(employees.count("call modal_shell("), 2)
+        self.assertIn("employee-summary-card entity-card entity-card--compact", employees)
+        self.assertIn("btn btn-secondary employee-archive-link", employees)
+        self.assertIn("data-close-employee-modal", modal_macro)
+        self.assertIn('title: "Закрыть без сохранения?"', modal_script)
+
     def test_message_preview_exposes_used_key_choices_and_panel_states(self):
         template = Path("app/templates/message_preview.html").read_text(
             encoding="utf-8"
         )
         script = Path("app/static/js/message.js").read_text(encoding="utf-8")
+        picker_script = Path("app/static/js/panel-picker.js").read_text(
+            encoding="utf-8"
+        )
         styles = Path("app/static/css/pages/message.css").read_text(
             encoding="utf-8"
         )
@@ -309,7 +360,7 @@ class PresentationTests(unittest.TestCase):
         self.assertIn('id="messagePanelPickerSelection"', template)
         self.assertIn('id="messagePanelPickerChips"', template)
         self.assertIn("Добавлена вручную", script)
-        self.assertIn("Панель уже выбрана", script)
+        self.assertIn("Панель уже выбрана", picker_script)
         self.assertIn("grid-template-columns: repeat(2", styles)
         self.assertIn("grid-template-columns: repeat(3", styles)
         self.assertIn('name = checkbox.dataset.panelSource === "manual"', script)
@@ -329,6 +380,10 @@ class PresentationTests(unittest.TestCase):
     def test_manual_write_supports_additional_panels_without_changing_assignment(self):
         template = Path("app/templates/manual_write.html").read_text(encoding="utf-8")
         script = Path("app/static/js/manual-write.js").read_text(encoding="utf-8")
+        picker_script = Path("app/static/js/panel-picker.js").read_text(
+            encoding="utf-8"
+        )
+        smart_search = Path("app/static/js/smart-search.js").read_text(encoding="utf-8")
         styles = Path("app/static/css/pages/manual_write.css").read_text(encoding="utf-8")
 
         self.assertIn('id="open-manual-panel-picker"', template)
@@ -337,8 +392,9 @@ class PresentationTests(unittest.TestCase):
         self.assertIn('id="automaticPanelCount"', template)
         self.assertIn('id="manualPanelCount"', template)
         self.assertIn("Основной адрес", template)
-        self.assertIn("globalLoader: false", script)
-        self.assertIn('event.key === "Enter"', script)
+        self.assertIn("SmartAutocomplete.enhance", picker_script)
+        self.assertIn("globalLoader: false", smart_search)
+        self.assertIn('event.key === "Enter"', smart_search)
         self.assertIn("automatic_panel_ids", script)
         self.assertIn("manual_panel_ids", script)
         self.assertIn("panelAlreadySelected", script)
@@ -353,6 +409,83 @@ class PresentationTests(unittest.TestCase):
         actions = styles.split(".manual-panel-actions {", 1)[1].split("}", 1)[0]
         self.assertIn("gap:10px", actions)
         self.assertNotIn("position:absolute", actions)
+
+    def test_shared_panel_picker_owns_search_lifecycle_and_selection(self):
+        base = Path("app/templates/base.html").read_text(encoding="utf-8")
+        picker = Path("app/static/js/panel-picker.js").read_text(encoding="utf-8")
+        smart_search = Path("app/static/js/smart-search.js").read_text(encoding="utf-8")
+        message = Path("app/static/js/message.js").read_text(encoding="utf-8")
+        manual = Path("app/static/js/manual-write.js").read_text(encoding="utf-8")
+
+        self.assertIn('/static/js/panel-picker.js?v=1', base)
+        self.assertIn("class PanelPicker", picker)
+        self.assertIn("SmartAutocomplete.enhance", picker)
+        self.assertIn('queryParameter: "query"', picker)
+        self.assertIn("renderMenu: false", picker)
+        self.assertIn("onFinally: () => this.setLoading(false)", picker)
+        self.assertIn("new AbortController()", smart_search)
+        self.assertIn('state.request?.abort("replaced")', smart_search)
+        self.assertIn("finally", smart_search)
+        self.assertIn("globalLoader: false", smart_search)
+        self.assertIn('event.key === "Enter"', smart_search)
+        self.assertIn('event.key === "Escape"', picker)
+        self.assertIn("isAlreadySelected", picker)
+        self.assertIn("addSelected()", picker)
+        self.assertIn("removeManual(event)", picker)
+        self.assertIn("emptyText", picker)
+        self.assertIn("new window.PanelPicker", message)
+        self.assertIn("new window.PanelPicker", manual)
+        self.assertIn('endpoint: "/message/panels/search"', message)
+        self.assertIn('endpoint: "/message/panels/search"', manual)
+        self.assertNotIn("new AbortController()", message)
+        self.assertNotIn("new AbortController()", manual)
+        self.assertNotIn("async function searchPanels", message)
+        self.assertNotIn("async function searchPanels", manual)
+
+    def test_remote_smart_search_contract_is_centralized(self):
+        smart_search = Path("app/static/js/smart-search.js").read_text(encoding="utf-8")
+        picker = Path("app/static/js/panel-picker.js").read_text(encoding="utf-8")
+        uk_detail = Path("app/static/js/uk-detail.js").read_text(encoding="utf-8")
+
+        for fragment in (
+            "debounceMs",
+            "window.setTimeout(execute",
+            'state.request?.abort("replaced")',
+            'abortReason = "timeout"',
+            "if (!response.ok)",
+            "await response.json()",
+            'error.smartSearchReason = abortReason || "aborted"',
+            'event.key === "ArrowDown"',
+            'event.key === "ArrowUp"',
+            'event.key === "Enter"',
+            'event.key === "Escape"',
+            'addEventListener("pointerdown"',
+            "state.options.searchButton",
+            "minimumQueryLength",
+            "state.options.renderer",
+            "state.options.getParams",
+            "state.options.onSelect",
+            "state.options.onLoading",
+            "state.options.onLoaded",
+            "state.options.onError",
+            "state.options.onFinally",
+            "globalLoader: false",
+            "function renderState",
+            '"smart-search-loading"',
+            '"smart-search-error"',
+            "const selected = !state.menu.hidden",
+        ):
+            self.assertIn(fragment, smart_search)
+
+        self.assertIn('empty.textContent = state.options.emptyText || "Ничего не найдено"', smart_search)
+        self.assertIn("SmartAutocomplete.enhance", picker)
+        self.assertIn("SmartAutocomplete.enhance", uk_detail)
+        self.assertIn("minimumQueryLength: 0", uk_detail)
+        self.assertNotIn("fetchSearchJson", uk_detail)
+        self.assertNotIn("debounceTimer", uk_detail)
+        self.assertNotIn("requestSequence", uk_detail)
+        self.assertNotIn("new AbortController()", picker)
+        self.assertNotIn("new AbortController()", uk_detail)
 
 
 if __name__ == "__main__":

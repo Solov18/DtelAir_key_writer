@@ -977,24 +977,4 @@ body.light-theme .panels-search-empty {
 }
 
 
-/* ==================================================
-   СКРОЛЛ ТАБЛИЦЫ
-================================================== */
-
-body.light-theme .panels-table-scroll {
-    scrollbar-color: var(--scroll-thumb) var(--scroll-track);
-}
-
-body.light-theme .panels-table-scroll::-webkit-scrollbar-track {
-    background: var(--scroll-track);
-}
-
-body.light-theme .panels-table-scroll::-webkit-scrollbar-thumb {
-    border-color: var(--scroll-track);
-
-    background: var(--scroll-thumb);
-}
-
-body.light-theme .panels-table-scroll::-webkit-scrollbar-thumb:hover {
-    background: var(--scroll-thumb-hover);
-}
+/* Оформление скроллбаров централизовано в scroll.css. */
