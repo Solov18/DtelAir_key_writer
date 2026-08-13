@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% from 'macros/key_write_ui.html' import status_badge, occupied_context, action_selector %}
 
 {% block page_name %}Проверка сообщения{% endblock %}
 
@@ -179,37 +180,14 @@
                             {% if key.ambiguous %}<span class="badge warning">Нужно выбрать тип ключа</span>
                             {% elif key.identity_conflict %}<span class="badge error">Номер не соответствует указанному HEX</span>
                             {% elif key.item %}
-                            <span
-                                class="badge {% if key.write_context.write_state == 'free' %}success{% elif key.write_context.write_state in ('partial_selected', 'used') %}warning{% else %}info{% endif %}"
-                                data-key-state-label
-                            >
-                                {% if key.write_context.write_state == 'free' %}Свободен — готов к записи
-                                {% elif key.write_context.write_state == 'all_selected' %}Уже записан на выбранной панели
-                                {% elif key.write_context.write_state == 'partial_selected' %}Частично записан на выбранных панелях
-                                {% else %}Уже используется{% endif %}
-                            </span>
+                            <span data-key-state-label>{{ status_badge(key.write_context.ui_status) }}</span>
                             {% else %}<span class="badge error">Не найден</span>{% endif %}
                         </td>
                     </tr>
                     {% if key.item and key.write_context.is_used %}
                     <tr class="message-key-assignment-row">
                         <td colspan="4">
-                            <div class="message-key-assignment">
-                                <div>
-                                    <b>Ключ уже используется</b>
-                                    <span>{{ key.write_context.description }}</span>
-                                </div>
-                                <div>
-                                    <b>Уже записан на панелях</b>
-                                    {% if key.write_context.panels %}
-                                    <ul>
-                                        {% for assigned_panel in key.write_context.panels %}
-                                        <li>{{ assigned_panel.address }}{% if assigned_panel.entrance %} · {{ assigned_panel.entrance }}{% elif assigned_panel.name %} · {{ assigned_panel.name }}{% endif %}</li>
-                                        {% endfor %}
-                                    </ul>
-                                    {% else %}<span>Подтверждённых записей на панелях в журнале нет</span>{% endif %}
-                                </div>
-                            </div>
+                            {{ occupied_context(key.write_context, true) }}
                         </td>
                     </tr>
                     {% endif %}
@@ -247,23 +225,7 @@
                 {% endif %}
             </span>
             {% if has_used_keys %}
-            <fieldset class="message-write-options" form="messageWriteForm">
-                <legend>Выберите действие для уже используемых ключей</legend>
-                <label class="message-write-choice">
-                    <input type="radio" name="occupied_action" value="reassign" form="messageWriteForm">
-                    <span>
-                        <b>Переназначить на новый адрес</b>
-                        <small>В CRM ключ будет считаться выданным по новому адресу и квартире. Прежнее назначение останется в истории. На выбранные панели ключ запишется только там, где его ещё нет. Со старых панелей ключ не удаляется.</small>
-                    </span>
-                </label>
-                <label class="message-write-choice">
-                    <input type="radio" name="occupied_action" value="add_panels" form="messageWriteForm">
-                    <span>
-                        <b>Добавить ещё на выбранные панели</b>
-                        <small>Сохранить текущее назначение и добавить доступ только на недостающие панели.</small>
-                    </span>
-                </label>
-            </fieldset>
+            {{ action_selector('occupied_action', 'messageWriteForm', 'Выберите действие для уже используемых ключей') }}
             {% endif %}
         </div>
         <form

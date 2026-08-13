@@ -32,6 +32,7 @@ from app.repositories.log_repository import get_employee_operations
 from app.services import (
     KeyWriteResult,
     find_key,
+    get_key_write_context,
     get_panels,
     is_ambiguous_key,
     write_key_to_panels,
@@ -41,6 +42,44 @@ from app.templates_config import templates
 
 
 router = APIRouter()
+
+
+def _employee_write_result(request, employee: dict, key: dict, panels: list[dict]):
+    """Program an employee key; its assignment is persisted only after confirmation."""
+    context = get_key_write_context(int(key["id"]), panels)
+    results = write_key_to_panels(
+        "employee",
+        key,
+        panels,
+        flat_num="0",
+        inner=0,
+        address=f"Сотрудник: {employee.get('full_name') or employee['id']}",
+        request=request,
+        assignment_type="employee",
+        employee_id=employee["id"],
+        known_panel_ids=set(context.known_panel_ids),
+        # The physical writer must not create a generic assignment here.
+        # The employee repository creates the employee assignment only after
+        # at least one panel confirms the write.
+        assignment_policy="preserve",
+        write_option="employee_issue",
+    )
+    return KeyWriteResult.from_writer(key.get("id"), results)
+
+
+def _employee_write_response(request, employee: dict, key: dict, write_result: KeyWriteResult):
+    return templates.TemplateResponse(
+        "write_results.html",
+        {
+            "request": request,
+            "title": f"Результат записи ключа сотруднику: {employee.get('full_name') or employee['id']}",
+            "all_results": [{
+                "key": key,
+                "results": write_result.to_legacy_results(),
+                "write_result": write_result,
+            }],
+        },
+    )
 
 
 KEY_STATUS_LABELS = {
@@ -384,6 +423,8 @@ def employee_issue_key(
     old_key_status: str = Form("replaced"),
     old_key_reason: str = Form("Выдан новый ключ"),
     old_key_comment: str = Form(""),
+    panel_scope: str = Form("selected"),
+    panel_ids: list[int] = Form([]),
 ):
     employee = get_employee(employee_id)
 
@@ -406,43 +447,67 @@ def employee_issue_key(
                     "value": key_value.strip(),
                     "key_type_id": key_type_id,
                     "comment": new_key_comment,
+                    "panel_scope": panel_scope,
+                    "panel_ids": panel_ids,
                 },
             ),
         )
 
-    try:
-        issue_key_to_employee(
-            employee_id=employee_id,
-            key_id=key["id"],
-            new_key_comment=new_key_comment,
-            old_key_status=old_key_status,
-            old_key_reason=old_key_reason,
-            old_key_comment=old_key_comment,
-        )
-    except ValueError as error:
+    raw_panel_ids = panel_ids if isinstance(panel_ids, (list, tuple, set)) else []
+    clean_panel_ids = list(dict.fromkeys(
+        int(value) for value in raw_panel_ids if int(value) > 0
+    ))
+    if panel_scope == "all":
+        panels = get_panels()
+    elif clean_panel_ids:
+        panels = get_panels(panel_ids=clean_panel_ids)
+    else:
+        panels = []
+    if not panels:
         return templates.TemplateResponse(
             "employee_detail.html",
-            _employee_detail_context(
-                request,
-                employee_id,
-                {"type": "error", "text": str(error)},
-            ),
+            _employee_detail_context(request, employee_id, {
+                "type": "error", "text": "Выберите хотя бы одну панель для физической записи ключа."
+            }),
         )
 
-    log_event(
-        request=request,
-        action="employee_key_issue",
-        object_type="Сотрудник",
-        object_name=employee.get("full_name") or str(employee_id),
-        details=f"Выдан ключ {key.get('number') or key.get('hex_value')}",
-        printed_number=key.get("number", ""),
-        hex_value=key.get("hex_value", "-"),
-        key_id=key.get("id"),
-        key_type=key.get("type_name") or key.get("key_type", ""),
-        employee_id=employee_id,
-    )
+    write_result = _employee_write_result(request, employee, key, panels)
+    confirmed = bool(write_result.succeeded_panel_ids or write_result.already_present_panel_ids)
+    if confirmed and not request.session.get("training_mode"):
+        try:
+            issue_key_to_employee(
+                employee_id=employee_id,
+                key_id=key["id"],
+                new_key_comment=new_key_comment,
+                old_key_status=old_key_status,
+                old_key_reason=old_key_reason,
+                old_key_comment=old_key_comment,
+            )
+        except ValueError as error:
+            return templates.TemplateResponse(
+                "employee_detail.html",
+                _employee_detail_context(
+                    request,
+                    employee_id,
+                    {"type": "error", "text": str(error)},
+                ),
+            )
 
-    return RedirectResponse(f"/employees/{employee_id}", status_code=303)
+    if confirmed and not request.session.get("training_mode"):
+        log_event(
+            request=request,
+            action="employee_key_issue",
+            object_type="Сотрудник",
+            object_name=employee.get("full_name") or str(employee_id),
+            details=f"Выдан ключ {key.get('number') or key.get('hex_value')}",
+            printed_number=key.get("number", ""),
+            hex_value=key.get("hex_value", "-"),
+            key_id=key.get("id"),
+            key_type=key.get("type_name") or key.get("key_type", ""),
+            employee_id=employee_id,
+        )
+
+    return _employee_write_response(request, employee, key, write_result)
 
 
 @router.post("/employees/{employee_id}/keys/create-and-issue", response_class=HTMLResponse)

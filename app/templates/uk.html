@@ -39,12 +39,8 @@
             <span><small>Закреплено панелей</small><b>{{ statistics.panels }}</b></span>
         </div>
         <div class="uk-summary-card is-violet">
-            <span class="uk-summary-icon"><svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 8-8M15 4h4v4"/></svg></span>
+            <span class="uk-summary-icon"><svg viewBox="0 0 24 24"><circle cx="7.5" cy="14.5" r="4.5"/><path d="m11 11 9-9M16 6l3 3M14 8l2 2"/></svg></span>
             <span><small>Выдано ключей</small><b>{{ statistics["keys"] }}</b></span>
-        </div>
-        <div class="uk-summary-card is-cyan">
-            <span class="uk-summary-icon"><svg viewBox="0 0 24 24"><path d="M5 12h14M12 5v14"/><circle cx="12" cy="12" r="9"/></svg></span>
-            <span><small>Ключей-вездеходов</small><b>{{ statistics.master_keys }}</b></span>
         </div>
     </section>
 
@@ -87,8 +83,7 @@
                         <th>Телефон</th>
                         <th>Панели</th>
                         <th>Ключи</th>
-                        <th>Вездеходы</th>
-                        <th>Карточка</th>
+                        <th>Действия</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -110,18 +105,19 @@
                         <td>{{ group.phone or '—' }}</td>
                         <td><span class="uk-count-badge">{{ group.panels_count }}</span></td>
                         <td><span class="uk-count-badge is-key">{{ group.keys_count }}</span></td>
-                        <td><span class="uk-count-badge is-master">{{ group.master_keys_count }}</span></td>
                         <td>
                             <div class="uk-row-actions">
-                                <a class="uk-open-card-link" href="/uk/{{ group.id }}" title="Открыть карточку">
+                                <a class="uk-open-card-link" href="/uk/{{ group.id }}" title="Открыть карточку" aria-label="Открыть карточку УК {{ group.name }}">
                                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.5"/></svg>
-                                    <span>Открыть</span>
+                                </a>
+                                <a class="uk-edit-card-link" href="/uk?{% if row_query %}{{ row_query }}&{% endif %}selected_group_id={{ group.id }}&edit=1" title="Редактировать УК" aria-label="Редактировать УК {{ group.name }}">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4l11-11a2.8 2.8 0 0 0-4-4L4 16v4z"/><path d="m13.5 6.5 4 4"/></svg>
                                 </a>
                             </div>
                         </td>
                     </tr>
                     {% else %}
-                    <tr><td colspan="8"><div class="uk-register-empty"><b>УК не найдены</b><span>Измените запрос или добавьте первую компанию.</span></div></td></tr>
+                    <tr><td colspan="7"><div class="uk-register-empty"><b>УК не найдены</b><span>Измените запрос или добавьте первую компанию.</span></div></td></tr>
                     {% endfor %}
                     </tbody>
                 </table>
@@ -155,7 +151,6 @@
             <div class="uk-inspector-counters">
                 <a href="/uk/{{ selected_group.id }}#panels"><b>{{ selected_group.panels_count }}</b><span>Панелей</span></a>
                 <a href="/uk/{{ selected_group.id }}#keys"><b>{{ selected_group.keys_count }}</b><span>Ключей</span></a>
-                <a href="/uk/{{ selected_group.id }}#keys"><b>{{ selected_group.master_keys_count }}</b><span>Вездеходов</span></a>
             </div>
             <div class="uk-inspector-note"><span>Комментарий</span><p>{{ selected_group.note or 'Комментарий не добавлен.' }}</p></div>
             <section class="uk-inspector-panels">
@@ -242,5 +237,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/uk.js?v=4"></script>
+<script src="/static/js/uk.js?v=5"></script>
 {% endblock %}

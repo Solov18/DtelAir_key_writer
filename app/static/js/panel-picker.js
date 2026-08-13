@@ -143,11 +143,13 @@
                         <b>${escapeHtml(panel.address || "Адрес не указан")}</b>
                         <span>${escapeHtml(title)}</span>
                         <small>${escapeHtml(panel.mac || "MAC не указан")}</small>
+                        ${reason ? `<em>${escapeHtml(reason)}</em>` : ""}
                     </span>
-                    <span class="badge ${escapeHtml(panel.status_tone || "")}">${escapeHtml(panel.status_name || "")}</span>
-                    <input type="checkbox" data-picker-panel data-panel="${encodeURIComponent(JSON.stringify(panel))}"
-                        aria-label="Выбрать ${escapeHtml(panel.address || title)}" ${disabled ? "disabled" : ""}>
-                    ${reason ? `<em>${escapeHtml(reason)}</em>` : ""}
+                    <span class="panel-picker__actions">
+                        <span class="badge ${escapeHtml(panel.status_tone || "")}">${escapeHtml(panel.status_name || "")}</span>
+                        <input type="checkbox" data-picker-panel data-panel="${encodeURIComponent(JSON.stringify(panel))}"
+                            aria-label="Выбрать ${escapeHtml(panel.address || title)}" ${disabled ? "disabled" : ""}>
+                    </span>
                 </label>`;
             }).join("");
             this.updateSelection();

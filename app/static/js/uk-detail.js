@@ -105,6 +105,7 @@
                 input.name = "panel_link_ids";
                 input.value = String(item.link_id);
                 input.checked = selected.has(String(item.link_id));
+                option.classList.toggle("is-selected", input.checked);
                 const body = document.createElement("span");
                 const address = document.createElement("b");
                 address.textContent = item.address;
@@ -114,6 +115,7 @@
                 input.addEventListener("change", () => {
                     if (input.checked) selected.set(String(item.link_id), item);
                     else selected.delete(String(item.link_id));
+                    option.classList.toggle("is-selected", input.checked);
                     updateSummary();
                 });
                 option.append(input, body);

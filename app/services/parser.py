@@ -126,6 +126,16 @@ def normalize(value: str) -> str:
 def normalize_house_variants(value: str) -> str:
     value = normalize(value)
 
+    # Литеру дома часто отделяют пробелом: «Единство 1 А» и «Единство 1А»
+    # должны обозначать один адрес. Склеиваем только число и одну букву,
+    # непосредственно стоящую перед концом адреса или маркером корпуса.
+    value = re.sub(
+        r"\b(\d+)\s+([а-яa-z])(?=\s*(?:(?:корпус|корп|к)\s*\d+\b|$))",
+        r"\1\2",
+        value,
+        flags=re.IGNORECASE,
+    )
+
     # 65 корп. 1, 65к1 и 65/1 приводятся к одному виду.
     value = re.sub(
         r"\b(\d+[а-яa-z]?)\s*(?:корпус|корп|к)\s*(\d+[а-яa-z]?)\b",
@@ -341,8 +351,10 @@ def _house_similarity(message_tokens: set[str], candidate_house: str) -> tuple[f
     if not house_tokens:
         return 0.18, "house_missing"
 
-    expanded = expand_tokens(house_tokens)
-    if candidate_house in expanded:
+    # Полное совпадение допустимо только по исходному нормализованному номеру
+    # дома. expand_tokens("21а/1") также содержит "21а", из-за чего адрес без
+    # корпуса ошибочно считался точным при запросе "21А К1".
+    if candidate_house in house_tokens:
         return 1.0, "house_exact"
 
     candidate_base, candidate_suffix = _house_number_parts(candidate_house)

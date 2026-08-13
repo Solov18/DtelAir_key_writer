@@ -179,6 +179,30 @@ class MessageParserTests(PostgreSQLTestCase):
             "Вин. 22/1В старая северная",
         )
 
+    def test_spaced_house_letter_and_short_corpus_match_exact_addresses(self):
+        self._create_panel("ул. Единство 1А", "Основной вход", 51)
+        self._create_panel("ул. Полтавская 21А", "Основной вход", 53)
+        self._create_panel("ул. Полтавская 21А корпус 1", "Подъезд 1", 52)
+
+        spaced_letter = parse_message(
+            "Единство 1 А кв 12, ключ №40877"
+        )
+        short_corpus = parse_message(
+            "Полтавская 21А К1 кв 148, ключ №40878"
+        )
+
+        self.assertEqual(spaced_letter["address"], "ул. Единство 1А")
+        self.assertEqual(spaced_letter["address_status"], "exact")
+        self.assertEqual(spaced_letter["apartment"], "12")
+        self.assertEqual(
+            short_corpus["address"],
+            "ул. Полтавская 21А корпус 1",
+        )
+        self.assertEqual(short_corpus["address_status"], "exact")
+        self.assertEqual(short_corpus["apartment"], "148")
+        self.assertEqual(short_corpus["address_candidates"][0]["house_match"], "house_exact")
+        self.assertEqual(short_corpus["address_candidates"][1]["house_match"], "house_base")
+
     def test_missing_corpus_requires_confirmation_and_shows_variants(self):
         self._create_panel("Тепличная 63 корпус 1", "Подъезд 1", 6)
         self._create_panel("Тепличная 63 корпус 2", "Подъезд 2", 7)

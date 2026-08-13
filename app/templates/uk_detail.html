@@ -55,18 +55,32 @@
 
         <aside class="uk-detail-v2-side">
             <div class="uk-detail-counter-grid">
-                <a href="#panels"><b>{{ group.panels_count }}</b><span>Панелей</span></a>
-                <a href="#keys"><b>{{ group.keys_count }}</b><span>Ключей</span></a>
-                <a href="#keys"><b>{{ group.master_keys_count }}</b><span>Вездеходов</span></a>
+                <a class="uk-detail-counter-tile is-green" href="#panels">
+                    <span class="uk-detail-counter-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M9 6h6M9 10h6M10 18h4"/></svg>
+                    </span>
+                    <span class="uk-detail-counter-copy"><b>{{ group.panels_count }}</b><small>Панелей</small></span>
+                </a>
+                <a class="uk-detail-counter-tile is-violet" href="#keys">
+                    <span class="uk-detail-counter-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 8-8M15 4h4v4"/></svg>
+                    </span>
+                    <span class="uk-detail-counter-copy"><b>{{ group.keys_count }}</b><small>Ключей</small></span>
+                </a>
+                <a class="uk-detail-counter-tile is-cyan" href="#keys">
+                    <span class="uk-detail-counter-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="m8.3 10.9 7.4-3.8M8.3 13.1l7.4 3.8"/></svg>
+                    </span>
+                    <span class="uk-detail-counter-copy"><b>{{ group.master_keys_count }}</b><small>На нескольких панелях</small></span>
+                </a>
             </div>
             <div class="panel uk-detail-readiness uk-crm-access-card">
                 <header><div><span class="page-eyebrow">Доступ в CRM</span><h2>{% if group.crm_login_configured and group.crm_password_configured %}Реквизиты настроены{% else %}Реквизиты не заполнены{% endif %}</h2></div></header>
                 {% if is_admin %}
-                <p>Логин и пароль загружаются только после явного открытия администратором.</p>
-                <button type="button" class="btn btn-ghost" data-reveal-credentials data-group-id="{{ group.id }}">Показать / скрыть</button>
-                <dl class="uk-secret-output" hidden data-credential-output>
-                    <div><dt>Логин</dt><dd data-credential-login-text></dd></div>
-                    <div><dt>Пароль</dt><dd data-credential-password-text></dd></div>
+                <p>Логин и пароль для доступа управляющей компании.</p>
+                <dl class="uk-secret-output uk-secret-output--visible">
+                    <div><dt>Логин</dt><dd>{{ credentials.crm_login or 'Не указан' }}</dd></div>
+                    <div><dt>Пароль</dt><dd>{{ credentials.crm_password or 'Не указан' }}</dd></div>
                 </dl>
                 {% else %}
                 <p>Реквизиты доступны только администратору.</p>
@@ -88,10 +102,13 @@
                     <div><b>{{ panel.address }}</b><small class="uk-panel-point">{{ panel.entrance or panel.name or "Точка доступа" }}</small><code class="uk-panel-mac">{{ panel.mac }}</code></div>
                     <a href="/panels?selected_panel_id={{ panel.panel_id }}" title="Открыть панель">↗</a>
                 </header>
-                <form method="post" action="/uk/{{ group.id }}/panels/{{ panel.link_id }}/update">
+                <form class="uk-panel-edit-form" method="post" action="/uk/{{ group.id }}/panels/{{ panel.link_id }}/update">
                     <label>Квартира УК<input name="apartment" value="{{ panel.apartment }}" required></label>
                     <label>Комментарий<input name="comment" value="{{ panel.link_comment or '' }}"></label>
-                    <button class="btn btn-ghost" type="submit">Сохранить</button>
+                    <span class="uk-panel-save-slot">
+                        <span class="uk-panel-save-spacer" aria-hidden="true">Действие</span>
+                        <button class="btn btn-ghost uk-panel-save-button" type="submit">Сохранить</button>
+                    </span>
                 </form>
                 <form method="post" action="/uk/{{ group.id }}/panels/{{ panel.link_id }}/detach" data-confirm="Активные записи ключей должны быть обработаны заранее." data-confirm-title="Открепить панель?" data-confirm-action="Открепить панель" data-confirm-cancel="Назад" data-confirm-variant="danger">
                     <button class="uk-link-danger" type="submit">Открепить панель</button>
@@ -115,7 +132,7 @@
                 <header>
                     <span class="uk-resource-key-dot" style="--key-color: {{ issue.type_color or '#29a9ff' }}"></span>
                     <div>
-                        <span class="page-eyebrow">{{ 'Ключ-вездеход' if issue.is_master else 'Ключ УК' }}</span>
+                        <span class="page-eyebrow">{{ 'Ключ на нескольких панелях' if issue.is_master else 'Ключ УК' }}</span>
                         <h3>{{ issue.type_name }} · №{{ issue.number }}</h3>
                         <small>HEX: {{ issue.hex_value }} · выдан {{ issue.issued_at|datetime }}</small>
                     </div>
@@ -147,7 +164,7 @@
 
                 {% if issue.issue_status in ['pending', 'active'] %}
                 <form class="uk-master-add-form" method="post" action="/uk/{{ group.id }}/keys/{{ issue.issue_id }}/panels/add">
-                    <label>Добавить панель к вездеходу
+                    <label>Добавить ещё одну панель к ключу
                         <select name="panel_link_id" required>
                             <option value="">Выберите панель УК</option>
                             {% for panel in group_panels %}
@@ -247,7 +264,7 @@
                                    data-smart-search="keys" data-smart-search-url="/api/keys/search"
                                    data-smart-search-min-length="1" data-smart-search-limit="12"
                                    data-smart-search-params="#ukIssueKeyType:key_type_id" data-smart-submit="false">
-                            <button type="button" data-uk-key-find>Найти</button>
+                            <button class="uk-neon-action" type="button" data-uk-key-find>Найти</button>
                         </span>
                     </label>
                 </div>
@@ -263,13 +280,13 @@
                 <div class="uk-issue-panel-picker__head">
                     <div><b>Панели для записи</b><span>Выберите одну или несколько панелей этой УК</span></div>
                     <div class="uk-issue-panel-picker__actions">
-                        <button type="button" data-uk-panels-select-all>Выбрать все</button>
-                        <button type="button" data-uk-panels-clear>Снять все</button>
+                        <button class="uk-neon-action is-compact" type="button" data-uk-panels-select-all>Выбрать все</button>
+                        <button class="uk-neon-action is-compact" type="button" data-uk-panels-clear>Снять все</button>
                     </div>
                 </div>
                 <label class="uk-issue-panel-search">
                     <span class="sr-only">Поиск панелей</span>
-                    <span class="uk-picker-search-row"><input type="search" autocomplete="off" placeholder="Адрес, вход, парковка, калитка, лифт или MAC" data-uk-panels-search><button type="button" data-uk-panels-find>Найти</button></span>
+                    <span class="uk-picker-search-row"><input type="search" autocomplete="off" placeholder="Адрес, вход, парковка, калитка, лифт или MAC" data-uk-panels-search><button class="uk-neon-action" type="button" data-uk-panels-find>Найти</button></span>
                 </label>
                 <div class="uk-issue-panel-list custom-scroll" data-uk-panels-list></div>
                 <p class="uk-issue-panel-empty" data-uk-panels-empty hidden>Панели не найдены</p>
@@ -288,5 +305,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/uk-detail.js?v=9"></script>
+<script src="/static/js/uk-detail.js?v=10"></script>
 {% endblock %}

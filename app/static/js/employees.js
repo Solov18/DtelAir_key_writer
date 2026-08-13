@@ -127,4 +127,87 @@
             });
         });
     });
+    const issueForm = document.getElementById("employeeIssueKeyForm");
+    const panelPickerRoot = document.getElementById("employeePanelPicker");
+    if (issueForm && panelPickerRoot && window.PanelPicker) {
+        const selectedContainer = issueForm.querySelector("[data-employee-selected-panels]");
+        const count = issueForm.querySelector("[data-employee-panel-count]");
+        const empty = issueForm.querySelector("[data-employee-panel-empty]");
+        const scope = issueForm.querySelector("[data-employee-panel-scope]");
+        const allPanels = issueForm.querySelector("[data-employee-all-panels]");
+
+        const selectedIds = () => Array.from(selectedContainer.querySelectorAll('input[name="panel_ids"]')).map((node) => node.value);
+        const updatePanelState = () => {
+            const ids = selectedIds();
+            count.textContent = String(ids.length);
+            empty.hidden = ids.length > 0 || allPanels.checked;
+            scope.value = allPanels.checked ? "all" : "selected";
+            selectedContainer.classList.toggle("is-all", allPanels.checked);
+            selectedContainer.querySelectorAll("button, input").forEach((node) => { node.disabled = allPanels.checked; });
+        };
+        const hasPanel = (id) => selectedContainer.querySelector(`[data-panel-id="${CSS.escape(String(id))}"]`) !== null;
+        const addPanel = (panel) => {
+            if (hasPanel(panel.id)) return false;
+            const item = document.createElement("article");
+            item.className = "employee-selected-panel";
+            item.dataset.panelId = String(panel.id);
+            item.dataset.panelSource = "manual";
+            item.innerHTML = `<input type="hidden" name="panel_ids" value="${String(panel.id).replace(/[^0-9]/g, "")}">
+                <div><b></b><span></span><code></code></div>
+                <button type="button" data-remove-manual-panel title="Удалить из выбранных" aria-label="Удалить из выбранных">×</button>`;
+            item.querySelector("b").textContent = panel.address || "Адрес не указан";
+            item.querySelector("span").textContent = panel.entrance || panel.name || "Точка доступа";
+            item.querySelector("code").textContent = panel.mac || "MAC не указан";
+            selectedContainer.append(item);
+            updatePanelState();
+            return true;
+        };
+
+        allPanels.addEventListener("change", async () => {
+            if (allPanels.checked) {
+                const confirmed = await window.showDangerConfirm?.({
+                    title: "Записать ключ на все панели?",
+                    text: "Ключ будет физически отправлен на каждую активную панель системы. Используйте этот режим только для служебного ключа с полным доступом.",
+                    confirmText: "Использовать все панели",
+                    cancelText: "Отмена",
+                    source: allPanels,
+                });
+                if (!confirmed) allPanels.checked = false;
+            }
+            updatePanelState();
+        });
+
+        new window.PanelPicker({
+            endpoint: "/message/panels/search",
+            root: panelPickerRoot,
+            openButton: document.getElementById("openEmployeePanelPicker"),
+            closeButton: document.getElementById("closeEmployeePanelPicker"),
+            cancelButton: document.getElementById("cancelEmployeePanelPicker"),
+            searchInput: document.getElementById("employeePanelSearch"),
+            searchButton: document.getElementById("findEmployeePanels"),
+            status: document.getElementById("employeePanelSearchStatus"),
+            results: document.getElementById("employeePanelSearchResults"),
+            selection: document.getElementById("employeePanelPickerSelection"),
+            selectionCount: document.getElementById("employeePanelPickerCount"),
+            chips: document.getElementById("employeePanelPickerChips"),
+            addButton: document.getElementById("addEmployeePanels"),
+            manualContainer: selectedContainer,
+            manualItemSelector: ".employee-selected-panel",
+            itemClass: "employee-panel-picker__item",
+            bodyClass: "employee-panel-picker__body",
+            isAlreadySelected: hasPanel,
+            addPanel,
+            onPanelsAdded: updatePanelState,
+            onPanelRemoved: updatePanelState,
+        });
+
+        issueForm.addEventListener("submit", async (event) => {
+            if (!allPanels.checked && selectedIds().length === 0) {
+                event.preventDefault();
+                await window.showAlert?.({title: "Панели не выбраны", text: "Выберите панели для физической записи ключа или явно включите запись на все панели.", source: issueForm.querySelector("button[type=submit]")});
+                document.getElementById("openEmployeePanelPicker")?.focus();
+            }
+        });
+        updatePanelState();
+    }
 })();

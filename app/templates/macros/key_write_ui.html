@@ -1,0 +1,99 @@
+{% macro status_badge(status, text='') -%}
+{% set value = status.value if status and status.value is defined else (status or '') %}
+{% set labels = {
+    'ready': 'Свободен — готов к записи',
+    'occupied': 'Ключ уже используется',
+    'action_required': 'Требуется действие',
+    'already_all': 'Уже записан на всех выбранных панелях',
+    'partial': 'Выполнено частично',
+    'success': 'Успешно',
+    'failed': 'Ошибка'
+} %}
+<span class="key-write-status key-write-status--{{ value }}">{{ text or labels.get(value, 'Состояние неизвестно') }}</span>
+{%- endmacro %}
+
+{% macro occupied_context(context, compact=false) -%}
+<section class="key-write-occupied{% if compact %} key-write-occupied--compact{% endif %}" aria-label="Текущее использование ключа">
+    <div class="key-write-occupied__heading">
+        {{ status_badge('occupied') }}
+        <strong>Текущее назначение</strong>
+    </div>
+    {% if context.assignments %}
+    <div class="key-write-assignments">
+        {% for assignment in context.assignments %}
+        <article>
+            <b>{{ assignment.assignment_type_name or assignment.type_name or 'Назначение' }}</b>
+            {% if assignment.owner_name %}<span>{{ assignment.owner_name }}</span>{% endif %}
+            {% set assignment_address = assignment.assignment_address or assignment.address %}
+            {% set assignment_apartment = assignment.assignment_apartment or assignment.apartment %}
+            {% if assignment_address %}<span>{{ assignment_address }}{% if assignment_apartment %}, кв. {{ assignment_apartment }}{% endif %}</span>{% endif %}
+        </article>
+        {% endfor %}
+    </div>
+    {% elif context.current_assignment and (context.current_assignment.address or context.current_assignment.owner_name) %}
+    <div class="key-write-assignments">
+        <article>
+            <b>{{ context.current_assignment.type_name or 'Назначение' }}</b>
+            {% if context.current_assignment.owner_name %}<span>{{ context.current_assignment.owner_name }}</span>{% endif %}
+            {% if context.current_assignment.address %}<span>{{ context.current_assignment.address }}{% if context.current_assignment.apartment %}, кв. {{ context.current_assignment.apartment }}{% endif %}</span>{% endif %}
+        </article>
+    </div>
+    {% endif %}
+    {% if context.description %}<p class="key-write-occupied__description">{{ context.description }}</p>{% endif %}
+    <div class="key-write-known-panels">
+        <b>Уже записан на панелях</b>
+        {% if context.panels %}
+        <ul>{% for panel in context.panels %}<li>{{ panel.address }}{% if panel.entrance or panel.name %} · {{ panel.entrance or panel.name }}{% endif %}</li>{% endfor %}</ul>
+        {% else %}<span>Подтверждённых записей на панелях нет</span>{% endif %}
+    </div>
+</section>
+{%- endmacro %}
+
+{% macro action_selector(field_name='occupied_action', form_id='', legend='Выберите действие для занятого ключа', selected_action='') -%}
+<fieldset class="key-write-actions" data-occupied-key>
+    <legend>{{ legend }}</legend>
+    <label>
+        <input type="radio" name="{{ field_name }}" value="reassign"{% if selected_action == 'reassign' %} checked{% endif %}{% if form_id %} form="{{ form_id }}"{% endif %}>
+        <span><b>Переназначить ключ</b><small>Заменить назначение в CRM новым адресом и квартирой. История сохранится, со старых панелей ключ автоматически не удаляется.</small></span>
+    </label>
+    <label>
+        <input type="radio" name="{{ field_name }}" value="add_panels"{% if selected_action == 'add_panels' %} checked{% endif %}{% if form_id %} form="{{ form_id }}"{% endif %}>
+        <span><b>Только добавить на выбранные панели</b><small>Сохранить текущее назначение и записать ключ только на панели, где его ещё нет.</small></span>
+    </label>
+</fieldset>
+{%- endmacro %}
+
+{% macro result_summary(result) -%}
+<section class="key-write-result-summary">
+    <div>
+        {{ status_badge(result.overall_status) }}
+        <h3>{{ result.user_message }}</h3>
+    </div>
+    <dl>
+        <div><dt>Выбрано</dt><dd>{{ result.requested_panel_ids|length }}</dd></div>
+        <div><dt>Успешно</dt><dd>{{ result.succeeded_panel_ids|length }}</dd></div>
+        <div><dt>Уже было</dt><dd>{{ result.already_present_panel_ids|length }}</dd></div>
+        <div><dt>Пропущено</dt><dd>{{ result.skipped_panel_ids|length }}</dd></div>
+        <div><dt>Ошибок</dt><dd>{{ result.failed_panel_ids|length }}</dd></div>
+    </dl>
+</section>
+{%- endmacro %}
+
+{% macro panel_result(item) -%}
+{% set error = item.error_code.value if item.error_code and item.error_code.value is defined else (item.error_code or '') %}
+{% if item.already_present %}{% set state='already_all' %}{% set label='Уже записан' %}
+{% elif item.skipped %}{% set state='partial' %}{% set label='Пропущено' %}
+{% elif item.success %}{% set state='success' %}{% set label='Успешно записан' %}
+{% else %}{% set state='failed' %}{% set label={
+    'timeout': 'Панель не ответила вовремя',
+    'auth': 'Ошибка авторизации на панели',
+    'network': 'Нет соединения с панелью',
+    'rejected': 'Панель отклонила запрос',
+    'invalid_response': 'Некорректный ответ панели',
+    'unknown': 'Не удалось выполнить запись'
+}.get(error, 'Не удалось выполнить запись') %}{% endif %}
+<article class="key-write-panel-result key-write-panel-result--{{ state }}">
+    <div><b>{{ item.panel_name or 'Панель' }}</b>{% if item.address %}<span>{{ item.address }}</span>{% endif %}</div>
+    {{ status_badge(state, label) }}
+</article>
+{%- endmacro %}

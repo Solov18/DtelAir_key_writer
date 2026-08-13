@@ -219,8 +219,8 @@
                 </header>
                 <dl class="keys-side-facts">
                     <div><dt>Тип ключа</dt><dd><span class="key-type-chip"><i style="--key-type-color: {{ selected_key.type_color }}"></i>{{ selected_key.type_name }}</span></dd></div>
-                    <div><dt>Номер</dt><dd class="keys-copy-value"><span class="keys-technical-value">{{ selected_key.number }}</span><button type="button" class="keys-copy-button" data-copy-value="{{ selected_key.number|e }}" aria-label="Скопировать номер ключа" title="Скопировать номер ключа">⧉</button></dd></div>
-                    <div><dt>HEX</dt><dd class="keys-copy-value"><code class="keys-technical-value">{{ selected_key.hex_value or 'Не считан' }}</code>{% if selected_key.hex_value %}<button type="button" class="keys-copy-button" data-copy-value="{{ selected_key.hex_value|e }}" aria-label="Скопировать HEX" title="Скопировать HEX">⧉</button>{% endif %}</dd></div>
+                    <div><dt>Номер</dt><dd class="keys-copy-value"><span class="keys-technical-value">{{ selected_key.number }}</span><button type="button" class="copy-button keys-copy-button" data-copy-value="{{ selected_key.number|e }}" data-copy-label="Копировать номер" aria-label="Копировать номер" title="Копировать номер"><svg class="copy-button__copy-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><svg class="copy-button__success-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></button></dd></div>
+                    <div><dt>HEX</dt><dd class="keys-copy-value"><code class="keys-technical-value">{{ selected_key.hex_value or 'Не считан' }}</code>{% if selected_key.hex_value %}<button type="button" class="copy-button keys-copy-button" data-copy-value="{{ selected_key.hex_value|e }}" data-copy-label="Копировать HEX" aria-label="Копировать HEX" title="Копировать HEX"><svg class="copy-button__copy-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><svg class="copy-button__success-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></button>{% endif %}</dd></div>
                     <div><dt>Статус</dt><dd><span class="key-status is-{{ selected_key.status_tone }}">{{ selected_key.status_name }}</span></dd></div>
                     <div class="is-multiline"><dt>Комментарий</dt><dd>{{ selected_key.note or '—' }}</dd></div>
                     <div><dt>Дата добавления</dt><dd>{{ selected_key.created_at|datetime }}</dd></div>
@@ -232,7 +232,7 @@
                 <header><div><small>Состояние</small><h2>Текущее назначение</h2></div><span class="key-status is-{{ selected_key.status_tone }}">{{ selected_key.status_name }}</span></header>
                 {% if selected_key.assignment_type %}
                 <div class="keys-current-summary">
-                    <div class="keys-current-assignment-value"><b>{{ selected_key.assignment_text }}</b><button type="button" class="keys-copy-button" data-copy-value="{{ selected_key.assignment_text|e }}" aria-label="Скопировать текущее назначение" title="Скопировать адрес и назначение">⧉</button></div>
+                    <div class="keys-current-assignment-value"><b>{{ selected_key.assignment_text }}</b><button type="button" class="copy-button keys-copy-button" data-copy-value="{{ selected_key.assignment_text|e }}" data-copy-label="Копировать адрес и назначение" aria-label="Копировать адрес и назначение" title="Копировать адрес и назначение"><svg class="copy-button__copy-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><svg class="copy-button__success-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></button></div>
                     <span>Назначен {{ selected_key.assigned_at|datetime }}</span>
                 </div>
                 <form method="post" action="/keys/{{ selected_key.id }}/release" class="keys-side-release">
@@ -460,38 +460,5 @@ document.querySelectorAll("[data-select-url]").forEach((row) => {
     });
 });
 
-async function copyKeySidebarValue(button) {
-    const value = button.dataset.copyValue || "";
-    if (!value) return;
-    try {
-        if (navigator.clipboard && window.isSecureContext) {
-            await navigator.clipboard.writeText(value);
-        } else {
-            const helper = document.createElement("textarea");
-            helper.value = value;
-            helper.setAttribute("readonly", "");
-            helper.style.position = "fixed";
-            helper.style.opacity = "0";
-            document.body.appendChild(helper);
-            helper.select();
-            document.execCommand("copy");
-            helper.remove();
-        }
-        const previous = button.textContent;
-        button.textContent = "✓";
-        button.classList.add("is-copied");
-        window.setTimeout(() => {
-            button.textContent = previous;
-            button.classList.remove("is-copied");
-        }, 1200);
-    } catch (error) {
-        button.classList.add("is-copy-error");
-        window.setTimeout(() => button.classList.remove("is-copy-error"), 1200);
-    }
-}
-
-document.querySelectorAll(".keys-copy-button[data-copy-value]").forEach((button) => {
-    button.addEventListener("click", () => copyKeySidebarValue(button));
-});
 </script>
 {% endblock %}

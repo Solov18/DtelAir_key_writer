@@ -62,7 +62,7 @@
                 <details class="key-assignment-edit key-assignment-edit-wide" id="assignment-edit" {% if error %}open{% endif %}>
                     <summary class="btn">Редактировать назначение</summary>
                     <form method="post" action="/keys/{{ key.id }}/assignment" class="key-assignment-edit-form key-assignment-edit-form-wide">
-                        <label>
+                        <label class="key-assignment-owner-type">
                             <span>Тип владельца</span>
                             <select name="assignment_type" required>
                                 {% for value, label in assignment_type_names.items() %}
@@ -70,15 +70,25 @@
                                 {% endfor %}
                             </select>
                         </label>
-                        <label class="is-address">
+                        <label class="is-address key-assignment-address-search">
                             <span>Адрес</span>
-                            <input name="address" value="{{ key.assignment_address or '' }}" list="assignment-addresses" placeholder="Начните вводить существующий адрес" autocomplete="off" required>
+                            <span class="key-assignment-address-control">
+                                <span class="search-icon" aria-hidden="true">⌕</span>
+                                <input
+                                    name="address"
+                                    value="{{ key.assignment_address or '' }}"
+                                    placeholder="Начните вводить улицу и дом"
+                                    autocomplete="off"
+                                    data-smart-search="panels"
+                                    data-smart-search-min-length="2"
+                                    data-smart-search-limit="10"
+                                    data-smart-submit="false"
+                                    required
+                                >
+                            </span>
                             <small>Можно выбрать только адрес, уже существующий в CRM.</small>
                         </label>
-                        <datalist id="assignment-addresses">
-                            {% for address in assignment_addresses %}<option value="{{ address }}"></option>{% endfor %}
-                        </datalist>
-                        <label>
+                        <label class="key-assignment-apartment">
                             <span>Квартира</span>
                             <input name="apartment" value="{{ key.assignment_apartment or '' }}" placeholder="Можно оставить пустой">
                         </label>

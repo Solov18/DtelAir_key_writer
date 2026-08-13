@@ -307,23 +307,25 @@
         const form = event.target;
         if (!(form instanceof HTMLFormElement) || form.dataset.noLoader != null) return;
         if (form.target && form.target !== "_self" || form.method.toLowerCase() === "dialog") return;
+        const method = String(event.submitter?.formMethod || form.method || "GET").toUpperCase();
         let action;
         try { action = new URL(event.submitter?.formAction || form.action || window.location.href, window.location.href); }
         catch (_) { return; }
         if (action.origin !== window.location.origin || /\/(?:export|download)(?:\/|$)/i.test(action.pathname)) return;
         queueMicrotask(() => {
-            if (!event.defaultPrevented) show({overlay: true});
+            if (!event.defaultPrevented) show({overlay: method !== "GET"});
         });
     }, true);
 
     const nativeFormSubmit = HTMLFormElement.prototype.submit;
     HTMLFormElement.prototype.submit = function () {
         if (this.dataset.noLoader == null && (!this.target || this.target === "_self")) {
+            const method = String(this.method || "GET").toUpperCase();
             let action;
             try { action = new URL(this.action || window.location.href, window.location.href); }
             catch (_) { action = null; }
             if (action?.origin === window.location.origin && !/\/(?:export|download)(?:\/|$)/i.test(action.pathname)) {
-                show({overlay: true});
+                show({overlay: method !== "GET"});
             }
         }
         return nativeFormSubmit.call(this);

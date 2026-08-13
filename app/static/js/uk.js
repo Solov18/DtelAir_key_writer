@@ -1,4 +1,12 @@
 (() => {
+    const pageParams = new URLSearchParams(window.location.search);
+    if (pageParams.get("edit") === "1") {
+        window.addEventListener("DOMContentLoaded", () => {
+            const modal = document.getElementById("ukEditModal");
+            if (modal) window.AppModal?.open(modal);
+        }, {once: true});
+    }
+
     document.querySelectorAll("[data-uk-row]").forEach((row) => {
         const navigate = () => {
             if (row.dataset.href) window.location.assign(row.dataset.href);

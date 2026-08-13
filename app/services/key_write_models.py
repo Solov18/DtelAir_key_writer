@@ -219,7 +219,7 @@ def classify_error(status: str, message: str = "") -> WriteErrorCode | None:
         return WriteErrorCode.TIMEOUT
     if "AUTH" in token or "АВТОРИЗ" in token:
         return WriteErrorCode.AUTH
-    if "NETWORK" in token or "СЕТ" in token or "НЕДОСТУП" in token:
+    if any(part in token for part in ("NETWORK", "CONNECTION", "UNREACHABLE", "СЕТ", "НЕДОСТУП")):
         return WriteErrorCode.NETWORK
     if "INVALID" in token or "НЕПОЛН" in token or "ФОРМАТ" in token:
         return WriteErrorCode.INVALID_RESPONSE

@@ -7,6 +7,18 @@ from app.templates_config import format_datetime, format_datetime_seconds, templ
 
 
 class PresentationTests(unittest.TestCase):
+    def test_key_assignment_uses_compact_smart_address_search(self):
+        template = Path("app/templates/key_detail.html").read_text(encoding="utf-8")
+        styles = Path("app/static/css/pages/keys_log.css").read_text(encoding="utf-8")
+
+        self.assertNotIn('list="assignment-addresses"', template)
+        self.assertNotIn('<datalist id="assignment-addresses">', template)
+        self.assertIn('data-smart-search="panels"', template)
+        self.assertIn('data-smart-submit="false"', template)
+        self.assertIn('class="key-assignment-owner-type"', template)
+        self.assertIn('class="key-assignment-apartment"', template)
+        self.assertIn(".key-assignment-address-control", styles)
+
     def test_shared_datetime_formatter_hides_timezone_and_microseconds(self):
         value = "2026-08-03 20:42:08.214655+03:00"
         self.assertEqual(format_datetime(value), "03.08.2026 20:42")
@@ -122,7 +134,7 @@ class PresentationTests(unittest.TestCase):
         self.assertIn("--scroll-size: 8px", base_css)
         self.assertIn("--font-table: 13px", base_css)
         self.assertIn(".employee-row-actions button", theme_css)
-        self.assertIn(".uk-row-actions .uk-open-card-link", theme_css)
+        self.assertIn(".uk-row-actions :is(.uk-open-card-link, .uk-edit-card-link)", theme_css)
         self.assertIn(".log-period-button.is-active", theme_css)
         self.assertIn(".uk-history-scroll td", theme_css)
         self.assertIn(".smart-search-option.is-active", Path("app/static/css/smart-search.css").read_text(encoding="utf-8"))
@@ -174,10 +186,14 @@ class PresentationTests(unittest.TestCase):
     def test_selected_key_sidebar_wraps_values_and_supports_copying(self):
         template = Path("app/templates/keys.html").read_text(encoding="utf-8")
         styles = Path("app/static/css/pages/keys_log.css").read_text(encoding="utf-8")
+        copy_script = Path("app/static/js/copy-button.js").read_text(encoding="utf-8")
+        base = Path("app/templates/base.html").read_text(encoding="utf-8")
 
         self.assertIn("keys-copy-button", template)
         self.assertIn("data-copy-value", template)
-        self.assertIn("copyKeySidebarValue", template)
+        self.assertIn("copyValue(button)", copy_script)
+        self.assertIn("event.stopPropagation()", copy_script)
+        self.assertIn('/static/js/copy-button.js?v=1', base)
         self.assertIn("keys-current-assignment-value", template)
         self.assertIn("var(--detail-sidebar-width, 390px)", styles)
         self.assertIn("detail-layout", template)
@@ -232,6 +248,7 @@ class PresentationTests(unittest.TestCase):
         self.assertIn("HTMLFormElement.prototype.submit", script)
         self.assertIn('document.addEventListener("click"', script)
         self.assertIn('options.globalLoader === false', script)
+        self.assertIn('show({overlay: method !== "GET"})', script)
         self.assertIn("isDownloadLink(anchor)", script)
         self.assertIn("isNestedInteractiveClick(event, navigationTarget)", script)
         self.assertIn('"button",', script)
@@ -332,6 +349,9 @@ class PresentationTests(unittest.TestCase):
         template = Path("app/templates/message_preview.html").read_text(
             encoding="utf-8"
         )
+        key_write_ui = Path("app/templates/macros/key_write_ui.html").read_text(
+            encoding="utf-8"
+        )
         script = Path("app/static/js/message.js").read_text(encoding="utf-8")
         picker_script = Path("app/static/js/panel-picker.js").read_text(
             encoding="utf-8"
@@ -340,17 +360,20 @@ class PresentationTests(unittest.TestCase):
             encoding="utf-8"
         )
 
-        self.assertIn("Ключ уже используется", template)
-        self.assertIn("Переназначить на новый адрес", template)
-        self.assertIn("Добавить ещё на выбранные панели", template)
-        self.assertIn('name="occupied_action" value="reassign"', template)
-        self.assertIn('name="occupied_action" value="add_panels"', template)
+        self.assertIn("occupied_context", template)
+        self.assertIn("Ключ уже используется", key_write_ui)
+        self.assertIn("Переназначить ключ", key_write_ui)
+        self.assertIn("Только добавить на выбранные панели", key_write_ui)
+        self.assertIn("field_name='occupied_action'", key_write_ui)
+        self.assertIn('value="reassign"', key_write_ui)
+        self.assertIn('value="add_panels"', key_write_ui)
         self.assertIn("data-known-panels", template)
-        self.assertIn("Частично записан на выбранных панелях", template)
+        self.assertIn("'partial': 'Выполнено частично'", key_write_ui)
         self.assertIn("Уже записан на всех выбранных панелях", script)
         self.assertIn("Его текущее назначение в CRM будет заменено новым", script)
         self.assertIn("без изменения текущего назначения", script)
-        self.assertIn(".message-write-choice", styles)
+        shared_styles = Path("app/static/css/components.css").read_text(encoding="utf-8")
+        self.assertIn(".key-write-actions", shared_styles)
         self.assertIn("body.light-theme", styles)
         self.assertIn("+ Добавить дополнительные панели", template)
         self.assertIn('id="messagePanelPicker"', template)
@@ -379,6 +402,9 @@ class PresentationTests(unittest.TestCase):
 
     def test_manual_write_supports_additional_panels_without_changing_assignment(self):
         template = Path("app/templates/manual_write.html").read_text(encoding="utf-8")
+        key_write_ui = Path("app/templates/macros/key_write_ui.html").read_text(
+            encoding="utf-8"
+        )
         script = Path("app/static/js/manual-write.js").read_text(encoding="utf-8")
         picker_script = Path("app/static/js/panel-picker.js").read_text(
             encoding="utf-8"
@@ -398,12 +424,14 @@ class PresentationTests(unittest.TestCase):
         self.assertIn("automatic_panel_ids", script)
         self.assertIn("manual_panel_ids", script)
         self.assertIn("panelAlreadySelected", script)
-        self.assertIn('data-occupied-key', template)
-        self.assertIn('value="reassign"', template)
-        self.assertIn('value="add_panels"', template)
+        self.assertIn("occupied_context", template)
+        self.assertIn('data-occupied-key', key_write_ui)
+        self.assertIn('value="reassign"', key_write_ui)
+        self.assertIn('value="add_panels"', key_write_ui)
         self.assertIn("showDangerConfirm", script)
         self.assertIn("showConfirm", script)
-        self.assertIn("manual-occupied-actions", styles)
+        shared_styles = Path("app/static/css/components.css").read_text(encoding="utf-8")
+        self.assertIn(".key-write-actions", shared_styles)
         self.assertIn("manual-panel-option--manual", styles)
         self.assertIn(".manual-panel-actions", styles)
         actions = styles.split(".manual-panel-actions {", 1)[1].split("}", 1)[0]
@@ -486,6 +514,38 @@ class PresentationTests(unittest.TestCase):
         self.assertNotIn("requestSequence", uk_detail)
         self.assertNotIn("new AbortController()", picker)
         self.assertNotIn("new AbortController()", uk_detail)
+
+    def test_ui_followup_uses_clear_multi_panel_labels_and_aligned_controls(self):
+        uk_template = Path("app/templates/uk.html").read_text(encoding="utf-8")
+        uk_detail = Path("app/templates/uk_detail.html").read_text(encoding="utf-8")
+        uk_styles = Path("app/static/css/pages/uk.css").read_text(encoding="utf-8")
+
+        self.assertNotIn("Ключей на нескольких панелях", uk_template)
+        self.assertNotIn("На нескольких панелях", uk_template)
+        self.assertIn('class="uk-edit-card-link"', uk_template)
+        self.assertIn("Ключ на нескольких панелях", uk_detail)
+        self.assertNotIn("Ключей-вездеходов", uk_template)
+        self.assertIn(".uk-summary-card.is-text-only", uk_styles)
+        self.assertIn("#ukIssueModal :is(.uk-picker-search-row > button", uk_styles)
+        self.assertIn("height: var(--control-height, 42px)", uk_styles)
+        self.assertIn("body.light-theme #ukIssueModal .uk-neon-action", uk_styles)
+        self.assertIn("#ukAddModal .uk-modal-card", uk_styles)
+        self.assertIn("#ukEditModal .uk-modal-card", uk_styles)
+        self.assertIn("width: min(900px, calc(100vw - 24px))", uk_styles)
+
+    def test_key_copy_actions_use_shared_svg_icon_and_status_can_wrap(self):
+        key_template = Path("app/templates/keys.html").read_text(encoding="utf-8")
+        key_styles = Path("app/static/css/pages/keys_log.css").read_text(encoding="utf-8")
+        components = Path("app/static/css/components.css").read_text(encoding="utf-8")
+
+        self.assertGreaterEqual(key_template.count('class="copy-button keys-copy-button"'), 3)
+        self.assertGreaterEqual(key_template.count('<rect x="8" y="8" width="11" height="11"'), 3)
+        self.assertGreaterEqual(key_template.count('class="copy-button__success-icon"'), 3)
+        self.assertNotIn(">⧉</button>", key_template)
+        self.assertIn(".keys-copy-button svg", key_styles)
+        status_rule = components.split(".key-write-status{", 1)[1].split("}", 1)[0]
+        self.assertIn("white-space:normal", status_rule)
+        self.assertIn("overflow-wrap:anywhere", status_rule)
 
 
 if __name__ == "__main__":

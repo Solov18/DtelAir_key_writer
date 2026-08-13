@@ -194,7 +194,7 @@
         </div>
         {% endif %}
 
-        <form method="post" action="/employees/{{ employee.id }}/keys/issue" class="employee-profile-issue-form">
+        <form method="post" action="/employees/{{ employee.id }}/keys/issue" class="employee-profile-issue-form" id="employeeIssueKeyForm">
             <label>Номер или HEX ключа
                 <input
                     name="key_value"
@@ -216,11 +216,32 @@
             <label>Комментарий
                 <input name="new_key_comment" autocomplete="off" placeholder="Например: ключ от серверной">
             </label>
+            <section class="employee-issue-panels">
+                <div class="employee-issue-panels__head">
+                    <div><b>Панели для физической записи</b><span>Выберите нужные панели либо явно включите запись на все панели системы.</span></div>
+                    <button type="button" class="btn-secondary" id="openEmployeePanelPicker">Выбрать панели</button>
+                </div>
+                <label class="employee-all-panels"><input type="checkbox" data-employee-all-panels><span><b>Записать на все панели системы</b><small>Только для служебного ключа с полным доступом.</small></span></label>
+                <input type="hidden" name="panel_scope" value="selected" data-employee-panel-scope>
+                <div class="employee-selected-panels" data-employee-selected-panels><span data-employee-panel-empty>Панели пока не выбраны</span></div>
+                <b class="employee-selected-count">Выбрано панелей: <span data-employee-panel-count>0</span></b>
+            </section>
             <input type="hidden" name="old_key_status" value="replaced">
             <input type="hidden" name="old_key_reason" value="Не применяется">
-            <button class="btn" type="submit">Добавить ключ</button>
+            <button class="btn" type="submit">Выдать и записать на панели</button>
         </form>
     </section>
+    <div class="employee-panel-picker" id="employeePanelPicker" hidden aria-hidden="true">
+        <div class="employee-panel-picker__dialog panel" role="dialog" aria-modal="true" aria-labelledby="employeePanelPickerTitle">
+            <header><div><span class="page-eyebrow">Физическая запись</span><h2 id="employeePanelPickerTitle">Выберите панели</h2></div><button type="button" class="employee-panel-picker__close" id="closeEmployeePanelPicker" aria-label="Закрыть">×</button></header>
+            <p>Найдите панели по адресу, входу, назначению, MAC или номеру.</p>
+            <div class="employee-panel-picker__search"><input id="employeePanelSearch" type="search" autocomplete="off" placeholder="Адрес, подъезд, парковка, калитка или MAC"><button type="button" class="btn-secondary" id="findEmployeePanels">Найти</button></div>
+            <p class="employee-panel-picker__status" id="employeePanelSearchStatus">Введите не менее двух символов.</p>
+            <div class="employee-panel-picker__results custom-scroll" id="employeePanelSearchResults"></div>
+            <div class="employee-panel-picker__selection" id="employeePanelPickerSelection" hidden>Отмечено: <b id="employeePanelPickerCount">0</b><span id="employeePanelPickerChips"></span></div>
+            <footer><button type="button" id="cancelEmployeePanelPicker">Отмена</button><button type="button" class="btn" id="addEmployeePanels" disabled>Добавить выбранные</button></footer>
+        </div>
+    </div>
     {% endif %}
     </div>
 
@@ -332,5 +353,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/employees.js?v=6"></script>
+<script src="/static/js/employees.js?v=8"></script>
 {% endblock %}

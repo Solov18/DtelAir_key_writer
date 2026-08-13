@@ -258,6 +258,7 @@ def uk_detail(
     if not group:
         return _redirect(notice="company_missing")
     issues = _decorate_issues(group_id, include_closed=True)
+    credentials = get_group_credentials(group_id) if _is_admin(request) else None
     return templates.TemplateResponse(
         "uk_detail.html",
         {
@@ -272,6 +273,7 @@ def uk_detail(
                 for item in get_group_operations(group_id, limit=40)
             ],
             "is_admin": _is_admin(request),
+            "credentials": credentials,
             "notice": notice,
         },
     )

@@ -346,6 +346,19 @@ class UkRegistryTests(PostgreSQLTestCase):
         self.assertIn(b"never-render-this", allowed.body)
         self.assertEqual(allowed.headers["cache-control"], "no-store")
 
+        profile = uk_detail(request, group_id, notice="")
+        profile_html = profile.body.decode("utf-8")
+        self.assertIn("secret-login", profile_html)
+        self.assertIn("never-render-this", profile_html)
+        self.assertNotIn("Показать / скрыть", profile_html)
+
+        operator_profile = uk_detail(
+            self._request(role="operator"), group_id, notice=""
+        )
+        operator_html = operator_profile.body.decode("utf-8")
+        self.assertNotIn("secret-login", operator_html)
+        self.assertNotIn("never-render-this", operator_html)
+
     def test_panel_link_keeps_individual_apartment_and_one_active_owner(self):
         first_group = uk_repository.save_group("УК Первая")
         second_group = uk_repository.save_group("УК Вторая")

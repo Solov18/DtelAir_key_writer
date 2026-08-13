@@ -457,7 +457,7 @@ body.light-theme .app-combobox__options button small {
 /* Neutral icon actions in register tables */
 body.light-theme .employee-row-actions a,
 body.light-theme .employee-row-actions button,
-body.light-theme .uk-row-actions > a:not(.uk-open-card-link),
+body.light-theme .uk-row-actions > a:not(.uk-open-card-link):not(.uk-edit-card-link),
 body.light-theme .uk-row-actions > button {
     color: var(--color-icon);
     background: transparent;
@@ -469,8 +469,8 @@ body.light-theme .employee-row-actions a:hover,
 body.light-theme .employee-row-actions a:focus-visible,
 body.light-theme .employee-row-actions button:hover,
 body.light-theme .employee-row-actions button:focus-visible,
-body.light-theme .uk-row-actions > a:not(.uk-open-card-link):hover,
-body.light-theme .uk-row-actions > a:not(.uk-open-card-link):focus-visible,
+body.light-theme .uk-row-actions > a:not(.uk-open-card-link):not(.uk-edit-card-link):hover,
+body.light-theme .uk-row-actions > a:not(.uk-open-card-link):not(.uk-edit-card-link):focus-visible,
 body.light-theme .uk-row-actions > button:hover,
 body.light-theme .uk-row-actions > button:focus-visible {
     color: var(--color-link);
@@ -480,7 +480,7 @@ body.light-theme .uk-row-actions > button:focus-visible {
     transform: none;
 }
 
-body.light-theme .uk-row-actions .uk-open-card-link {
+body.light-theme .uk-row-actions :is(.uk-open-card-link, .uk-edit-card-link) {
     min-height: 32px;
     color: var(--color-link);
     background: var(--button-secondary-bg);
@@ -488,8 +488,8 @@ body.light-theme .uk-row-actions .uk-open-card-link {
     box-shadow: none;
 }
 
-body.light-theme .uk-row-actions .uk-open-card-link:hover,
-body.light-theme .uk-row-actions .uk-open-card-link:focus-visible {
+body.light-theme .uk-row-actions :is(.uk-open-card-link, .uk-edit-card-link):hover,
+body.light-theme .uk-row-actions :is(.uk-open-card-link, .uk-edit-card-link):focus-visible {
     color: var(--color-heading);
     background: var(--button-secondary-hover);
     border-color: var(--border-strong);

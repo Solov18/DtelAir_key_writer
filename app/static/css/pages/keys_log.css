@@ -1499,10 +1499,11 @@ body.light-theme .keys-scan-table tr.is-error input { background: #fff1f3; }
 
 .keys-copy-value,
 .keys-current-assignment-value {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 30px;
     min-width: 0;
     align-items: center;
-    gap: 7px;
+    gap: 8px;
 }
 
 .keys-copy-value .keys-technical-value {
@@ -1513,38 +1514,100 @@ body.light-theme .keys-scan-table tr.is-error input { background: #fff1f3; }
     user-select: text;
 }
 
+.copy-button,
 .keys-copy-button {
+    box-sizing: border-box;
     display: inline-grid;
-    width: 27px;
-    height: 27px;
+    width: 30px;
+    min-width: 30px;
+    max-width: 30px;
+    height: 30px;
+    min-height: 30px;
+    max-height: 30px;
     flex: 0 0 auto;
-    place-items: center;
+    align-items: center;
+    justify-content: center;
+    justify-self: end;
+    align-self: center;
+    gap: 0;
     padding: 0;
+    overflow: hidden;
     border: 1px solid var(--line-soft);
     border-radius: 7px;
     color: var(--blue);
     background: rgba(0, 145, 232, .07);
     font: inherit;
+    line-height: 0;
     cursor: pointer;
-    transition: border-color .15s ease, color .15s ease, background .15s ease;
+    box-shadow: none;
+    transform: none;
+    transition: border-color .15s ease, color .15s ease, background .15s ease, box-shadow .15s ease;
 }
 
+.copy-button svg,
+.keys-copy-button svg {
+    grid-area: 1 / 1;
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    pointer-events: none;
+    transition: opacity .15s ease, transform .15s ease;
+}
+
+.copy-button__success-icon {
+    opacity: 0;
+    transform: scale(.72);
+}
+
+.copy-button:hover,
+.copy-button:focus-visible,
 .keys-copy-button:hover,
 .keys-copy-button:focus-visible {
     border-color: var(--blue);
     background: rgba(0, 145, 232, .14);
+    box-shadow: 0 0 0 3px rgba(0, 145, 232, .1);
     outline: none;
+    transform: none;
 }
 
+.copy-button.is-copied,
 .keys-copy-button.is-copied {
     color: #42db91;
     border-color: rgba(66, 219, 145, .5);
     background: rgba(66, 219, 145, .1);
 }
 
+.copy-button.is-copied .copy-button__copy-icon {
+    opacity: 0;
+    transform: scale(.72);
+}
+
+.copy-button.is-copied .copy-button__success-icon {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.copy-button.is-copy-error,
 .keys-copy-button.is-copy-error {
     color: #ff5b73;
     border-color: rgba(255, 91, 115, .55);
+}
+
+body.light-theme .copy-button {
+    color: #087fc3;
+    border-color: rgba(38, 135, 194, .3);
+    background: rgba(13, 142, 221, .07);
+}
+
+body.light-theme .copy-button:hover,
+body.light-theme .copy-button:focus-visible {
+    color: #056da9;
+    border-color: rgba(13, 142, 221, .58);
+    background: rgba(13, 142, 221, .13);
 }
 
 .keys-side-facts code {
@@ -2584,9 +2647,10 @@ body.light-theme .keys-free-toggle i {
 }
 
 .key-assignment-edit-form-wide {
-    grid-template-columns: minmax(180px, .7fr) minmax(280px, 1.5fr) minmax(160px, .6fr);
+    grid-template-columns: minmax(190px, .75fr) minmax(360px, 1.65fr) minmax(170px, .6fr);
     gap: 14px;
     padding: 16px;
+    align-items: start;
 }
 
 .key-assignment-edit-form-wide .is-wide { grid-column: 1 / -1; }
@@ -2601,6 +2665,42 @@ body.light-theme .keys-free-toggle i {
 .key-assignment-edit-form-wide textarea {
     min-height: 108px;
     resize: vertical;
+}
+
+.key-assignment-owner-type,
+.key-assignment-address-search,
+.key-assignment-apartment {
+    align-self: start;
+    min-width: 0;
+}
+
+.key-assignment-owner-type > select,
+.key-assignment-apartment > input,
+.key-assignment-address-control > input {
+    min-height: var(--control-height, 44px);
+}
+
+.key-assignment-address-control {
+    position: relative;
+    display: block;
+    min-width: 0;
+}
+
+.key-assignment-address-control .search-icon {
+    position: absolute;
+    top: 50%;
+    left: 14px;
+    z-index: 1;
+    color: var(--color-icon, var(--blue-2));
+    font-size: 18px;
+    line-height: 1;
+    pointer-events: none;
+    transform: translateY(-50%);
+}
+
+.key-assignment-address-control > input {
+    margin: 0;
+    padding-left: 42px;
 }
 
 body.light-theme .key-assignment-edit {

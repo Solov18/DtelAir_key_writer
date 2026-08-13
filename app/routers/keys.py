@@ -11,7 +11,6 @@ from app.repositories.key_repository import (
     KEY_STATUSES,
     create_key_type,
     get_all_keys_for_export,
-    get_assignment_addresses,
     get_key,
     get_key_assignments,
     get_key_history,
@@ -503,7 +502,6 @@ def key_detail(request: Request, key_id: int):
             "key_types": get_key_types(),
             "key_statuses": KEY_STATUSES,
             "assignments": get_key_assignments(key_id),
-            "assignment_addresses": get_assignment_addresses(),
             "assignment_type_names": ASSIGNMENT_TYPE_NAMES,
             "history": history,
             "assignment_changes": [
