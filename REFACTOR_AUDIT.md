@@ -97,7 +97,7 @@
 | HTML response replacement | JSON успешен, но `document.write`/validation падает | loader закрыт в `finally` до render | показывать app dialog; не оставлять старую форму disabled |
 | polling panels | overlapping/background state при медленном ответе | следующий timer ставится после await | сохранить serial polling, явно `globalLoader:false` |
 
-В `global-loader.js` остались `console.debug/info` диагностические записи. Это не функциональный дефект, но их нужно классифицировать до cleanup: часть полезна для production diagnostics, часть выглядит временной (`global_loader.hide/reset`, `key_write.request.*`).
+Временные `console.debug/info` записи загрузчика и сценариев записи удалены при production cleanup. Ошибки по-прежнему проходят через прикладные диалоги и `console.error`, а серверные ошибки — через стандартный журнал приложения без вывода секретов.
 
 ## 4. Модальные окна
 

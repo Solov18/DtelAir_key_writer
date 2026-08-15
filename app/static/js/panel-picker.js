@@ -22,7 +22,7 @@
                 minimumQueryLength: 2,
                 itemClass: "panel-picker__item",
                 bodyClass: "panel-picker__body",
-                emptyText: "Панели не найдены. Уточните адрес или назначение точки доступа.",
+                emptyText: "Панели не найдены. Уточните адрес.",
                 shortQueryText: "Введите не менее двух символов.",
                 loadingText: "Поиск…",
                 errorText: "Не удалось выполнить поиск. Повторите попытку.",

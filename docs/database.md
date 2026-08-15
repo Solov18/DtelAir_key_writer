@@ -1,7 +1,7 @@
 # База данных PostgreSQL
 
 Документ описывает фактическую структуру SQLAlchemy и Alembic после ревизии
-`20260730_06`. Рабочий движок — PostgreSQL через `SQLAlchemy 2` и
+`20260814_09`. Рабочий движок — PostgreSQL через `SQLAlchemy 2` и
 `psycopg`; URL подключения берётся из `DATABASE_URL`.
 
 ## Общая схема
@@ -81,6 +81,7 @@ flowchart LR
 
 FK `key_type_id → key_types.id ON DELETE RESTRICT`. Уникальный индекс
 `idx_keys_type_number` действует на `(key_type_id, lower(number))`;
+`uq_keys_hex_nonempty_ci` запрещает повтор непустого HEX без учёта регистра,
 `idx_keys_hex_lookup` ускоряет поиск по HEX, `idx_keys_status` — по статусу.
 Рабочий ключ без HEX прикладной код не создаёт и не назначает.
 
@@ -107,7 +108,7 @@ FK `key_type_id → key_types.id ON DELETE RESTRICT`. Уникальный ин�
 |---|---|---|
 | `id` | `INTEGER`, PK | ID пользователя. |
 | `full_name` | `TEXT NOT NULL` | Имя. |
-| `login` | `TEXT NOT NULL UNIQUE` | Логин. |
+| `login` | `TEXT NOT NULL UNIQUE` | Логин. Дополнительный индекс `uq_users_login_ci` запрещает дубликаты без учёта регистра. |
 | `password_hash` | `TEXT NOT NULL` | Хеш пароля. |
 | `role_id` | `INTEGER NOT NULL`, FK | Одна назначенная роль. |
 | `active` | `INTEGER` | Доступ разрешён. |

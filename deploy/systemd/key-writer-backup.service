@@ -1,0 +1,22 @@
+[Unit]
+Description=Backup Dtel Key Writer PostgreSQL database
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=key-writer
+Group=key-writer
+WorkingDirectory=/opt/key-writer
+EnvironmentFile=/etc/key-writer/key-writer.env
+Environment=PGSERVICEFILE=/etc/key-writer/pg_service.conf
+Environment=PGPASSFILE=/etc/key-writer/pgpass
+ExecStart=/opt/key-writer/deploy/scripts/backup-postgres.sh
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/backups/key-writer
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=key-writer-backup

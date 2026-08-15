@@ -127,6 +127,23 @@ class UniversalSearchTests(PostgreSQLTestCase):
         self.assertEqual(result["panel_results"], [])
         self.assertEqual(result["result_counts"]["panels"], 0)
 
+    def test_universal_search_matches_padded_key_number(self):
+        with db() as conn:
+            key_id = int(
+                conn.execute(
+                    """
+                    INSERT INTO keys(key_type_id, number, hex_value, status)
+                    VALUES (?, '000050', 'AA005050', 'free')
+                    """,
+                    (self.key_type_id,),
+                ).lastrowid
+            )
+
+        result = universal_search("50")
+
+        self.assertEqual(result["key"]["id"], key_id)
+        self.assertIn(key_id, {item["id"] for item in result["inventory_results"]})
+
     def test_key_suggestion_keeps_unambiguous_hex_as_value(self):
         suggestions = get_search_suggestions(
             "F0291360",

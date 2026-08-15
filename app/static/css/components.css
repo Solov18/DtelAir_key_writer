@@ -454,6 +454,7 @@ body.light-theme .theme-moon {
 .app-dialog p { min-height:24px; margin:10px 0 22px; color:var(--muted); font-size:14px; line-height:1.55; white-space:pre-line; }
 .app-dialog__actions { display:flex; justify-content:flex-end; gap:10px; }
 .app-dialog__actions .btn { min-width:130px; }
+.app-dialog__actions [hidden] { display:none !important; }
 .app-dialog[data-variant="danger"] .app-dialog__panel { border-color:rgba(255,74,95,.5); box-shadow:0 24px 80px rgba(0,0,0,.48),0 0 34px rgba(255,44,75,.12); }
 .app-dialog[data-variant="danger"] .app-dialog__icon { color:#ff6b7b; border-color:rgba(255,74,95,.4); background:rgba(255,74,95,.1); }
 .app-dialog[data-variant="danger"] .app-dialog__eyebrow { color:#ff6b7b; }

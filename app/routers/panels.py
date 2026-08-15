@@ -273,7 +273,7 @@ def panels_monitor_state(
 
 
 @router.post("/panels/{panel_id}/check")
-async def panel_check(request: Request, panel_id: int):
+def panel_check(request: Request, panel_id: int):
     if not _is_admin(request):
         return JSONResponse(
             {"ok": False, "error": "Недостаточно прав для проверки панели"},
@@ -309,7 +309,10 @@ async def panel_check(request: Request, panel_id: int):
             },
             status_code=429,
         )
-    result = await run_in_threadpool(check_panel, panel)
+    # A synchronous route is executed by Starlette's worker thread pool.  The
+    # panel HTTP request and the synchronous repositories therefore cannot
+    # block the Uvicorn event loop.
+    result = check_panel(panel)
     update_panel_api_status(panel_id, result)
     updated_panel = get_panel_by_id(panel_id)
     log_event(
@@ -404,8 +407,11 @@ def panel_toggle(request: Request, panel_id: int, enabled: int = Form(...)):
 
 @router.post("/panels/import")
 async def panels_import(request: Request, file: UploadFile = File(...)):
-    report = import_panels_excel(file.filename or "", await file.read())
-    log_event(
+    filename = file.filename or ""
+    content = await file.read()
+    report = await run_in_threadpool(import_panels_excel, filename, content)
+    await run_in_threadpool(
+        log_event,
         request=request,
         action="panel_import",
         object_type="Файл панелей",
@@ -421,9 +427,10 @@ async def panels_import(request: Request, file: UploadFile = File(...)):
 
 @router.get("/panels/export")
 def panels_export():
-    workbook = Workbook()
-    sheet = workbook.active
+    workbook = Workbook(write_only=True)
+    sheet = workbook.create_sheet()
     sheet.title = "Панели"
+    sheet.freeze_panes = "A2"
     sheet.append(
         [
             "ID", "Адрес", "Подъезд / вход", "Название", "IP", "MAC",
@@ -431,7 +438,8 @@ def panels_export():
             "Последняя проверка", "Последний онлайн",
         ]
     )
-    for panel in get_all_panels():
+    panels = get_all_panels()
+    for panel in panels:
         sheet.append(
             [
                 panel["id"], panel["address"], panel["entrance"], panel["name"],
@@ -441,8 +449,9 @@ def panels_export():
                 excel_safe_value(panel.get("last_online_at", "")),
             ]
         )
-    sheet.freeze_panes = "A2"
-    sheet.auto_filter.ref = sheet.dimensions
+    # The row count is cheap to track here and avoids normal-mode worksheets,
+    # which retain every Excel cell in memory.
+    sheet.auto_filter.ref = f"A1:L{len(panels) + 1}"
     output = io.BytesIO()
     workbook.save(output)
     output.seek(0)

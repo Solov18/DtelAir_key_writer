@@ -1,10 +1,14 @@
 import json
 import logging
+from contextlib import contextmanager
+from threading import BoundedSemaphore
 
 import requests
+from sqlalchemy import create_engine, text
+from sqlalchemy.pool import NullPool
 
-from app.db import db
-from app.repositories.key_repository import set_key_assignment
+from app.db import db, get_engine
+from app.repositories.key_repository import get_key_write_contexts, set_key_assignment
 from app.services.crm import crm_add_key
 
 
@@ -17,9 +21,42 @@ UNAVAILABLE_KEY_STATUSES = {
     "defective": "Ключ отмечен как брак",
     "archived": "Ключ находится в архиве",
 }
+_WRITE_LOCK_CONNECTIONS = BoundedSemaphore(2)
 
 
-def write_key_to_panels(
+@contextmanager
+def _serialized_key_write(key_id: int | None):
+    """Serialize one physical key operation across all FastAPI workers."""
+
+    if not key_id:
+        yield
+        return
+    # Keep the value in PostgreSQL's signed bigint range and outside the
+    # monitor's fixed advisory-lock identifier.
+    lock_id = ((int(key_id) & 0x7FFFFFFF) << 32) | 0x4B4559
+    # The advisory lock uses a dedicated non-pooled connection. Holding a
+    # regular pool slot while repositories open their own transactions could
+    # otherwise exhaust a small pool under concurrent writes.
+    with _WRITE_LOCK_CONNECTIONS:
+        lock_engine = create_engine(get_engine().url, poolclass=NullPool)
+        try:
+            with lock_engine.connect() as lock_connection:
+                lock_connection.execute(
+                    text("SELECT pg_advisory_lock(:lock_id)"),
+                    {"lock_id": lock_id},
+                )
+                try:
+                    yield
+                finally:
+                    lock_connection.execute(
+                        text("SELECT pg_advisory_unlock(:lock_id)"),
+                        {"lock_id": lock_id},
+                    )
+        finally:
+            lock_engine.dispose()
+
+
+def _write_key_to_panels_unlocked(
     mode: str,
     key_item: dict,
     panels: list[dict],
@@ -419,3 +456,49 @@ def write_key_to_panels(
     )
 
     return results
+
+
+def write_key_to_panels(
+    mode: str,
+    key_item: dict,
+    panels: list[dict],
+    flat_num="0",
+    inner=1,
+    address="",
+    request=None,
+    assignment_type: str = "",
+    employee_id: int | None = None,
+    uk_group_id: int | None = None,
+    assignment_policy: str = "replace",
+    known_panel_ids: set[int] | None = None,
+    write_option: str = "",
+    previous_assignment: str = "",
+    automatic_panel_ids: set[int] | None = None,
+    manual_panel_ids: set[int] | None = None,
+):
+    """Write one key safely, including when several web workers race."""
+
+    key_id = int(key_item["id"]) if key_item.get("id") else None
+    with _serialized_key_write(key_id):
+        refreshed_known = set(known_panel_ids or set())
+        if key_id:
+            context = get_key_write_contexts([key_id]).get(key_id, {})
+            refreshed_known.update(int(value) for value in context.get("panel_ids", []))
+        return _write_key_to_panels_unlocked(
+            mode,
+            key_item,
+            panels,
+            flat_num=flat_num,
+            inner=inner,
+            address=address,
+            request=request,
+            assignment_type=assignment_type,
+            employee_id=employee_id,
+            uk_group_id=uk_group_id,
+            assignment_policy=assignment_policy,
+            known_panel_ids=refreshed_known,
+            write_option=write_option,
+            previous_assignment=previous_assignment,
+            automatic_panel_ids=automatic_panel_ids,
+            manual_panel_ids=manual_panel_ids,
+        )

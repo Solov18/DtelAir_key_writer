@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+from datetime import datetime, timezone
 from html.parser import HTMLParser
 from threading import RLock
 from time import monotonic
@@ -64,11 +65,17 @@ def crm_auth_configured() -> bool:
 
 def check_crm_connection() -> dict:
     """Authenticate and perform one read-only request without exposing secrets."""
+    checked_at = datetime.now(timezone.utc).isoformat()
     if not crm_auth_configured():
         return {
             "ok": False,
+            "status": "not_configured",
             "message": "CRM не настроена: задайте Cookie или логин, пароль и Buyer ID.",
+            "http_status": None,
+            "response_time_ms": None,
+            "checked_at": checked_at,
         }
+    started = monotonic()
     try:
         with _crm_lock:
             _reset_session()
@@ -85,12 +92,47 @@ def check_crm_connection() -> dict:
                 raise CrmAuthError(f"CRM временно недоступна: HTTP {response.status_code}")
             return {
                 "ok": True,
+                "status": "ok",
                 "message": f"CRM доступна, сервер ответил HTTP {response.status_code}.",
+                "http_status": response.status_code,
+                "response_time_ms": max(1, round((monotonic() - started) * 1000)),
+                "checked_at": checked_at,
             }
-    except (CrmAuthError, requests.RequestException) as error:
+    except requests.Timeout:
         return {
             "ok": False,
-            "message": str(error)[:300] or "Не удалось проверить подключение к CRM.",
+            "status": "timeout",
+            "message": "CRM не ответила за отведённое время.",
+            "http_status": None,
+            "response_time_ms": max(1, round((monotonic() - started) * 1000)),
+            "checked_at": checked_at,
+        }
+    except requests.ConnectionError:
+        return {
+            "ok": False,
+            "status": "connection_error",
+            "message": "Не удалось установить соединение с CRM. Проверьте DNS и сетевой доступ.",
+            "http_status": None,
+            "response_time_ms": max(1, round((monotonic() - started) * 1000)),
+            "checked_at": checked_at,
+        }
+    except CrmAuthError:
+        return {
+            "ok": False,
+            "status": "auth_error",
+            "message": "CRM отклонила текущие данные авторизации.",
+            "http_status": None,
+            "response_time_ms": max(1, round((monotonic() - started) * 1000)),
+            "checked_at": checked_at,
+        }
+    except requests.RequestException:
+        return {
+            "ok": False,
+            "status": "connection_error",
+            "message": "Не удалось безопасно проверить подключение к CRM.",
+            "http_status": None,
+            "response_time_ms": max(1, round((monotonic() - started) * 1000)),
+            "checked_at": checked_at,
         }
 
 

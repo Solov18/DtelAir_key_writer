@@ -124,6 +124,16 @@ class MessageParserTests(PostgreSQLTestCase):
         self.assertTrue(rows[0]["ambiguous"])
         self.assertEqual(len(rows[0]["matches"]), 2)
 
+    def test_message_number_matches_stored_number_with_leading_zeroes(self):
+        orange_id = self._create_type("Оранжевый", "#FF982A")
+        key_repository.save_prepared_key(orange_id, "000050", "AABB0050")
+
+        rows = _build_key_rows(parse_message("Ключи: 50 ор")["key_requests"])
+
+        self.assertEqual(rows[0]["item"]["number"], "000050")
+        self.assertFalse(rows[0]["ambiguous"])
+        self.assertFalse(rows[0]["identity_conflict"])
+
     def test_free_form_message_finds_address_apartment_keys_and_phone(self):
         self._create_panel(
             "Тепличная улица 65, корпус 1",

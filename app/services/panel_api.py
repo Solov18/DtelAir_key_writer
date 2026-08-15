@@ -1,4 +1,5 @@
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 import requests
@@ -160,7 +161,12 @@ def check_panel_api_connection() -> dict:
     if not panel_api_configured():
         return {
             "ok": False,
+            "status": "not_configured",
             "message": "Логин или пароль API панелей не настроен",
+            "panel_id": None,
+            "panel_name": None,
+            "response_time_ms": None,
+            "checked_at": datetime.now(timezone.utc).isoformat(),
         }
     from app.repositories.panel_repository import get_enabled_panels
 
@@ -175,13 +181,26 @@ def check_panel_api_connection() -> dict:
     if not panel:
         return {
             "ok": False,
+            "status": "not_configured",
             "message": "Нет включённой панели с IP-адресом для безопасной проверки",
+            "panel_id": None,
+            "panel_name": None,
+            "response_time_ms": None,
+            "checked_at": datetime.now(timezone.utc).isoformat(),
         }
     result = check_panel(panel)
+    common = {
+        "panel_id": panel.get("id"),
+        "panel_name": str(panel.get("name") or panel.get("address") or "Панель"),
+        "response_time_ms": result.get("response_time_ms"),
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+    }
     if result.get("status") == "online":
         return {
             "ok": True,
+            "status": "ok",
             "message": "API панели доступен, авторизация выполнена успешно",
+            **common,
         }
     safe_messages = {
         "auth_error": "Панель отклонила текущие реквизиты API",
@@ -190,10 +209,12 @@ def check_panel_api_connection() -> dict:
     }
     return {
         "ok": False,
+        "status": str(result.get("status") or "error"),
         "message": safe_messages.get(
             str(result.get("status") or ""),
             "Проверка API панели завершилась ошибкой",
         ),
+        **common,
     }
 
 

@@ -3,6 +3,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.services.auth import authenticate_user, get_current_user
 from app.templates_config import templates
+from app.access_control import is_lookup_user
 
 router = APIRouter()
 
@@ -12,7 +13,10 @@ def login_page(request: Request):
     current_user = get_current_user(request)
 
     if current_user:
-        return RedirectResponse("/", status_code=303)
+        return RedirectResponse(
+            "/search" if is_lookup_user(current_user) else "/",
+            status_code=303,
+        )
 
     return templates.TemplateResponse(
         "login.html",
@@ -50,7 +54,10 @@ def login(
         "role": user["role"],
     }
 
-    return RedirectResponse("/", status_code=303)
+    return RedirectResponse(
+        "/search" if is_lookup_user(user) else "/",
+        status_code=303,
+    )
 
 
 @router.post("/logout")

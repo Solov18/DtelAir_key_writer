@@ -108,7 +108,7 @@ def test_uk_registry_migration_rebuilds_empty_legacy_tables():
                     """
                 )
             ).mappings().one()
-        assert revision == "20260730_06"
+        assert revision == "20260814_09"
         assert group["crm_login"] == "migration-login"
         assert group["crm_password"] == "migration-password"
         assert group["archived_at"] is None
@@ -121,7 +121,7 @@ def test_uk_registry_migration_rebuilds_empty_legacy_tables():
         with scoped_engine.connect() as connection:
             assert (
                 connection.scalar(text("SELECT version_num FROM alembic_version"))
-                    == "20260730_06"
+                    == "20260814_09"
             )
         scoped_engine.dispose()
     finally:

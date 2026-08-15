@@ -13,6 +13,14 @@ import re
 
 from app.db import db
 from app.search_utils import normalize_search_text
+from app.key_numbers import (
+    exact_key_number_sql,
+    is_numeric_key_number,
+    key_number_search_sql,
+    key_numbers_equal,
+    normalize_key_number_for_lookup,
+    normalized_key_number_sql,
+)
 
 
 class KeySearchProfile(StrEnum):
@@ -64,8 +72,8 @@ def normalize_key_hex(value: str) -> str:
 
 
 def normalize_key_number(value: str) -> str:
-    """Keep a key number textual; leading zeroes are meaningful."""
-    return (value or "").strip()
+    """Compatibility alias for the shared lookup normalization rule."""
+    return normalize_key_number_for_lookup(value)
 
 
 def _compact_query(value: str) -> str:
@@ -93,7 +101,8 @@ class KeySearchService:
 
         compact = _compact_query(raw)
         numeric = compact if compact.isdigit() else ""
-        numeric_unpadded = numeric.lstrip("0") or ("0" if numeric else "")
+        numeric_unpadded = normalize_key_number_for_lookup(numeric) if numeric else ""
+        normalized_number_sql = normalized_key_number_sql("k.number")
         conditions = ["kt.enabled = 1"]
         if profile != KeySearchProfile.EXACT_LOOKUP:
             conditions.append("BTRIM(k.hex_value) <> ''")
@@ -101,10 +110,11 @@ class KeySearchService:
 
         if normalized:
             if exact_only or profile == KeySearchProfile.EXACT_LOOKUP:
+                number_sql, number_params = exact_key_number_sql("k.number", raw)
                 conditions.append(
-                    "(LOWER(k.number) = LOWER(?) OR UPPER(k.hex_value) = ?)"
+                    f"(({number_sql}) OR UPPER(k.hex_value) = ?)"
                 )
-                params.extend([raw, normalize_key_hex(raw)])
+                params.extend([*number_params, normalize_key_hex(raw)])
             else:
                 search_value = "CONCAT_WS(' ', kt.name, k.number, k.hex_value)"
                 terms = [
@@ -114,13 +124,25 @@ class KeySearchService:
                 ] or [normalized]
                 prefix_term = terms[-1] if len(terms) > 1 else ""
                 for term in terms[:-1] if prefix_term else terms:
-                    conditions.append(f"SMART_NORM({search_value}) LIKE ?")
-                    params.append(f"%{term}%")
+                    if is_numeric_key_number(term):
+                        number_sql, number_params = key_number_search_sql(
+                            "k.number", term, pattern=f"%{term}%"
+                        )
+                        conditions.append(
+                            f"(SMART_NORM({search_value}) LIKE ? OR {number_sql})"
+                        )
+                        params.extend([f"%{term}%", *number_params])
+                    else:
+                        conditions.append(f"SMART_NORM({search_value}) LIKE ?")
+                        params.append(f"%{term}%")
                 if prefix_term:
-                    conditions.append(
-                        "(SMART_NORM(k.number) LIKE ? OR SMART_NORM(k.hex_value) LIKE ?)"
+                    number_sql, number_params = key_number_search_sql(
+                        "k.number", prefix_term, pattern=f"{prefix_term}%"
                     )
-                    params.extend([f"{prefix_term}%", f"{prefix_term}%"])
+                    conditions.append(
+                        f"({number_sql} OR SMART_NORM(k.hex_value) LIKE ?)"
+                    )
+                    params.extend([*number_params, f"{prefix_term}%"])
         if type_id is not None:
             conditions.append("kt.id = ?")
             params.append(int(type_id))
@@ -148,7 +170,8 @@ class KeySearchService:
                            {available_sql} AS available,
                            CASE
                                WHEN UPPER(REGEXP_REPLACE(k.hex_value, '[^0-9A-Za-z]', '', 'g')) = ? THEN 0
-                               WHEN ? <> '' AND COALESCE(NULLIF(LTRIM(k.number, '0'), ''), '0') = ? THEN 0
+                               WHEN ? <> '' AND BTRIM(k.number) ~ '^[0-9]+$'
+                                    AND {normalized_number_sql} = ? THEN 0
                                WHEN SMART_NORM(k.number) = ? OR SMART_NORM(k.hex_value) = ? THEN 1
                                WHEN SMART_NORM(k.number) LIKE ? OR SMART_NORM(k.hex_value) LIKE ? THEN 2
                                ELSE 3
@@ -214,7 +237,7 @@ class KeySearchService:
     def exact_lookup(
         cls, value: str, *, type_id: int | None = None, limit: int = 100
     ) -> list[KeySearchResult]:
-        raw = normalize_key_number(value)
+        raw = str(value or "").strip()
         if not raw:
             return []
         # Preserve the old priority: an exact printed number wins over HEX.
@@ -225,7 +248,10 @@ class KeySearchService:
             exact_only=True,
             limit=limit,
         )
-        exact_numbers = [item for item in number_matches if item.number.lower() == raw.lower()]
+        exact_numbers = [
+            item for item in number_matches
+            if key_numbers_equal(item.number, raw)
+        ]
         if exact_numbers:
             return exact_numbers
         normalized_hex = normalize_key_hex(raw)

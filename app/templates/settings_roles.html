@@ -57,14 +57,15 @@
                 </div>
                 <div class="permission-grid">
                     {% for permission in permissions %}
-                    {% set locked = selected_role.code == 'admin' and permission.code in critical_permissions %}
+                    {% set lookup_role = selected_role.code == 'lookup' %}
+                    {% set locked = lookup_role or (selected_role.code == 'admin' and permission.code in critical_permissions) %}
                     <label class="permission-card {% if permission.code in selected_role.permissions %}is-enabled{% endif %} {% if locked %}is-locked{% endif %}">
                         <input type="checkbox" name="permissions" value="{{ permission.code }}"
                                {% if permission.code in selected_role.permissions %}checked{% endif %}
                                {% if locked %}disabled{% endif %}>
-                        {% if locked %}<input type="hidden" name="permissions" value="{{ permission.code }}">{% endif %}
+                        {% if locked and permission.code in selected_role.permissions %}<input type="hidden" name="permissions" value="{{ permission.code }}">{% endif %}
                         <span><b>{{ permission.name }}</b><small>{{ permission.description }}</small></span>
-                        <em>{{ "Обязательно" if locked else "Разрешено" }}</em>
+                        <em>{% if lookup_role %}{{ "Обязательно" if permission.code in selected_role.permissions else "Недоступно" }}{% elif locked %}Обязательно{% else %}Разрешено{% endif %}</em>
                     </label>
                     {% endfor %}
                 </div>

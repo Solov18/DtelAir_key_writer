@@ -68,6 +68,10 @@
 
         <nav class="sidebar-nav">
 
+            {% set nav_user = current_user(request) %}
+            {% set lookup_only = is_lookup_user(nav_user) %}
+
+            {% if not lookup_only %}
             <a class="nav-item" href="/">
                 <svg viewBox="0 0 24 24">
                     <path d="M3 10.5 12 3l9 7.5V21a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>
@@ -93,6 +97,7 @@
 
                 <span>Обычная запись</span>
             </a>
+            {% endif %}
 
             <a class="nav-item" href="/search">
                 <svg viewBox="0 0 24 24">
@@ -103,6 +108,7 @@
                 <span>Универсальный поиск</span>
             </a>
 
+            {% if not lookup_only %}
             <a class="nav-item" href="/employees">
                 <svg viewBox="0 0 24 24">
                     <path d="M20 21a8 8 0 0 0-16 0"/>
@@ -156,6 +162,7 @@
                 </svg>
                 <span>Настройки</span>
             </a>
+            {% endif %}
             {% endif %}
 
         </nav>
@@ -455,7 +462,7 @@
     }
 </script>
 
-<script src="/static/js/global-loader.js?v=6"></script>
+<script src="/static/js/global-loader.js?v=12"></script>
 <script src="/static/js/date-time.js?v=1"></script>
 <script src="/static/js/theme.js?v=5"></script>
 <script src="/static/js/smart-search.js?v=5"></script>

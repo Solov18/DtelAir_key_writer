@@ -32,7 +32,6 @@
                 headers: {Accept: "application/json", ...(options.headers || {})},
                 cache: options.cache || "no-store",
                 signal: controller.signal,
-                globalLoader: false,
             });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             return await response.json();

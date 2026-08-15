@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+import re
+
+from fastapi.testclient import TestClient
+
 from app.db import db
+from app.main import app
 from app.repositories import uk_repository
-from app.repositories.key_repository import search_keys_for_selection
+from app.repositories.key_repository import get_keys_page, search_keys_for_selection
+from app.repositories.user_repository import create_user
 from app.routers.message import message_panel_search
 from app.routers.search import key_picker_search, panel_picker_search
+from app.services.auth import hash_password
 from app.services.key_search import KeySearchProfile, KeySearchService
-from app.services.keys import find_keys
+from app.services.keys import find_key, find_keys
+from app.key_numbers import normalize_key_number_for_lookup
 from app.services.panel_search import PanelSearchProfile, PanelSearchService
 from tests.postgres_test_case import PostgreSQLTestCase
 
@@ -89,6 +97,90 @@ class BackendSearchServiceTests(PostgreSQLTestCase):
         self.assertIn("Тестовая 10", occupied.current_owner)
         self.assertIn("кв. 32", occupied.current_owner)
         self.assertEqual(find_keys("000124")[0]["id"], ids["occupied"])
+
+    def test_numeric_key_lookup_ignores_zero_padding_and_respects_type(self):
+        blue = self._type("Синий", "#2A9DF4")
+        orange = self._type("Оранжевый", "#FF982A")
+        blue_key = self._key(blue, "Синий", "50", "AA000050")
+        orange_key = self._key(orange, "Оранжевый", "000050", "BB000050")
+        first_key = self._key(orange, "Оранжевый", "000001", "BB000001")
+
+        self.assertEqual(normalize_key_number_for_lookup("000000"), "0")
+        self.assertEqual(
+            {item.id for item in KeySearchService.exact_lookup("50")},
+            {blue_key, orange_key},
+        )
+        self.assertEqual(
+            {item.id for item in KeySearchService.exact_lookup("000050")},
+            {blue_key, orange_key},
+        )
+        self.assertEqual(
+            [item.id for item in KeySearchService.exact_lookup("1")],
+            [first_key],
+        )
+        ambiguous = find_key("50")
+        self.assertTrue(ambiguous["_ambiguous"])
+        self.assertEqual({item["id"] for item in ambiguous["matches"]}, {blue_key, orange_key})
+        self.assertEqual(find_key("50", orange)["id"], orange_key)
+        self.assertEqual(find_key("000050", blue)["id"], blue_key)
+
+        registry = get_keys_page(query="50", page=1, page_size=20)
+        self.assertTrue({blue_key, orange_key} <= {item["id"] for item in registry["items"]})
+        picker = search_keys_for_selection("50", limit=20)
+        self.assertTrue({blue_key, orange_key} <= {item["id"] for item in picker})
+
+    def test_registry_numeric_query_is_exact_across_padding_and_types(self):
+        blue = self._type("Синий", "#2A9DF4")
+        orange = self._type("Оранжевый", "#FF982A")
+        blue_key = self._key(blue, "Синий", "12", "AA000012")
+        orange_key = self._key(orange, "Оранжевый", "000012", "BB000012")
+        unrelated = self._key(orange, "Оранжевый", "009128", "BB009128")
+
+        for query in ("12", "012", "00012"):
+            result = get_keys_page(query=query, page=1, page_size=20)
+            self.assertEqual(
+                {blue_key, orange_key},
+                {item["id"] for item in result["items"]},
+            )
+            self.assertNotIn(unrelated, {item["id"] for item in result["items"]})
+
+        blue_result = get_keys_page(query="00012", key_type_id=blue)
+        orange_result = get_keys_page(query="12", key_type_id=orange)
+        self.assertEqual([blue_key], [item["id"] for item in blue_result["items"]])
+        self.assertEqual([orange_key], [item["id"] for item in orange_result["items"]])
+
+    def test_keys_http_form_query_returns_exact_numeric_matches(self):
+        blue = self._type("Синий", "#2A9DF4")
+        exact_id = self._key(blue, "Синий", "12", "CC000012")
+        self._key(blue, "Синий", "009128", "CC009128")
+        password = "number-search-test-password"
+        create_user("Тестовый администратор", "number-search-admin", hash_password(password), "admin")
+
+        client = TestClient(app)
+        login_page = client.get("/login")
+        csrf_match = re.search(
+            r'name="csrf_token"\s+value="([^"]+)"',
+            login_page.text,
+        )
+        self.assertIsNotNone(csrf_match)
+        login_response = client.post(
+            "/login",
+            data={
+                "login": "number-search-admin",
+                "password": password,
+                "csrf_token": csrf_match.group(1),
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(login_response.status_code, 303)
+
+        response = client.get("/keys", params={"q": "00012"})
+        self.assertEqual(response.status_code, 200)
+        page = get_keys_page(query="00012", page=1, page_size=20)
+        self.assertEqual([exact_id], [item["id"] for item in page["items"]])
+        self.assertIn('name="q"', response.text)
+        self.assertIn('value="00012"', response.text)
+        self.assertIn("12", response.text)
 
     def test_key_partial_type_hex_filters_ranking_limit_and_legacy_adapter(self):
         ids = self._key_fixture()

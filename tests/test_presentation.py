@@ -226,7 +226,10 @@ class PresentationTests(unittest.TestCase):
         login = Path("app/templates/login.html").read_text(encoding="utf-8")
         loader_template = Path("app/templates/_global_loader.html").read_text(encoding="utf-8")
         styles = Path("app/static/css/global-loader.css").read_text(encoding="utf-8")
+        components = Path("app/static/css/components.css").read_text(encoding="utf-8")
         script = Path("app/static/js/global-loader.js").read_text(encoding="utf-8")
+        keys_router = Path("app/routers/keys.py").read_text(encoding="utf-8")
+        panels_router = Path("app/routers/panels.py").read_text(encoding="utf-8")
 
         self.assertEqual(loader_template.count('id="globalLoader"'), 1)
         self.assertIn("{% include '_global_loader.html' %}", base)
@@ -239,25 +242,50 @@ class PresentationTests(unittest.TestCase):
             base.index("/static/js/global-loader.js"),
         )
         self.assertIn("const requests = new Map()", script)
-        self.assertIn("window.showGlobalLoader = show", script)
-        self.assertIn("window.hideGlobalLoader = hide", script)
+        self.assertIn("window.GlobalLoader = GlobalLoader", script)
+        self.assertIn("begin,\n        end,\n        reset,", script)
+        self.assertIn("get activeCount() { return requests.size; }", script)
+        self.assertIn("if (requestId == null || !requests.has(requestId)) return false", script)
+        self.assertNotIn("window.showGlobalLoader", script)
+        self.assertNotIn("window.hideGlobalLoader", script)
         self.assertIn("async function runWithLoader", script)
-        self.assertIn("finally {\n            hide(requestId);", script)
+        self.assertIn("finally {\n            end(requestId);", script)
         self.assertIn('addEventListener("loadend"', script)
+        self.assertIn('addEventListener("error"', script)
+        self.assertIn('addEventListener("abort"', script)
+        self.assertIn('addEventListener("timeout"', script)
         self.assertIn('document.addEventListener("submit"', script)
         self.assertIn("HTMLFormElement.prototype.submit", script)
         self.assertIn('document.addEventListener("click"', script)
         self.assertIn('options.globalLoader === false', script)
-        self.assertIn('show({overlay: method !== "GET"})', script)
+        self.assertIn('overlay: method !== "GET"', script)
         self.assertIn("isDownloadLink(anchor)", script)
+        self.assertIn("function suppressNavigationLoader()", script)
+        self.assertIn("Downloads can fire beforeunload", script)
+        self.assertIn('submitter?.hasAttribute?.("formaction")', script)
+        self.assertIn('submitter?.hasAttribute?.("formmethod")', script)
+        self.assertNotIn("submitter?.formAction || form.action", script)
+        self.assertNotIn("submitter?.formMethod || form.method", script)
+        self.assertNotIn('document.write(payload.html)', script)
+        self.assertIn("GlobalLoader.submitForm", script)
+        self.assertIn("const longNavigation = form.dataset.loaderLongNavigation != null", script)
+        self.assertIn("collapsible: longNavigation", script)
+        self.assertIn("maxDuration: longNavigation ? 305000 : 120000", script)
+        self.assertIn("data-global-loader-collapse", loader_template)
+        self.assertIn(".global-loader__collapse", styles)
+        self.assertIn("await run_in_threadpool(\n        import_keys_file", keys_router)
+        self.assertIn("await run_in_threadpool(import_panels_excel", panels_router)
+        self.assertIn('action="/keys/import" enctype="multipart/form-data" class="keys-modal-form" data-loader-long-navigation', Path("app/templates/keys.html").read_text(encoding="utf-8"))
+        self.assertIn('action="/panels/import" enctype="multipart/form-data" class="panel-import-form" data-loader-long-navigation', Path("app/templates/panels.html").read_text(encoding="utf-8"))
         self.assertIn("isNestedInteractiveClick(event, navigationTarget)", script)
         self.assertIn('"button",', script)
         self.assertIn("maxDuration: 30000", script)
-        self.assertIn("window.submitHtmlFormWithLoader = submitHtmlForm", script)
-        self.assertIn("const controller = new AbortController()", script)
-        self.assertIn("controller.abort(), 45000", script)
-        self.assertIn("window.clearTimeout(requestTimeout)", script)
-        self.assertIn("maxDuration: 50000", script)
+        self.assertIn("HTMLFormElement.prototype.submit.call(form)", script)
+        self.assertIn('window.addEventListener("pageshow", reset)', script)
+        self.assertIn('window.addEventListener("pagehide", reset)', script)
+        self.assertIn('window.addEventListener("beforeunload"', script)
+        self.assertIn('document.visibilityState === "visible"', script)
+        self.assertNotIn("if (!requests.size) show", script)
         self.assertIn("overlayDelay = 260", script)
         self.assertIn("requests.size", script)
         self.assertIn(".global-loader.is-overlay-visible", styles)
@@ -269,8 +297,51 @@ class PresentationTests(unittest.TestCase):
         self.assertIn("global-loader__ring--inner", loader_template)
         self.assertIn("global-loader-spin-reverse", styles)
         self.assertIn("global-loader-pulse", styles)
+        self.assertIn("async function downloadLink(anchor)", script)
+        self.assertIn("const blob = await response.blob()", script)
+        self.assertIn("URL.revokeObjectURL(objectUrl)", script)
+        self.assertIn('contentType.includes("text/html")', script)
+        self.assertIn(".app-dialog__actions [hidden]", components)
         self.assertIn("Загрузка…", loader_template)
         self.assertNotIn("Выполняется операция…", loader_template)
+
+    def test_global_loader_has_no_page_specific_implementation(self):
+        global_script = Path("app/static/js/global-loader.js")
+        global_styles = Path("app/static/css/global-loader.css")
+        loader_template = Path("app/templates/_global_loader.html")
+
+        for path in Path("app/static/js").rglob("*.js"):
+            if path == global_script:
+                continue
+            source = path.read_text(encoding="utf-8")
+            self.assertNotIn("showGlobalLoader", source, str(path))
+            self.assertNotIn("hideGlobalLoader", source, str(path))
+            self.assertNotIn('getElementById("globalLoader")', source, str(path))
+            self.assertNotIn("global-loader-blocking", source, str(path))
+            self.assertNotIn("is-overlay-visible", source, str(path))
+
+        for path in Path("app/templates").rglob("*.html"):
+            if path == loader_template:
+                continue
+            source = path.read_text(encoding="utf-8")
+            self.assertNotIn('id="globalLoader"', source, str(path))
+
+        for path in Path("app/static/css").rglob("*.css"):
+            if path == global_styles:
+                continue
+            source = path.read_text(encoding="utf-8")
+            self.assertNotIn("body.global-loader-blocking", source, str(path))
+            self.assertNotIn(".global-loader.is-overlay-visible", source, str(path))
+
+        employees = Path("app/static/js/employees.js").read_text(encoding="utf-8")
+        manual_write = Path("app/static/js/manual-write.js").read_text(encoding="utf-8")
+        smart_search = Path("app/static/js/smart-search.js").read_text(encoding="utf-8")
+        message = Path("app/static/js/message.js").read_text(encoding="utf-8")
+        self.assertIn("window.GlobalLoader?.navigate", employees)
+        self.assertIn("window.GlobalLoader?.submitForm", manual_write)
+        self.assertNotIn("submitNativeFormWithLoader", manual_write)
+        self.assertIn("window.GlobalLoader?.submitForm", message)
+        self.assertNotIn("globalLoader: false", smart_search)
 
     def test_key_registry_modals_close_only_with_explicit_cross(self):
         source = Path("app/templates/keys.html").read_text(encoding="utf-8")
@@ -419,7 +490,7 @@ class PresentationTests(unittest.TestCase):
         self.assertIn('id="manualPanelCount"', template)
         self.assertIn("Основной адрес", template)
         self.assertIn("SmartAutocomplete.enhance", picker_script)
-        self.assertIn("globalLoader: false", smart_search)
+        self.assertNotIn("globalLoader: false", smart_search)
         self.assertIn('event.key === "Enter"', smart_search)
         self.assertIn("automatic_panel_ids", script)
         self.assertIn("manual_panel_ids", script)
@@ -445,7 +516,7 @@ class PresentationTests(unittest.TestCase):
         message = Path("app/static/js/message.js").read_text(encoding="utf-8")
         manual = Path("app/static/js/manual-write.js").read_text(encoding="utf-8")
 
-        self.assertIn('/static/js/panel-picker.js?v=1', base)
+        self.assertIn('/static/js/panel-picker.js?v=2', base)
         self.assertIn("class PanelPicker", picker)
         self.assertIn("SmartAutocomplete.enhance", picker)
         self.assertIn('queryParameter: "query"', picker)
@@ -454,7 +525,7 @@ class PresentationTests(unittest.TestCase):
         self.assertIn("new AbortController()", smart_search)
         self.assertIn('state.request?.abort("replaced")', smart_search)
         self.assertIn("finally", smart_search)
-        self.assertIn("globalLoader: false", smart_search)
+        self.assertNotIn("globalLoader: false", smart_search)
         self.assertIn('event.key === "Enter"', smart_search)
         self.assertIn('event.key === "Escape"', picker)
         self.assertIn("isAlreadySelected", picker)
@@ -497,7 +568,6 @@ class PresentationTests(unittest.TestCase):
             "state.options.onLoaded",
             "state.options.onError",
             "state.options.onFinally",
-            "globalLoader: false",
             "function renderState",
             '"smart-search-loading"',
             '"smart-search-error"',

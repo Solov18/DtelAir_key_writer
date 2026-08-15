@@ -1,8 +1,11 @@
 import threading
 import time
 
+from sqlalchemy import text
+
 from tests.postgres_test_case import PostgreSQLTestCase
 
+from app.db import get_engine
 from app.repositories import panel_repository
 from app.repositories.panel_monitor_repository import (
     begin_cycle_if_due,
@@ -12,10 +15,34 @@ from app.repositories.panel_monitor_repository import (
 from app.repositories.system_settings_repository import (
     save_monitor_runtime_settings,
 )
-from app.services.panel_monitor import run_monitor_cycle
+from app.services.panel_monitor import ADVISORY_LOCK_ID, run_monitor_cycle
 
 
 class PanelMonitorTests(PostgreSQLTestCase):
+    def test_only_one_database_monitor_leader_can_hold_the_lock(self):
+        engine = get_engine()
+        with engine.connect() as first, engine.connect() as second:
+            acquired = bool(
+                first.execute(
+                    text("SELECT pg_try_advisory_lock(:lock_id)"),
+                    {"lock_id": ADVISORY_LOCK_ID},
+                ).scalar()
+            )
+            self.assertTrue(acquired)
+            try:
+                second_acquired = bool(
+                    second.execute(
+                        text("SELECT pg_try_advisory_lock(:lock_id)"),
+                        {"lock_id": ADVISORY_LOCK_ID},
+                    ).scalar()
+                )
+                self.assertFalse(second_acquired)
+            finally:
+                first.execute(
+                    text("SELECT pg_advisory_unlock(:lock_id)"),
+                    {"lock_id": ADVISORY_LOCK_ID},
+                )
+
     def _create_panels(self, count: int) -> list[dict]:
         items = []
         for index in range(count):

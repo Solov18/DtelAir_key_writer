@@ -65,6 +65,21 @@ Index(
     unique=True,
 )
 Index("idx_keys_hex_lookup", func.lower(keys.c.hex_value))
+Index(
+    "idx_keys_number_normalized_type",
+    func.coalesce(
+        func.nullif(func.ltrim(func.btrim(keys.c.number), "0"), ""),
+        "0",
+    ),
+    keys.c.key_type_id,
+    postgresql_where=func.btrim(keys.c.number).op("~")("^[0-9]+$"),
+)
+Index(
+    "uq_keys_hex_nonempty_ci",
+    func.upper(keys.c.hex_value),
+    unique=True,
+    postgresql_where=func.btrim(keys.c.hex_value) != "",
+)
 Index("idx_keys_status", keys.c.status, keys.c.key_type_id)
 
 
@@ -145,6 +160,7 @@ users = Table(
     Column("created_at", Text, server_default=_now_text),
     Column("last_login", Text, server_default=text("''")),
 )
+Index("uq_users_login_ci", func.lower(users.c.login), unique=True)
 
 
 panels = Table(

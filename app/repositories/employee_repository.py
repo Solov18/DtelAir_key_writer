@@ -1,11 +1,14 @@
 import math
 
+from sqlalchemy.exc import IntegrityError
+
 from app.db import db
 from app.repositories.key_repository import (
     release_key_on_connection,
     set_key_assignment_on_connection,
 )
 from app.search_utils import normalize_search_text
+from app.key_numbers import key_number_search_sql
 
 
 ACTIVE_KEY_STATUS = "active"
@@ -258,8 +261,11 @@ def get_employee_page(
 
     if normalized_query:
         pattern = f"%{normalized_query}%"
+        number_sql, number_params = key_number_search_sql(
+            "search_key.number", query, pattern=pattern
+        )
         conditions.append(
-            """
+            f"""
             (
                 SMART_NORM(e.full_name) LIKE ?
                 OR SMART_NORM(e.position) LIKE ?
@@ -273,7 +279,7 @@ def get_employee_page(
                     JOIN keys search_key ON search_key.id = search_ek.key_id
                     WHERE search_ek.employee_id = e.id
                       AND (
-                          SMART_NORM(search_key.number) LIKE ?
+                          {number_sql}
                           OR SMART_NORM(search_key.hex_value) LIKE ?
                           OR SMART_NORM(search_key.key_type) LIKE ?
                       )
@@ -281,7 +287,7 @@ def get_employee_page(
             )
             """
         )
-        params.extend([pattern] * 9)
+        params.extend([*([pattern] * 6), *number_params, pattern, pattern])
 
     if department:
         conditions.append("e.department = ?")
@@ -615,7 +621,7 @@ def issue_key_to_employee(
             raise ValueError("Сотрудник не найден или уже уволен.")
 
         key = conn.execute(
-            "SELECT id, hex_value FROM keys WHERE id = ?",
+            "SELECT id, hex_value FROM keys WHERE id = ? FOR UPDATE",
             (key_id,),
         ).fetchone()
 
@@ -678,51 +684,56 @@ def issue_key_to_employee(
             (employee_id, key_id),
         ).fetchone()
 
-        if previous_assignment:
-            conn.execute(
-                """
-                UPDATE employee_keys
-                SET
-                    status = 'active',
-                    issued_at = CURRENT_TIMESTAMP,
-                    closed_at = NULL,
-                    close_reason = '',
-                    comment = ?,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-                """,
-                (new_key_comment.strip(), previous_assignment["id"]),
-            )
-            assignment_id = int(previous_assignment["id"])
-        else:
-            cursor = conn.execute(
-                """
-                INSERT INTO employee_keys(
-                    employee_id,
-                    key_id,
-                    status,
-                    issued_at,
-                    closed_at,
-                    close_reason,
-                    comment,
-                    created_at,
-                    updated_at
+        try:
+            if previous_assignment:
+                conn.execute(
+                    """
+                    UPDATE employee_keys
+                    SET
+                        status = 'active',
+                        issued_at = CURRENT_TIMESTAMP,
+                        closed_at = NULL,
+                        close_reason = '',
+                        comment = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                    """,
+                    (new_key_comment.strip(), previous_assignment["id"]),
                 )
-                VALUES(
-                    ?,
-                    ?,
-                    'active',
-                    CURRENT_TIMESTAMP,
-                    NULL,
-                    '',
-                    ?,
-                    CURRENT_TIMESTAMP,
-                    CURRENT_TIMESTAMP
+                assignment_id = int(previous_assignment["id"])
+            else:
+                cursor = conn.execute(
+                    """
+                    INSERT INTO employee_keys(
+                        employee_id,
+                        key_id,
+                        status,
+                        issued_at,
+                        closed_at,
+                        close_reason,
+                        comment,
+                        created_at,
+                        updated_at
+                    )
+                    VALUES(
+                        ?,
+                        ?,
+                        'active',
+                        CURRENT_TIMESTAMP,
+                        NULL,
+                        '',
+                        ?,
+                        CURRENT_TIMESTAMP,
+                        CURRENT_TIMESTAMP
+                    )
+                    """,
+                    (employee_id, key_id, new_key_comment.strip()),
                 )
-                """,
-                (employee_id, key_id, new_key_comment.strip()),
-            )
-            assignment_id = int(cursor.lastrowid)
+                assignment_id = int(cursor.lastrowid)
+        except IntegrityError as error:
+            raise ValueError(
+                "Ключ уже был выдан другим оператором. Обновите карточку сотрудника."
+            ) from error
 
         conn.execute(
             """

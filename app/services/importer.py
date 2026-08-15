@@ -132,6 +132,30 @@ def import_keys_file(
             for row in conn.execute("SELECT id, name FROM key_types")
         }
 
+        # Import files can contain tens of thousands of keys.  Looking up the
+        # key number and HEX with two SQL statements for every row made a
+        # normal import execute 100,000+ round trips and monopolise a worker
+        # for minutes.  Load the two uniqueness maps once, keep them current
+        # while parsing the file, and flush writes in batches below.
+        existing_keys: dict[tuple[int, str], dict] = {}
+        existing_hex: dict[str, dict] = {}
+        for stored_row in conn.execute(
+            """
+            SELECT id, key_type_id, number, hex_value, key_type, note
+            FROM keys
+            """
+        ):
+            stored = dict(stored_row.items())
+            existing_keys[
+                (int(stored["key_type_id"]), str(stored["number"]).lower())
+            ] = stored
+            stored_hex = str(stored.get("hex_value") or "").upper()
+            if stored_hex:
+                existing_hex[stored_hex] = stored
+
+        pending_inserts: list[tuple] = []
+        pending_updates: list[tuple] = []
+
         for row in rows:
             source = row.get("__source", "Строка")
             number = _excel_number(_first_value(row, KEY_NUMBER_COLUMNS))
@@ -177,31 +201,11 @@ def import_keys_file(
                 report["created_types"] += 1
 
             key_type_id, canonical_type_name = type_data
-            existing = conn.execute(
-                """
-                SELECT * FROM keys
-                WHERE key_type_id = ? AND LOWER(number) = LOWER(?)
-                LIMIT 1
-                """,
-                (key_type_id, number),
-            ).fetchone()
-
-            duplicate_hex = None
-            if hex_value:
-                duplicate_sql = """
-                    SELECT id, number, key_type
-                    FROM keys
-                    WHERE UPPER(hex_value) = ?
-                """
-                duplicate_params: list = [hex_value]
-                if existing is not None:
-                    duplicate_sql += " AND id <> ?"
-                    duplicate_params.append(int(existing["id"]))
-                duplicate_sql += " LIMIT 1"
-                duplicate_hex = conn.execute(
-                    duplicate_sql,
-                    duplicate_params,
-                ).fetchone()
+            key_identity = (key_type_id, number.lower())
+            existing = existing_keys.get(key_identity)
+            duplicate_hex = existing_hex.get(hex_value)
+            if duplicate_hex is existing:
+                duplicate_hex = None
 
             if duplicate_hex:
                 report["duplicates"] += 1
@@ -220,20 +224,50 @@ def import_keys_file(
                     )
                     continue
 
-                conn.execute(
-                    """
-                    UPDATE keys
-                    SET hex_value = CASE WHEN hex_value = '' THEN ? ELSE hex_value END,
-                        note = CASE WHEN note = '' THEN ? ELSE note END,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                    """,
-                    (hex_value, note, existing["id"]),
-                )
+                pending_updates.append((hex_value, note, existing["id"]))
+                existing["hex_value"] = hex_value or current_hex
+                existing["note"] = existing.get("note") or note
+                if hex_value:
+                    existing_hex[hex_value] = existing
                 report["updated"] += 1
                 continue
 
-            conn.execute(
+            pending_inserts.append(
+                (
+                    key_type_id,
+                    number,
+                    hex_value,
+                    canonical_type_name,
+                    note,
+                    created_by,
+                )
+            )
+            imported = {
+                "id": None,
+                "key_type_id": key_type_id,
+                "number": number,
+                "hex_value": hex_value,
+                "key_type": canonical_type_name,
+                "note": note,
+            }
+            existing_keys[key_identity] = imported
+            existing_hex[hex_value] = imported
+            report["added"] += 1
+
+        if pending_updates:
+            conn.executemany(
+                """
+                UPDATE keys
+                SET hex_value = CASE WHEN hex_value = '' THEN ? ELSE hex_value END,
+                    note = CASE WHEN note = '' THEN ? ELSE note END,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                pending_updates,
+            )
+
+        if pending_inserts:
+            conn.executemany(
                 """
                 INSERT INTO keys(
                     key_type_id,
@@ -246,16 +280,8 @@ def import_keys_file(
                 )
                 VALUES (?, ?, ?, ?, 'free', ?, ?)
                 """,
-                (
-                    key_type_id,
-                    number,
-                    hex_value,
-                    canonical_type_name,
-                    note,
-                    created_by,
-                ),
+                pending_inserts,
             )
-            report["added"] += 1
 
     report["error_details"] = report["error_details"][:25]
     return report
@@ -270,65 +296,60 @@ def import_panels_csv(content: bytes) -> int:
         delimiter=delimiter,
     )
 
-    count = 0
+    values: list[tuple[str, str, str, str, str]] = []
+
+    for row in reader:
+        address = (
+            row.get("address")
+            or row.get("адрес")
+            or ""
+        ).strip()
+
+        mac = (
+            row.get("mac")
+            or row.get("MAC")
+            or ""
+        ).strip().upper()
+
+        name = (
+            row.get("name")
+            or row.get("название")
+            or f"{address} {mac}"
+        ).strip()
+
+        entrance = (
+            row.get("entrance")
+            or row.get("вход")
+            or row.get("подъезд")
+            or ""
+        ).strip()
+
+        tags = (
+            row.get("tags")
+            or row.get("теги")
+            or ""
+        ).strip()
+
+        if address and mac:
+            values.append((address, entrance, name, mac, tags))
 
     with db() as conn:
-        for row in reader:
-            address = (
-                row.get("address")
-                or row.get("адрес")
-                or ""
-            ).strip()
+        if values:
+            conn.executemany(
+                """
+                INSERT INTO panels(address, entrance, name, mac, tags)
+                VALUES(?,?,?,?,?)
+                ON CONFLICT(mac)
+                DO UPDATE SET
+                    address = excluded.address,
+                    entrance = excluded.entrance,
+                    name = excluded.name,
+                    tags = excluded.tags
+                """,
+                values,
+            )
 
-            mac = (
-                row.get("mac")
-                or row.get("MAC")
-                or ""
-            ).strip().upper()
-
-            name = (
-                row.get("name")
-                or row.get("название")
-                or f"{address} {mac}"
-            ).strip()
-
-            entrance = (
-                row.get("entrance")
-                or row.get("вход")
-                or row.get("подъезд")
-                or ""
-            ).strip()
-
-            tags = (
-                row.get("tags")
-                or row.get("теги")
-                or ""
-            ).strip()
-
-            if address and mac:
-                conn.execute(
-                    """
-                    INSERT INTO panels(address, entrance, name, mac, tags)
-                    VALUES(?,?,?,?,?)
-                    ON CONFLICT(mac)
-                    DO UPDATE SET
-                        address = excluded.address,
-                        entrance = excluded.entrance,
-                        name = excluded.name,
-                        tags = excluded.tags
-                    """,
-                    (
-                        address,
-                        entrance,
-                        name,
-                        mac,
-                        tags,
-                    ),
-                )
-
-                count += 1
-
-    return count
+    return len(values)
 
 
 def import_panels_excel(filename: str, content: bytes) -> dict:
@@ -343,10 +364,15 @@ def import_panels_excel(filename: str, content: bytes) -> dict:
         result["errors"] += 1
         return result
 
-    workbook = load_workbook(
-        io.BytesIO(content),
-        data_only=True,
-    )
+    try:
+        workbook = load_workbook(
+            io.BytesIO(content),
+            data_only=True,
+            read_only=True,
+        )
+    except Exception:
+        result["errors"] += 1
+        return result
 
     rows = []
 
@@ -356,7 +382,8 @@ def import_panels_excel(filename: str, content: bytes) -> dict:
                 min_row=1,
                 max_row=1,
                 values_only=True,
-            )
+            ),
+            (),
         )
 
         headers = [str(header or "").strip() for header in header_row]
@@ -419,18 +446,18 @@ def import_panels_excel(filename: str, content: bytes) -> dict:
             )
 
     with db() as conn:
+        existing_by_mac = {
+            str(stored["mac"] or "").upper(): dict(stored.items())
+            for stored in conn.execute("SELECT * FROM panels")
+            if str(stored["mac"] or "").strip()
+        }
+        upserts: list[tuple[str, str, str, str, str, str]] = []
+
         for item in rows:
-            existing = conn.execute(
-                """
-                SELECT *
-                FROM panels
-                WHERE mac = ?
-                """,
-                (item["mac"],),
-            ).fetchone()
+            existing = existing_by_mac.get(item["mac"])
 
             if existing:
-                old = dict(existing)
+                old = existing
                 address = item["address"] or (old.get("address") or "")
                 entrance = item["entrance"] or (old.get("entrance") or "")
                 ip = item["ip"] or (old.get("ip") or "")
@@ -445,47 +472,46 @@ def import_panels_excel(filename: str, content: bytes) -> dict:
                     or (old.get("tags") or "") != tags
                 )
 
-                conn.execute(
-                    """
-                    UPDATE panels
-                    SET address = ?,
-                        entrance = ?,
-                        name = ?,
-                        tags = ?,
-                        ip = ?
-                    WHERE mac = ?
-                    """,
-                    (
-                        address,
-                        entrance,
-                        name,
-                        tags,
-                        ip,
-                        item["mac"],
-                    ),
-                )
-
                 if changed:
                     result["updated"] += 1
                 else:
                     result["skipped"] += 1
 
             else:
-                conn.execute(
-                    """
-                    INSERT INTO panels(address, entrance, name, mac, tags, ip)
-                    VALUES(?,?,?,?,?,?)
-                    """,
-                    (
-                        item["address"],
-                        item["entrance"],
-                        item["name"],
-                        item["mac"],
-                        item["tags"],
-                        item["ip"],
-                    ),
-                )
-
                 result["added"] += 1
+
+                address = item["address"]
+                entrance = item["entrance"]
+                name = item["name"]
+                tags = item["tags"]
+                ip = item["ip"]
+
+            merged = {
+                **(existing or {}),
+                "address": address,
+                "entrance": entrance,
+                "name": name,
+                "tags": tags,
+                "ip": ip,
+                "mac": item["mac"],
+            }
+            existing_by_mac[item["mac"]] = merged
+            upserts.append((address, entrance, name, item["mac"], tags, ip))
+
+        if upserts:
+            conn.executemany(
+                """
+                INSERT INTO panels(address, entrance, name, mac, tags, ip)
+                VALUES(?,?,?,?,?,?)
+                ON CONFLICT(mac)
+                DO UPDATE SET
+                    address = excluded.address,
+                    entrance = excluded.entrance,
+                    name = excluded.name,
+                    tags = excluded.tags,
+                    ip = excluded.ip
+                """,
+                upserts,
+            )
 
     return result

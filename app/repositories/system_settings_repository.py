@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from datetime import datetime
@@ -17,6 +18,23 @@ MONITOR_KEYS = (
     "panel_monitor_stale_seconds",
     "panel_manual_check_cooldown_seconds",
 )
+CONNECTION_CHECK_KEYS = {
+    "crm": "diagnostic_crm_last_check",
+    "panels": "diagnostic_panels_last_check",
+}
+
+
+def _redact_secret_text(value: object) -> str:
+    message = str(value or "")
+    for secret in (
+        settings.crm_password,
+        settings.crm_cookie,
+        settings.panel_api_password,
+        settings.session_secret,
+    ):
+        if secret and len(secret) >= 4:
+            message = message.replace(secret, "[скрыто]")
+    return message
 
 
 @dataclass(frozen=True)
@@ -159,3 +177,63 @@ def save_monitor_runtime_settings(
                 (key, serialized, updated_by.strip()),
             )
     return get_monitor_runtime_settings()
+
+
+def get_connection_check_results() -> dict[str, dict]:
+    keys = tuple(CONNECTION_CHECK_KEYS.values())
+    placeholders = ",".join("?" for _ in keys)
+    with db() as conn:
+        rows = conn.execute(
+            f"SELECT key, value FROM system_settings WHERE key IN ({placeholders})",
+            keys,
+        ).fetchall()
+    reverse = {value: key for key, value in CONNECTION_CHECK_KEYS.items()}
+    results: dict[str, dict] = {}
+    for row in rows:
+        name = reverse.get(str(row["key"]))
+        if not name:
+            continue
+        try:
+            value = json.loads(str(row["value"]))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            continue
+        if isinstance(value, dict):
+            value["message"] = _redact_secret_text(value.get("message"))[:500]
+            results[name] = value
+    return results
+
+
+def save_connection_check_result(
+    name: str,
+    result: Mapping[str, object],
+    *,
+    updated_by: str,
+) -> dict:
+    key = CONNECTION_CHECK_KEYS.get(name)
+    if not key:
+        raise ValueError("Неизвестный тип проверки подключения")
+    message = _redact_secret_text(result.get("message"))
+    safe = {
+        "ok": bool(result.get("ok")),
+        "status": str(result.get("status") or ("ok" if result.get("ok") else "error"))[:40],
+        "message": message[:500],
+        "http_status": result.get("http_status"),
+        "response_time_ms": result.get("response_time_ms"),
+        "checked_at": str(result.get("checked_at") or "")[:80],
+        "panel_id": result.get("panel_id"),
+        "panel_name": str(result.get("panel_name") or "")[:200],
+    }
+    serialized = json.dumps(safe, ensure_ascii=False)
+    with db() as conn:
+        conn.execute(
+            """
+            INSERT INTO system_settings(key, value, updated_at, updated_by)
+            VALUES (?, ?, CURRENT_TIMESTAMP, ?)
+            ON CONFLICT(key) DO UPDATE SET
+                value = EXCLUDED.value,
+                updated_at = EXCLUDED.updated_at,
+                updated_by = EXCLUDED.updated_by
+            """,
+            (key, serialized, updated_by.strip()),
+        )
+    return safe

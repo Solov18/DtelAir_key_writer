@@ -7,7 +7,8 @@ from starlette.requests import Request
 from tests.postgres_test_case import PostgreSQLTestCase
 
 import app.db as database
-from app.routers.manual_write import manual_write_execute
+from app.routers.manual_write import manual_write_execute, manual_write_preview
+from app.repositories import key_repository, panel_repository
 from app.services.auth import hash_password, verify_password
 from app.services.writer import write_key_to_panels
 
@@ -103,6 +104,29 @@ class SystemSafetyTests(PostgreSQLTestCase):
         fallback.assert_not_called()
         writer.assert_not_called()
         self.assertIn("Не выбрана ни одна панель", response.body.decode("utf-8"))
+
+    def test_manual_write_preview_matches_padded_key_number(self):
+        key_type_id = key_repository.create_key_type("Оранжевый", "#FF982A")
+        key = key_repository.save_prepared_key(
+            key_type_id, "000050", "AA000050", "Тест"
+        )
+        panel_repository.create_or_update_panel(
+            address="ул. Тестовая 50",
+            entrance="подъезд 1",
+            mac="08:13:CD:00:00:50",
+        )
+
+        response = manual_write_preview(
+            request=self._request("/write/manual/preview"),
+            key_query="50",
+            address="ул. Тестовая 50",
+            apartment="5",
+            key_type_id=key_type_id,
+        )
+
+        body = response.body.decode("utf-8")
+        self.assertIn(f"Ключ №{key['number']}", body)
+        self.assertNotIn("Ключ не найден в базе", body)
 
     def test_manual_write_keeps_assignment_address_and_tracks_panel_sources(self):
         request = self._request("/write/manual/write")

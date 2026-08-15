@@ -781,6 +781,7 @@ def create_key_issue(
             SELECT id, hex_value, status
             FROM keys
             WHERE id = ?
+            FOR UPDATE
             """,
             (key_id,),
         ).fetchone()

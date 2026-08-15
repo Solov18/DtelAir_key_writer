@@ -61,9 +61,12 @@
                     const separator = targetRow.dataset.href.includes("?")
                         ? "&"
                         : "?";
-                    window.location.assign(
-                        `${targetRow.dataset.href}${separator}edit=1`
-                    );
+                    const destination = `${targetRow.dataset.href}${separator}edit=1`;
+                    if (window.GlobalLoader?.navigate) {
+                        window.GlobalLoader.navigate(destination);
+                    } else {
+                        window.location.assign(destination);
+                    }
                 }
                 return;
             }
@@ -77,7 +80,11 @@
     document.querySelectorAll("[data-employee-row]").forEach((row) => {
         const activate = () => {
             if (row.dataset.href) {
-                window.location.assign(row.dataset.href);
+                if (window.GlobalLoader?.navigate) {
+                    window.GlobalLoader.navigate(row.dataset.href);
+                } else {
+                    window.location.assign(row.dataset.href);
+                }
             }
         };
 

@@ -3,6 +3,7 @@ from app.middleware import AuthMiddleware
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.db import init_db
 from app.settings import settings
@@ -20,9 +21,15 @@ from app.routers import (
     log,
     users,
     settings as settings_router,
+    health,
 )
 
 app = FastAPI(title="Dtel Access Manager")
+
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=settings.trusted_host_list,
+)
 
 app.add_middleware(AuthMiddleware)
 
@@ -31,6 +38,7 @@ app.add_middleware(
     secret_key=settings.session_secret,
     same_site="lax",
     https_only=settings.session_https_only,
+    max_age=settings.session_max_age_seconds,
 )
 
 
@@ -45,6 +53,7 @@ app.mount(
 
 @app.on_event("startup")
 def startup():
+    settings.validate_production()
     init_db()
     panel_monitor_worker.start()
 
@@ -65,3 +74,4 @@ app.include_router(keys.router)
 app.include_router(log.router)
 app.include_router(users.router)
 app.include_router(settings_router.router)
+app.include_router(health.router)

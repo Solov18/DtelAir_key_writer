@@ -6,11 +6,13 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import requests
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
+from sqlalchemy import event
 from starlette.requests import Request
 
 from tests.postgres_test_case import PostgreSQLTestCase
 
+import app.db as database
 from app.repositories import panel_repository
 from app.routers import panels as panels_router
 from app.services.importer import import_panels_excel
@@ -53,6 +55,15 @@ class PanelRepositoryTests(PostgreSQLTestCase):
 
         with patch.object(panels_router, "get_all_panels", return_value=[panel]):
             response = panels_router.panels_export()
+
+        self.assertEqual(
+            response.media_type,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        self.assertEqual(
+            response.headers["content-disposition"],
+            'attachment; filename="panels_export.xlsx"',
+        )
 
         async def read_response() -> bytes:
             chunks = []
@@ -112,6 +123,54 @@ class PanelRepositoryTests(PostgreSQLTestCase):
         self.assertEqual(existing_after["ip"], "10.90.171.20")
         self.assertEqual(added["entrance"], "Подъезд 2")
         self.assertEqual(added["ip"], "10.80.72.10")
+
+    def test_large_excel_import_uses_one_panel_snapshot_and_one_batch_upsert(self):
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.append(["Адрес", "Подъезд / вход", "IP", "MAC", "Теги"])
+        for number in range(1, 41):
+            sheet.append(
+                [
+                    f"Тестовая {number}",
+                    "Подъезд 1",
+                    f"10.250.0.{number}",
+                    f"08:13:CD:FA:00:{number:02X}",
+                    "импорт",
+                ]
+            )
+        content = io.BytesIO()
+        workbook.save(content)
+
+        statements: list[tuple[str, bool]] = []
+
+        def capture(_conn, _cursor, statement, _parameters, _context, executemany):
+            statements.append((" ".join(statement.lower().split()), bool(executemany)))
+
+        engine = database.get_engine()
+        event.listen(engine, "before_cursor_execute", capture)
+        try:
+            report = import_panels_excel("panels.xlsx", content.getvalue())
+        finally:
+            event.remove(engine, "before_cursor_execute", capture)
+
+        panel_snapshots = [
+            statement
+            for statement, _many in statements
+            if statement == "select * from panels"
+        ]
+        panel_upserts = [
+            many
+            for statement, many in statements
+            if statement.startswith("insert into panels(")
+        ]
+        self.assertEqual(report["added"], 40)
+        self.assertEqual(len(panel_snapshots), 1)
+        self.assertEqual(panel_upserts, [True])
+
+    def test_invalid_panel_workbook_returns_report_instead_of_raising(self):
+        report = import_panels_excel("panels.xlsx", b"not an excel workbook")
+        self.assertEqual(report["errors"], 1)
+        self.assertEqual(report["added"], 0)
 
     def test_server_filters_pagination_and_status_statistics(self):
         first = self._create("Тепличная 63", "Подъезд 1", "08:13:CD:00:00:01", "10.0.0.1")

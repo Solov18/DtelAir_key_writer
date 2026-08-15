@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 
-SUPPLY_VOLTAGE_MIN = 12.8
-SUPPLY_VOLTAGE_MAX = 13.5
+SUPPLY_VOLTAGE_MIN = 12.7
+SUPPLY_VOLTAGE_MAX = 13.7
 
 
 def supply_voltage_tone(value: object) -> str:

@@ -8,6 +8,13 @@ from app.search_utils import (
     normalize_search_text,
     parse_assignment_search_query,
 )
+from app.key_numbers import (
+    exact_key_number_sql,
+    format_numeric_key_number,
+    infer_numeric_key_number_width,
+    is_numeric_key_number,
+    key_number_search_sql,
+)
 
 
 KEY_STATUSES = {
@@ -229,7 +236,8 @@ def get_missing_key_numbers(
             (key_type_id,),
         ).fetchall()
 
-    stored_numbers = sorted({int(row["number"]) for row in rows})
+    stored_values = [str(row["number"]).strip() for row in rows]
+    stored_numbers = sorted({int(value) for value in stored_values})
     if not stored_numbers and not (clean_start and clean_end):
         return {
             "key_type": key_type,
@@ -250,11 +258,7 @@ def get_missing_key_numbers(
     if end_value - start_value > 10_000_000:
         raise ValueError("Диапазон слишком большой. Уточните начало и конец проверки.")
 
-    width = max(
-        len(clean_start),
-        len(clean_end),
-        max((len(str(row["number"])) for row in rows), default=1),
-    )
+    display_width = infer_numeric_key_number_width(stored_values)
     present = [
         number
         for number in stored_numbers
@@ -274,15 +278,15 @@ def get_missing_key_numbers(
         missing_count += count
         ranges.append(
             {
-                "start": str(gap_start).zfill(width),
-                "end": str(gap_end).zfill(width),
+                "start": format_numeric_key_number(gap_start, display_width),
+                "end": format_numeric_key_number(gap_end, display_width),
                 "count": count,
             }
         )
         remaining = max(0, limit - len(numbers))
         if remaining:
             numbers.extend(
-                str(value).zfill(width)
+                format_numeric_key_number(value, display_width)
                 for value in range(
                     gap_start,
                     min(gap_end + 1, gap_start + remaining),
@@ -297,8 +301,8 @@ def get_missing_key_numbers(
 
     return {
         "key_type": key_type,
-        "start": str(start_value).zfill(width),
-        "end": str(end_value).zfill(width),
+        "start": format_numeric_key_number(start_value, display_width),
+        "end": format_numeric_key_number(end_value, display_width),
         "ranges": ranges,
         "numbers": numbers,
         "missing_count": missing_count,
@@ -433,12 +437,32 @@ def _keys_filter_sql(
             address_sql, address_params = assignment_address_sql(parsed)
             conditions.extend(("ka.id IS NOT NULL", f"({address_sql})"))
             params.extend(address_params)
+        elif is_numeric_key_number(query):
+            number_sql, number_params = exact_key_number_sql("k.number", query)
+            compact_hex = re.sub(r"[^0-9A-Fa-f]", "", query).upper()
+            conditions.append(
+                f"""
+                (
+                    {number_sql}
+                    OR REGEXP_REPLACE(
+                        UPPER(COALESCE(k.hex_value, '')),
+                        '[^0-9A-F]',
+                        '',
+                        'g'
+                    ) = ?
+                )
+                """
+            )
+            params.extend([*number_params, compact_hex])
         else:
             pattern = f"%{normalized_query}%"
+            number_sql, number_params = key_number_search_sql(
+                "k.number", query, pattern=pattern
+            )
             conditions.append(
-                """
+                f"""
                 (
-                    SMART_NORM(k.number) LIKE ?
+                    {number_sql}
                     OR SMART_NORM(k.hex_value) LIKE ?
                     OR SMART_NORM(kt.name) LIKE ?
                     OR SMART_NORM(k.note) LIKE ?
@@ -475,7 +499,7 @@ def _keys_filter_sql(
                 )
                 """
             )
-            params.extend([pattern] * 11)
+            params.extend([*number_params, *([pattern] * 10)])
 
     if key_type_id:
         conditions.append("k.key_type_id = ?")
@@ -871,6 +895,12 @@ def update_key_assignment(
         raise ValueError("Выберите адрес из реестра CRM.")
 
     with db() as conn:
+        key_row = conn.execute(
+            "SELECT id FROM keys WHERE id = ? FOR UPDATE",
+            (key_id,),
+        ).fetchone()
+        if not key_row:
+            raise ValueError("Ключ не найден.")
         current_row = conn.execute(
             """
             SELECT ka.*, e.full_name AS employee_name, ug.name AS uk_name
@@ -1102,17 +1132,22 @@ def save_prepared_key(
             )
 
         if existing:
-            conn.execute(
-                """
-                UPDATE keys
-                SET hex_value = ?,
-                    key_type = ?,
-                    updated_at = CURRENT_TIMESTAMP,
-                    created_by = CASE WHEN created_by = '' THEN ? ELSE created_by END
-                WHERE id = ?
-                """,
-                (clean_hex, key_type["name"], username, existing_id),
-            )
+            try:
+                conn.execute(
+                    """
+                    UPDATE keys
+                    SET hex_value = ?,
+                        key_type = ?,
+                        updated_at = CURRENT_TIMESTAMP,
+                        created_by = CASE WHEN created_by = '' THEN ? ELSE created_by END
+                    WHERE id = ?
+                    """,
+                    (clean_hex, key_type["name"], username, existing_id),
+                )
+            except IntegrityError as error:
+                raise ValueError(
+                    "Номер или HEX уже был сохранён другим оператором. Обновите данные."
+                ) from error
             key_id = existing_id
         else:
             try:
@@ -1161,7 +1196,7 @@ def save_key_hex(
 
     with db() as conn:
         current = conn.execute(
-            "SELECT id, hex_value FROM keys WHERE id = ?",
+            "SELECT id, hex_value FROM keys WHERE id = ? FOR UPDATE",
             (key_id,),
         ).fetchone()
         if not current:
@@ -1188,16 +1223,19 @@ def save_key_hex(
                 f"HEX уже принадлежит ключу {duplicate['type_name']} №{duplicate['number']}."
             )
 
-        cursor = conn.execute(
-            """
-            UPDATE keys
-            SET hex_value = ?,
-                updated_at = CURRENT_TIMESTAMP,
-                created_by = CASE WHEN created_by = '' THEN ? ELSE created_by END
-            WHERE id = ?
-            """,
-            (clean_hex, username, key_id),
-        )
+        try:
+            cursor = conn.execute(
+                """
+                UPDATE keys
+                SET hex_value = ?,
+                    updated_at = CURRENT_TIMESTAMP,
+                    created_by = CASE WHEN created_by = '' THEN ? ELSE created_by END
+                WHERE id = ?
+                """,
+                (clean_hex, username, key_id),
+            )
+        except IntegrityError as error:
+            raise ValueError("Такой HEX уже сохранён у другого ключа.") from error
         if cursor.rowcount == 0:
             raise ValueError("Ключ не найден.")
 
@@ -1228,6 +1266,12 @@ def update_key(
         raise ValueError("Тип ключа не найден.")
 
     with db() as conn:
+        stored = conn.execute(
+            "SELECT id FROM keys WHERE id = ? FOR UPDATE",
+            (key_id,),
+        ).fetchone()
+        if not stored:
+            raise ValueError("Ключ не найден.")
         duplicate = conn.execute(
             "SELECT id FROM keys WHERE UPPER(hex_value) = ? AND id <> ? LIMIT 1",
             (clean_hex, key_id),
@@ -1257,7 +1301,7 @@ def update_key(
                 ),
             )
         except IntegrityError as error:
-            raise ValueError("Ключ с таким номером уже есть в выбранном типе.") from error
+            raise ValueError("Ключ с таким номером или HEX уже существует.") from error
 
         if cursor.rowcount == 0:
             raise ValueError("Ключ не найден.")
@@ -1279,7 +1323,7 @@ def set_key_assignment_on_connection(
         raise ValueError("Некорректный тип назначения ключа.")
 
     stored_key = conn.execute(
-        "SELECT hex_value FROM keys WHERE id = ?",
+        "SELECT hex_value FROM keys WHERE id = ? FOR UPDATE",
         (key_id,),
     ).fetchone()
     if not stored_key:
@@ -1430,6 +1474,12 @@ def set_key_assignment(
 
 
 def release_key_on_connection(conn, key_id: int, note: str = "") -> None:
+    stored_key = conn.execute(
+        "SELECT id FROM keys WHERE id = ? FOR UPDATE",
+        (key_id,),
+    ).fetchone()
+    if not stored_key:
+        raise ValueError("Ключ не найден.")
     conn.execute(
         """
         UPDATE employee_keys

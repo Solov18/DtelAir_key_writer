@@ -378,19 +378,16 @@
             selectedPanelsContainer?.appendChild(sourceInput);
         });
 
-        console.info("key_write.submit", {
-            keyCount,
-            panelIds: checkedPanels.map((checkbox) => checkbox.value),
-        });
         writeInFlight = true;
         if (writeButton) {
             writeButton.disabled = true;
             writeButton.textContent = "Запись выполняется…";
         }
-        // Keep the write page visible while the server communicates with CRM.
-        // This flow deliberately does not use the global blocking overlay.
-        window.suppressGlobalLoaderForNextNavigation?.();
-        writeForm.submit();
+        if (window.GlobalLoader?.submitForm) {
+            window.GlobalLoader.submitForm(writeForm);
+        } else {
+            writeForm.submit();
+        }
     });
 
     window.addEventListener("pageshow", () => {

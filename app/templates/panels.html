@@ -329,7 +329,7 @@
 <div class="modal-backdrop panels-modal" id="panelImportModal" hidden>
     <section class="modal-card is-small modal-scroll" role="dialog" aria-modal="true" aria-labelledby="panelImportTitle">
         <header><div><small>Массовая загрузка</small><h2 id="panelImportTitle">Импорт Excel</h2></div><button type="button" class="btn btn-ghost" data-close-modal aria-label="Закрыть">×</button></header>
-        <form method="post" action="/panels/import" enctype="multipart/form-data" class="panel-import-form">
+        <form method="post" action="/panels/import" enctype="multipart/form-data" class="panel-import-form" data-loader-long-navigation>
             <label><span>Файл .xlsx</span><input type="file" name="file" accept=".xlsx,.xlsm,.xls" required></label>
             <p>Обязательные колонки: <b>Адрес</b> и <b>MAC</b>. Подъезд можно указать в строке адреса.</p>
             <button class="btn" type="submit">Импортировать →</button>

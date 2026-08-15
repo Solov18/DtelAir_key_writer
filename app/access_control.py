@@ -1,4 +1,5 @@
 PERMISSION_LABELS = {
+    "use_universal_search": "Универсальный поиск",
     "view": "Просмотр",
     "write_keys": "Запись ключей",
     "manage_keys": "Управление ключами",
@@ -14,7 +15,10 @@ SYSTEM_ROLE_LABELS = {
     "admin": "Администратор",
     "operator": "Оператор",
     "viewer": "Наблюдатель",
+    "lookup": "Справочная",
 }
+
+LOOKUP_ROLE_CODE = "lookup"
 
 
 def normalize_role(role: str) -> str:
@@ -29,3 +33,11 @@ def has_permission(user: dict | None, permission: str) -> bool:
     if not user or not int(user.get("active", 1)):
         return False
     return permission in set(user.get("permissions") or [])
+
+
+def is_lookup_user(user: dict | None) -> bool:
+    return bool(
+        user
+        and int(user.get("active", 1))
+        and user.get("role") == LOOKUP_ROLE_CODE
+    )

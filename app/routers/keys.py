@@ -3,6 +3,7 @@ import re
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, File, Form, Query, Request, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from openpyxl import Workbook
 
@@ -32,7 +33,7 @@ from app.repositories.key_repository import (
 from app.repositories.log_repository import normalize_operation_row
 from app.services import import_keys_file
 from app.services.audit import log_event
-from app.services.excel_export import excel_safe_value
+from app.services.excel_export import excel_safe_value, excel_text_cell
 from app.templates_config import templates
 
 router = APIRouter()
@@ -307,7 +308,8 @@ async def prepared_key_hex_save(request: Request):
     try:
         payload = await request.json()
         allow_replace = bool(payload.get("replace", False))
-        key = save_prepared_key(
+        key = await run_in_threadpool(
+            save_prepared_key,
             int(payload.get("key_type_id", 0)),
             str(payload.get("number", "")),
             str(payload.get("hex_value", "")),
@@ -320,7 +322,8 @@ async def prepared_key_hex_save(request: Request):
             status_code=400,
         )
 
-    log_event(
+    await run_in_threadpool(
+        log_event,
         request=request,
         action="key_hex_scan",
         object_type="Ключ",
@@ -354,7 +357,8 @@ async def key_hex_save(request: Request, key_id: int):
     try:
         payload = await request.json()
         allow_replace = bool(payload.get("replace", False))
-        key = save_key_hex(
+        key = await run_in_threadpool(
+            save_key_hex,
             key_id,
             str(payload.get("hex_value", "")),
             _user_name(request),
@@ -366,7 +370,8 @@ async def key_hex_save(request: Request, key_id: int):
             status_code=400,
         )
 
-    log_event(
+    await run_in_threadpool(
+        log_event,
         request=request,
         action="key_hex_scan",
         object_type="Ключ",
@@ -393,13 +398,17 @@ async def key_hex_save(request: Request, key_id: int):
 
 @router.post("/keys/import")
 async def keys_import(request: Request, file: UploadFile = File(...)):
-    report = import_keys_file(
-        file.filename or "",
-        await file.read(),
-        created_by=_user_name(request),
+    filename = file.filename or ""
+    content = await file.read()
+    report = await run_in_threadpool(
+        import_keys_file,
+        filename,
+        content,
+        _user_name(request),
     )
 
-    log_event(
+    await run_in_threadpool(
+        log_event,
         request=request,
         action="import_keys",
         object_type="Файл ключей",
@@ -422,9 +431,9 @@ async def keys_import(request: Request, file: UploadFile = File(...)):
 
 @router.get("/keys/export")
 def keys_export():
-    workbook = Workbook(write_only=False)
-    default_sheet = workbook.active
-    workbook.remove(default_sheet)
+    # Write-only worksheets keep memory usage bounded when the registry
+    # contains tens of thousands of keys.
+    workbook = Workbook(write_only=True)
     used_names: set[str] = set()
 
     keys_by_type: dict[str, list[dict]] = {}
@@ -442,6 +451,7 @@ def keys_export():
         used_names.add(sheet_name.lower())
 
         sheet = workbook.create_sheet(sheet_name)
+        sheet.freeze_panes = "A2"
         sheet.append(
             [
                 "Номер",
@@ -455,7 +465,7 @@ def keys_export():
         for key in items:
             sheet.append(
                 [
-                    key["number"],
+                    excel_text_cell(sheet, key["number"]),
                     key["hex_value"],
                     key_status_name(key["status"]),
                     key["note"],
@@ -463,11 +473,22 @@ def keys_export():
                     key["created_by"],
                 ]
             )
-        sheet.freeze_panes = "A2"
-        sheet.auto_filter.ref = sheet.dimensions
+        sheet.auto_filter.ref = f"A1:F{len(items) + 1}"
 
     if not workbook.worksheets:
-        workbook.create_sheet("Ключи")
+        sheet = workbook.create_sheet("Ключи")
+        sheet.append(
+            [
+                "Номер",
+                "HEX",
+                "Статус",
+                "Комментарий",
+                "Дата добавления",
+                "Кем добавлен",
+            ]
+        )
+        sheet.freeze_panes = "A2"
+        sheet.auto_filter.ref = "A1:F1"
 
     output = io.BytesIO()
     workbook.save(output)

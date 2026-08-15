@@ -1,0 +1,6 @@
+[key_writer]
+host=127.0.0.1
+port=5432
+dbname=key_writer
+user=key_writer
+sslmode=prefer

@@ -1,3 +1,5 @@
+from sqlalchemy.exc import IntegrityError
+
 from app.db import db
 
 
@@ -86,27 +88,72 @@ def _role_id_for_code(conn, role: str) -> int:
 
 
 def create_user(full_name: str, login: str, password_hash: str, role: str):
-    with db() as conn:
-        role_id = _role_id_for_code(conn, role)
-        return conn.execute(
+    try:
+        with db() as conn:
+            role_id = _role_id_for_code(conn, role)
+            return conn.execute(
+                """
+                INSERT INTO users(full_name, login, password_hash, role_id)
+                VALUES (?, ?, ?, ?)
+                """,
+                (full_name.strip(), login.strip(), password_hash, role_id),
+            ).lastrowid
+    except IntegrityError as error:
+        raise ValueError("Пользователь с таким логином уже существует.") from error
+
+
+def _lock_active_admins(conn) -> list[int]:
+    """Serialize operations that may remove the final active administrator."""
+
+    return [
+        int(row[0])
+        for row in conn.execute(
             """
-            INSERT INTO users(full_name, login, password_hash, role_id)
-            VALUES (?, ?, ?, ?)
-            """,
-            (full_name.strip(), login.strip(), password_hash, role_id),
-        ).lastrowid
+            SELECT u.id
+            FROM users u
+            JOIN roles r ON r.id = u.role_id
+            WHERE r.code = 'admin' AND u.active = 1
+            ORDER BY u.id
+            FOR UPDATE OF u
+            """
+        ).fetchall()
+    ]
 
 
 def update_user(user_id: int, full_name: str, login: str, role_id: int) -> None:
-    with db() as conn:
-        conn.execute(
-            """
-            UPDATE users
-            SET full_name = ?, login = ?, role_id = ?
-            WHERE id = ?
-            """,
-            (full_name.strip(), login.strip(), role_id, user_id),
-        )
+    try:
+        with db() as conn:
+            active_admin_ids = _lock_active_admins(conn)
+            target = conn.execute(
+                """
+                SELECT u.active, r.code AS current_role,
+                       (SELECT code FROM roles WHERE id = ?) AS new_role
+                FROM users u
+                JOIN roles r ON r.id = u.role_id
+                WHERE u.id = ?
+                FOR UPDATE OF u
+                """,
+                (role_id, user_id),
+            ).fetchone()
+            if not target or not target["new_role"]:
+                raise ValueError("Пользователь или роль не найдены.")
+            if (
+                target["current_role"] == "admin"
+                and target["new_role"] != "admin"
+                and bool(target["active"])
+                and active_admin_ids == [user_id]
+            ):
+                raise ValueError("Нельзя изменить роль последнего администратора.")
+            conn.execute(
+                """
+                UPDATE users
+                SET full_name = ?, login = ?, role_id = ?
+                WHERE id = ?
+                """,
+                (full_name.strip(), login.strip(), role_id, user_id),
+            )
+    except IntegrityError as error:
+        raise ValueError("Пользователь с таким логином уже существует.") from error
 
 
 def change_user_password(user_id: int, password_hash: str):
@@ -119,6 +166,24 @@ def change_user_password(user_id: int, password_hash: str):
 
 def delete_user(user_id: int) -> None:
     with db() as conn:
+        active_admin_ids = _lock_active_admins(conn)
+        target = conn.execute(
+            """
+            SELECT u.active, r.code AS role
+            FROM users u
+            JOIN roles r ON r.id = u.role_id
+            WHERE u.id = ?
+            FOR UPDATE OF u
+            """,
+            (user_id,),
+        ).fetchone()
+        if (
+            target
+            and target["role"] == "admin"
+            and bool(target["active"])
+            and active_admin_ids == [user_id]
+        ):
+            raise ValueError("Нельзя удалить последнего администратора.")
         conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
 
 
@@ -144,6 +209,26 @@ def update_user_role(user_id: int, role: str) -> None:
 
 def set_user_active(user_id: int, active: bool) -> None:
     with db() as conn:
+        active_admin_ids = _lock_active_admins(conn)
+        target = conn.execute(
+            """
+            SELECT u.active, r.code AS role
+            FROM users u
+            JOIN roles r ON r.id = u.role_id
+            WHERE u.id = ?
+            FOR UPDATE OF u
+            """,
+            (user_id,),
+        ).fetchone()
+        if not target:
+            raise ValueError("Пользователь не найден.")
+        if (
+            not active
+            and target["role"] == "admin"
+            and bool(target["active"])
+            and active_admin_ids == [user_id]
+        ):
+            raise ValueError("Нельзя отключить последнего администратора.")
         conn.execute(
             "UPDATE users SET active = ? WHERE id = ?",
             (1 if active else 0, user_id),

@@ -2,21 +2,36 @@
 
 {% block page_name %}Подключения{% endblock %}
 
-{% macro state(ready, restart=False) -%}
-<strong class="{{ 'is-good' if ready else 'is-warning' }}">
-    {{ "Настроено" if ready else "Не настроено" }}
-    {% if restart %}<small>Требуется перезапуск</small>{% endif %}
-</strong>
+{% macro status_badge(item) -%}
+<em class="settings-state is-{{ item.status }}">{{ item.status_label }}</em>
+{%- endmacro %}
+
+{% macro secret_state(ready) -%}
+<strong class="{{ 'is-good' if ready else 'is-warning' }}">{{ "Настроено" if ready else "Не настроено" }}<small>Значение скрыто</small></strong>
+{%- endmacro %}
+
+{% macro health_card(title, item, anchor) -%}
+<a class="diagnostic-health-card is-{{ item.status }}" href="#{{ anchor }}">
+    <span class="diagnostic-health-dot" aria-hidden="true"></span>
+    <span><b>{{ title }}</b><small>{{ item.message }}</small></span>
+    {{ status_badge(item) }}
+    <time>{{ item.checked_at|datetime if item.checked_at else "Нет проверки" }}</time>
+</a>
 {%- endmacro %}
 
 {% block content %}
 <div class="settings-page connections-settings-page">
-    <div class="settings-hero">
+    <div class="settings-hero diagnostic-hero">
         <div>
             <a class="page-back-link" href="/settings">← Настройки</a>
-            <span class="page-kicker">КОНФИГУРАЦИЯ И ПОДКЛЮЧЕНИЯ</span>
+            <span class="page-kicker">СОСТОЯНИЕ СИСТЕМЫ</span>
             <h1>Подключения и системные параметры</h1>
-            <p class="subtitle">Безопасный обзор конфигурации, проверка соединений и общие параметры мониторинга панелей.</p>
+            <p class="subtitle">Фактическое состояние приложения, PostgreSQL, внешних подключений, мониторинга, backup и HTTPS без раскрытия секретов.</p>
+        </div>
+        <div class="diagnostic-overall is-{{ overall.status }}">
+            <span>Общий статус</span>
+            <strong>{{ overall.status_label }}</strong>
+            <small>{{ overall.message }}</small>
         </div>
     </div>
 
@@ -26,133 +41,157 @@
     <div class="settings-check-banner is-error"><b>Настройки не сохранены</b><span>{{ runtime_error }}</span></div>
     {% endif %}
 
-    {% for name, result in check_results.items() %}
-    <div class="settings-check-banner {{ 'is-success' if result.ok else 'is-error' }}">
-        <b>
-            {% if name == 'crm' %}CRM DTEL{% else %}API панелей{% endif %}:
-            {{ "подключение успешно" if result.ok else "ошибка подключения" }}
-        </b>
-        <span>{{ result.message }}</span>
-    </div>
-    {% endfor %}
+    <section class="diagnostic-health-grid" aria-label="Сводка состояния компонентов">
+        {{ health_card("Приложение", application, "application") }}
+        {{ health_card("PostgreSQL", database, "database") }}
+        {{ health_card("CRM DTEL", crm_health, "crm") }}
+        {{ health_card("API панелей", panel_health, "panel-api") }}
+        {{ health_card("Мониторинг", monitor, "monitoring") }}
+        {{ health_card("Backup", backup, "backup") }}
+        {{ health_card("HTTPS", security, "security") }}
+    </section>
 
-    <nav class="settings-section-nav" aria-label="Разделы параметров">
-        <a href="#database">База данных</a>
-        <a href="#crm">CRM DTEL</a>
-        <a href="#panel-api">API панелей</a>
-        <a href="#monitoring">Мониторинг</a>
-        <a href="#system">Система</a>
+    <nav class="settings-section-nav" aria-label="Разделы диагностики">
+        <a href="#application">Приложение</a><a href="#database">PostgreSQL</a>
+        <a href="#backup">Backup</a><a href="#crm">CRM DTEL</a>
+        <a href="#panel-api">Панели/API</a><a href="#monitoring">Мониторинг</a>
+        <a href="#security">Безопасность</a>
     </nav>
 
+    <section class="panel connection-section" id="application">
+        <div class="settings-title"><span>01</span><div><h2>Приложение</h2><p>Фактические данные текущего процесса. Workers показываются только при наличии надёжного значения окружения.</p></div>{{ status_badge(application) }}</div>
+        <div class="settings-values-grid diagnostic-values-grid">
+            <div><span>Окружение</span><strong>{{ application.environment }}</strong></div>
+            <div><span>DRY_RUN</span><strong class="{{ 'is-warning' if not application.dry_run else 'is-good' }}">{{ "Включён" if application.dry_run else "Выключен" }}</strong></div>
+            <div><span>Python</span><strong>{{ application.python_version }}</strong></div>
+            <div><span>PID</span><strong>{{ application.pid }}</strong></div>
+            <div><span>Workers</span><strong>{{ application.workers if application.workers is not none else "Недоступно" }}</strong></div>
+            <div><span>Hostname</span><strong>{{ application.hostname }}</strong></div>
+            <div><span>Release</span><strong>{{ application.release }}</strong></div>
+            <div><span>Git commit</span><strong>{{ application.git_commit }}</strong></div>
+            <div><span>Запущено</span><strong>{{ application.started_at|datetime_seconds }}</strong></div>
+            <div><span>Uptime</span><strong>{{ application.uptime_seconds }} сек.</strong></div>
+        </div>
+    </section>
+
     <section class="panel connection-section" id="database">
-        <div class="settings-title">
-            <span>01</span>
-            <div><h2>База данных</h2><p>Реквизиты подключения читаются при старте. Пароль и полная DATABASE_URL никогда не передаются в HTML.</p></div>
-            <em class="settings-state {{ 'is-good' if database.connected else 'is-error' }}">{{ "Подключение успешно" if database.connected else "Ошибка подключения" }}</em>
+        <div class="settings-title"><span>02</span><div><h2>PostgreSQL</h2><p>Реальный ping и серверные показатели. Пароль и полная DATABASE_URL не передаются в HTML.</p></div>{{ status_badge(database) }}</div>
+        <div class="settings-values-grid diagnostic-values-grid">
+            <div><span>Статус подключения</span><strong class="{{ 'is-good' if database.connected else 'is-warning' }}">{{ "Подключено" if database.connected else "Недоступно" }}</strong></div>
+            <div><span>Текущая база</span><strong>{{ database.current_database }}</strong></div>
+            <div><span>Версия PostgreSQL</span><strong>{{ database.server_version }}</strong></div>
+            <div><span>DB ping</span><strong>{{ database.ping_ms ~ " мс" if database.ping_ms is not none else "Недоступно" }}</strong></div>
+            <div><span>Alembic current</span><strong>{{ database.alembic_current }}</strong></div>
+            <div><span>Alembic head</span><strong>{{ database.alembic_head }}</strong></div>
+            <div><span>Схема current = head</span><strong class="{{ 'is-good' if database.revision_matches else 'is-warning' }}">{{ "Да" if database.revision_matches else "Нет" }}</strong></div>
+            <div><span>Размер базы</span><strong>{{ database.database_size or "Недоступно" }}</strong></div>
+            <div><span>Активные соединения</span><strong>{{ database.active_connections if database.active_connections is not none else "Недоступно" }}</strong></div>
+            <div><span>Соединения приложения</span><strong>{{ database.application_connections if database.application_connections is not none else "Недоступно" }}</strong></div>
+            <div class="diagnostic-wide"><span>Состояние pool</span><strong>{{ database.pool_status }}</strong></div>
+            <div><span>Последняя успешная проверка</span><strong>{{ database.last_success_at|datetime_seconds }}</strong></div>
         </div>
-        <div class="settings-values-grid">
-            <div><span>Текущая рабочая база</span><strong>{{ database.current_database }}</strong></div>
-            <div><span>Хост</span><strong>{{ database.host }}</strong></div>
-            <div><span>Порт</span><strong>{{ database.port }}</strong></div>
-            <div><span>Имя базы</span><strong>{{ database.name }}</strong></div>
-            <div><span>Пользователь</span><strong>{{ database.user }}</strong></div>
-            <div><span>DATABASE_ECHO</span><strong>{{ "Включён" if database.echo else "Выключен" }}</strong></div>
-            <div><span>DATABASE_CONNECT_TIMEOUT</span><strong>{{ database.connect_timeout }} сек.</strong></div>
-            <div><span>Тестовая база</span><strong>{{ "Настроена" if database.test_database_ready else "Не настроена" }}</strong></div>
+        <details class="technical-details"><summary>Техническая конфигурация</summary><div class="settings-values-grid">
+            <div><span>Host / port</span><strong>{{ database.host }}:{{ database.port }}</strong></div>
+            <div><span>Database / user</span><strong>{{ database.name }} / {{ database.user }}</strong></div>
+            <div><span>DATABASE_ECHO</span><strong>{{ "Включён" if database.technical.database_echo else "Выключен" }}</strong></div>
+            <div><span>Connect timeout</span><strong>{{ database.technical.connect_timeout }} сек.</strong></div>
+            <div><span>Pool size / overflow</span><strong>{{ database.technical.pool_size }} / {{ database.technical.max_overflow }}</strong></div>
+            <div><span>Pool timeout / recycle</span><strong>{{ database.technical.pool_timeout }} / {{ database.technical.pool_recycle }} сек.</strong></div>
+        </div></details>
+    </section>
+
+    <section class="panel connection-section" id="backup">
+        <div class="settings-title"><span>03</span><div><h2>Backup</h2><p>Состояние production timer и опубликованных custom-format dump. На Windows systemd-диагностика нейтрально недоступна.</p></div>{{ status_badge(backup) }}</div>
+        <div class="settings-values-grid diagnostic-values-grid">
+            <div><span>Backup timer</span><strong>{{ "Включён" if backup.timer_enabled else "Выключен" if backup.timer_enabled is not none else "Недоступно" }}</strong></div>
+            <div><span>Последний запуск</span><strong>{{ backup.last_run_at or "Недоступно" }}</strong></div>
+            <div><span>Успешен</span><strong>{{ "Да" if backup.last_success else "Нет" if backup.last_success is not none else "Недоступно" }}</strong></div>
+            <div><span>Последний dump</span><strong>{{ backup.last_dump or "Недоступно" }}</strong></div>
+            <div><span>Размер dump</span><strong>{{ format_bytes(backup.last_dump_size) }}</strong></div>
+            <div><span>Создан</span><strong>{{ backup.last_dump_at|datetime_seconds }}</strong></div>
+            <div><span>Хранится backup</span><strong>{{ backup.count if backup.count is not none else "Недоступно" }}</strong></div>
+            <div><span>Размер каталога</span><strong>{{ format_bytes(backup.directory_size) }}</strong></div>
+            <div><span>Следующий запуск</span><strong>{{ backup.next_run or "Недоступно" }}</strong></div>
+            <div><span>Dump проверен</span><strong>{{ "Да, pg_restore --list" if backup.dump_verified else "Нет данных" }}</strong></div>
+            <div><span>Последняя test restore</span><strong>{{ backup.last_restore_check or "Недоступно" }}</strong></div>
         </div>
-        <p class="settings-restart-note">POSTGRES_*, DATABASE_URL и параметры пула изменяются только в <code>.env</code> и требуют перезапуска приложения.</p>
     </section>
 
     <section class="panel connection-section" id="crm">
-        <div class="settings-title">
-            <span>02</span>
-            <div><h2>CRM DTEL</h2><p>Секреты отображаются только как статус «задано/не задано».</p></div>
-            <em class="settings-state {{ 'is-good' if crm_ready else 'is-warning' }}">{{ "Настроено" if crm_ready else "Не настроено" }}</em>
-        </div>
+        <div class="settings-title"><span>04</span><div><h2>CRM DTEL</h2><p>Проверка запускается только вручную и выполняет read-only запрос. Создание, удаление и запись ключей не выполняются.</p></div>{{ status_badge(crm_health) }}</div>
         <div class="connection-section-layout">
-            <div class="settings-values-grid">
-                <div><span>CRM_BASE_URL</span><strong>{{ crm_base_url }}</strong></div>
-                <div><span>REQUEST_TIMEOUT</span><strong>{{ crm_timeout }} сек.</strong></div>
-                <div><span>CRM_BUYER_ID</span>{{ state(crm_buyer_id_ready, true) }}</div>
-                <div><span>CRM_LOGIN</span>{{ state(crm_login_ready, true) }}</div>
-                <div><span>CRM_PASSWORD</span>{{ state(crm_password_ready, true) }}</div>
-                <div><span>CRM_COOKIE</span>{{ state(crm_cookie_ready, true) }}</div>
+            <div class="settings-values-grid diagnostic-values-grid">
+                <div><span>Base URL</span><strong>{{ crm_base_url }}</strong></div>
+                <div><span>Timeout</span><strong>{{ crm_timeout }} сек.</strong></div>
+                <div><span>Buyer ID</span>{{ secret_state(crm_buyer_id_ready) }}</div>
+                <div><span>Login</span>{{ secret_state(crm_login_ready) }}</div>
+                <div><span>Password</span>{{ secret_state(crm_password_ready) }}</div>
+                <div><span>Cookie</span>{{ secret_state(crm_cookie_ready) }}</div>
+                <div><span>HTTP status</span><strong>{{ check_results.crm.http_status if check_results.crm and check_results.crm.http_status is not none else "Нет данных" }}</strong></div>
+                <div><span>Время ответа</span><strong>{{ check_results.crm.response_time_ms ~ " мс" if check_results.crm and check_results.crm.response_time_ms is not none else "Нет данных" }}</strong></div>
+                <div class="diagnostic-wide"><span>Последний результат</span><strong>{{ crm_health.message }}<small>{{ crm_health.checked_at|datetime_seconds }}</small></strong></div>
             </div>
-            <aside class="settings-check-card">
-                <h3>Проверка подключения</h3>
-                <p>Выполняет безопасную авторизацию с текущими настройками сервера. Секреты не записываются в журнал и не включаются в сообщение об ошибке.</p>
-                <form method="post" action="/settings/crm/check">
-                    <button class="btn" type="submit" data-confirm="Проверить текущее подключение к CRM?" data-confirm-action="Проверить подключение">Проверить CRM</button>
-                </form>
-            </aside>
+            <aside class="settings-check-card"><h3>Безопасная проверка</h3><p>Авторизуется текущими серверными реквизитами и читает корневую страницу без изменения данных. Секреты не пишутся в журнал.</p><form method="post" action="/settings/crm/check"><button class="btn" type="submit" data-confirm="Выполнить безопасную read-only проверку CRM?" data-confirm-action="Проверить CRM">Проверить CRM</button></form></aside>
         </div>
-        <p class="settings-restart-note">CRM_BASE_URL, CRM_BUYER_ID, CRM_LOGIN, CRM_PASSWORD, CRM_COOKIE и REQUEST_TIMEOUT изменяются в <code>.env</code> и требуют перезапуска.</p>
+        <p class="settings-restart-note"><strong>Требуется перезапуск:</strong> CRM-настройки остаются в <code>.env</code> и применяются только после перезапуска приложения.</p>
     </section>
 
     <section class="panel connection-section" id="panel-api">
-        <div class="settings-title">
-            <span>03</span>
-            <div><h2>API домофонных панелей</h2><p>Общие реквизиты используются для всех панелей. Их значения не выводятся.</p></div>
-            <em class="settings-state {{ 'is-good' if panel_api_ready else 'is-warning' }}">{{ "Настроено" if panel_api_ready else "Не настроено" }}</em>
-        </div>
+        <div class="settings-title"><span>05</span><div><h2>Панели и API</h2><p>Сводка строится по сохранённым данным PostgreSQL. Открытие страницы не опрашивает физические панели.</p></div>{{ status_badge(panel_health) }}</div>
         <div class="connection-section-layout">
-            <div class="settings-values-grid">
-                <div><span>PANEL_API_LOGIN</span>{{ state(panel_api_login_ready, true) }}</div>
-                <div><span>PANEL_API_PASSWORD</span>{{ state(panel_api_password_ready, true) }}</div>
-                <div><span>PANEL_API_TIMEOUT</span><strong>{{ panel_api_timeout }} сек.<small>Требуется перезапуск</small></strong></div>
+            <div class="settings-values-grid diagnostic-values-grid">
+                <div><span>Credentials</span><strong>{{ "Настроены" if panel_api_ready else "Не настроены" }}</strong></div>
+                <div><span>Timeout</span><strong>{{ panel_api_timeout }} сек.</strong></div>
+                <div><span>Всего панелей</span><strong>{{ panel_registry.total }}</strong></div>
+                <div><span>Включено</span><strong>{{ panel_registry.enabled }}</strong></div>
+                <div><span>Online / offline</span><strong>{{ panel_registry.online }} / {{ panel_registry.offline }}</strong></div>
+                <div><span>Устаревшие данные</span><strong>{{ panel_registry.stale }}</strong></div>
+                <div><span>Среднее / медиана ответа</span><strong>{{ panel_registry.average_response_ms or "—" }} / {{ panel_registry.median_response_ms or "—" }} мс</strong></div>
+                <div><span>Последний полный мониторинг</span><strong>{{ panel_registry.last_monitor_at|datetime_seconds }}</strong></div>
+                <div><span>Последняя успешная панель</span><strong>{{ panel_registry.last_success_at|datetime_seconds }}</strong></div>
+                <div class="diagnostic-wide"><span>Последняя safe-check</span><strong>{{ panel_health.message }}<small>{% if check_results.panels and check_results.panels.panel_name %}Панель: {{ check_results.panels.panel_name }}. {% endif %}{{ panel_health.checked_at|datetime_seconds }}</small></strong></div>
             </div>
-            <aside class="settings-check-card">
-                <h3>Проверка API</h3>
-                <p>Выбирается первая включённая панель с IP. Проверка ничего не записывает в карточку устройства и не раскрывает адрес или реквизиты.</p>
-                <form method="post" action="/settings/panels/check">
-                    <button class="btn" type="submit" data-confirm="Отправить безопасный запрос к одной панели?" data-confirm-action="Проверить API">Проверить API</button>
-                </form>
-            </aside>
+            <aside class="settings-check-card"><h3>Read-only проверка одной панели</h3><p>Проверяется одна явно указанная в результате панель через системные read-only endpoints. Массового запроса нет, данные панели не изменяются.</p><form method="post" action="/settings/panels/check"><button class="btn" type="submit" data-confirm="Отправить read-only запрос к одной панели?" data-confirm-action="Проверить API">Проверить API</button></form></aside>
         </div>
-        <p class="settings-restart-note">PANEL_API_LOGIN, PANEL_API_PASSWORD и PANEL_API_TIMEOUT изменяются в <code>.env</code> и требуют перезапуска.</p>
     </section>
 
     <section class="panel connection-section" id="monitoring">
-        <div class="settings-title">
-            <span>04</span>
-            <div><h2>Мониторинг панелей</h2><p>Несекретные параметры хранятся в PostgreSQL и применяются всеми worker-процессами со следующего цикла.</p></div>
-            <em class="settings-state is-live">Применяется сразу</em>
+        <div class="settings-title"><span>06</span><div><h2>Мониторинг панелей</h2><p>Состояние текущего цикла читается из PostgreSQL. Runtime-настройки ниже также хранятся в PostgreSQL. <strong>Применяется сразу</strong> со следующего цикла.</p></div>{{ status_badge(monitor) }}</div>
+        <h3 class="diagnostic-subtitle">Состояние сейчас</h3>
+        <div class="settings-values-grid diagnostic-values-grid">
+            <div><span>Включён</span><strong>{{ "Да" if monitor.enabled else "Нет" }}</strong></div>
+            <div><span>Leader активен</span><strong>{{ "Да" if monitor.leader_active else "Нет" }}</strong></div>
+            <div><span>Статус цикла</span><strong>{{ monitor.cycle_status }}</strong></div>
+            <div><span>Heartbeat</span><strong class="{{ 'is-warning' if monitor.heartbeat_stale else '' }}">{{ monitor.heartbeat|datetime_seconds }}</strong></div>
+            <div><span>Последний цикл</span><strong>{{ monitor.last_cycle_at|datetime_seconds }}</strong></div>
+            <div><span>Всего / завершено</span><strong>{{ monitor.total }} / {{ monitor.completed }}</strong></div>
+            <div><span>Online / ошибок</span><strong>{{ monitor.online }} / {{ monitor.failed }}</strong></div>
+            <div><span>Активные панели</span><strong>{{ monitor.active_panels }}</strong></div>
+            <div><span>Следующий цикл</span><strong>{{ monitor.next_cycle_at|datetime_seconds }}</strong></div>
         </div>
+        <h3 class="diagnostic-subtitle">Настройки</h3>
         <form class="monitor-settings-form" method="post" action="/settings/monitoring" data-confirm="Сохранить новые параметры мониторинга?" data-confirm-action="Сохранить">
-            <label class="monitor-toggle-row">
-                <input type="checkbox" name="panel_monitor_enabled" value="1" {% if monitor.panel_monitor_enabled %}checked{% endif %}>
-                <span><b>Автоматический мониторинг</b><small>Отключение останавливает новые циклы, но не прерывает уже выполняющийся.</small></span>
-                <em>{{ "Включён" if monitor.panel_monitor_enabled else "Выключен" }}</em>
-            </label>
+            <label class="monitor-toggle-row"><input type="checkbox" name="panel_monitor_enabled" value="1" {% if monitor_settings.panel_monitor_enabled %}checked{% endif %}><span><b>Автоматический мониторинг</b><small>Изменение применяется со следующего цикла без перезапуска.</small></span><em>{{ "Включён" if monitor_settings.panel_monitor_enabled else "Выключен" }}</em></label>
             <div class="monitor-fields-grid">
-                <label><span>Интервал циклов</span><input type="number" name="panel_monitor_interval_seconds" min="60" max="86400" required value="{{ monitor.panel_monitor_interval_seconds }}"><small>60–86400 сек. Меньший интервал повышает нагрузку на панели и сеть.</small></label>
-                <label><span>Параллельные запросы</span><input type="number" name="panel_monitor_concurrency" min="1" max="50" required value="{{ monitor.panel_monitor_concurrency }}"><small>1–50. Увеличение ускоряет цикл, но повышает одновременную нагрузку.</small></label>
-                <label><span>Порог устаревания</span><input type="number" name="panel_monitor_stale_seconds" min="{{ monitor.panel_monitor_interval_seconds }}" max="604800" required value="{{ monitor.panel_monitor_stale_seconds }}"><small>Не меньше интервала, максимум 604800 сек. После этого панель требует обновления статуса.</small></label>
-                <label><span>Пауза ручной проверки</span><input type="number" name="panel_manual_check_cooldown_seconds" min="1" max="3600" required value="{{ monitor.panel_manual_check_cooldown_seconds }}"><small>1–3600 сек. Защищает панель от повторных запросов оператора.</small></label>
+                <label><span>Интервал циклов</span><input type="number" name="panel_monitor_interval_seconds" min="60" max="86400" required value="{{ monitor_settings.panel_monitor_interval_seconds }}"><small>60–86400 секунд.</small></label>
+                <label><span>Параллельные запросы</span><input type="number" name="panel_monitor_concurrency" min="1" max="50" required value="{{ monitor_settings.panel_monitor_concurrency }}"><small>Одновременно от 1 до 50 панелей.</small></label>
+                <label><span>Порог устаревания</span><input type="number" name="panel_monitor_stale_seconds" min="{{ monitor_settings.panel_monitor_interval_seconds }}" max="604800" required value="{{ monitor_settings.panel_monitor_stale_seconds }}"><small>Не меньше интервала.</small></label>
+                <label><span>Пауза ручной проверки</span><input type="number" name="panel_manual_check_cooldown_seconds" min="1" max="3600" required value="{{ monitor_settings.panel_manual_check_cooldown_seconds }}"><small>Защита от повторных запросов.</small></label>
             </div>
-            <div class="monitor-form-footer">
-                <p>
-                    {% if monitor.updated_at %}
-                    Последнее изменение: {{ monitor.updated_at|datetime }}{% if monitor.updated_by %}, {{ monitor.updated_by }}{% endif %}.
-                    {% else %}Используются исходные значения из <code>.env</code>.{% endif %}
-                </p>
-                <button class="btn" type="submit">Сохранить мониторинг</button>
-            </div>
+            <div class="monitor-form-footer"><p>{% if monitor_settings.updated_at %}Последнее изменение: {{ monitor_settings.updated_at|datetime }}{% if monitor_settings.updated_by %}, {{ monitor_settings.updated_by }}{% endif %}.{% else %}Используются исходные значения из <code>.env</code>.{% endif %}</p><button class="btn" type="submit">Сохранить мониторинг</button></div>
         </form>
     </section>
 
-    <section class="panel connection-section" id="system">
-        <div class="settings-title">
-            <span>05</span>
-            <div><h2>Системные параметры</h2><p>Критические параметры безопасности читаются при старте приложения.</p></div>
-            <em class="settings-state is-restart">Требуется перезапуск</em>
+    <section class="panel connection-section" id="security">
+        <div class="settings-title"><span>07</span><div><h2>HTTPS и безопасность</h2><p>Показываются только состояния критических параметров. SESSION_SECRET и другие секреты никогда не передаются клиенту.</p></div>{{ status_badge(security) }}</div>
+        <div class="settings-values-grid diagnostic-values-grid">
+            <div><span>Текущая схема</span><strong>{{ security.scheme }}</strong></div>
+            <div><span>Окружение</span><strong>{{ security.environment }}</strong></div>
+            <div><span>SESSION_HTTPS_ONLY</span><strong>{{ "Включён" if security.session_https_only else "Выключен" }}</strong></div>
+            <div><span>SESSION_SECRET</span>{{ secret_state(security.session_secret_ready) }}</div>
+            <div class="diagnostic-wide"><span>Trusted Hosts</span><strong>{{ security.trusted_hosts|join(', ') }}</strong></div>
         </div>
-        <div class="settings-values-grid">
-            <div><span>DRY_RUN</span><strong>{{ "Включён" if dry_run else "Выключен" }}<small>Изменяется в .env</small></strong></div>
-            <div><span>SESSION_HTTPS_ONLY</span><strong>{{ "Включён" if session_https_only else "Выключен" }}<small>Изменяется в .env</small></strong></div>
-            <div><span>SESSION_SECRET</span>{{ state(session_secret_ready, true) }}</div>
-        </div>
-        <p class="settings-restart-note">SESSION_SECRET никогда не передаётся в HTML. DRY_RUN оставлен в <code>.env</code>, чтобы все сервисы переключались атомарно после контролируемого перезапуска.</p>
+        {% for warning in security.warnings %}<div class="settings-check-banner is-error"><b>Предупреждение безопасности</b><span>{{ warning }}</span></div>{% endfor %}
     </section>
 </div>
 {% endblock %}

@@ -1,0 +1,2 @@
+# Install as /etc/key-writer/pgpass with owner key-writer:key-writer and mode 0600.
+127.0.0.1:5432:key_writer:key_writer:CHANGE_ME

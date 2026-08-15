@@ -1,13 +1,16 @@
+import asyncio
 import io
 from unittest.mock import patch
 
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
+from sqlalchemy import event
 from starlette.requests import Request
 
 from tests.postgres_test_case import PostgreSQLTestCase
 
 import app.db as database
 from app.repositories import key_repository, panel_repository
+from app.routers import keys as keys_router
 from app.routers.keys import key_assignment_update_route
 from app.services.importer import import_keys_file
 from app.services.writer import write_key_to_panels
@@ -145,8 +148,43 @@ class KeyInventoryTests(PostgreSQLTestCase):
             "103",
         )
 
-        self.assertEqual(result["numbers"], ["099", "101", "103"])
+        self.assertEqual(result["numbers"], ["99", "101", "103"])
         self.assertEqual(result["missing_count"], 3)
+
+    def test_missing_numbers_compare_numerically_and_keep_type_display_format(self):
+        blue_id = key_repository.create_key_type("Синий без дополнения", "#168EE8")
+        orange_id = key_repository.create_key_type("Оранжевый шестизначный", "#FF982A")
+
+        for number in ("1", "2", "4", "5"):
+            self._create_key(blue_id, number, f"AA{int(number):06d}")
+        for number in ("000001", "000002", "000004", "000005"):
+            self._create_key(orange_id, number, f"BB{int(number):06d}")
+
+        blue = key_repository.get_missing_key_numbers(blue_id, "1", "5")
+        orange = key_repository.get_missing_key_numbers(orange_id, "1", "5")
+
+        self.assertEqual(blue["start"], "1")
+        self.assertEqual(blue["end"], "5")
+        self.assertEqual(blue["numbers"], ["3"])
+        self.assertEqual(blue["ranges"], [{"start": "3", "end": "3", "count": 1}])
+        self.assertEqual(orange["start"], "000001")
+        self.assertEqual(orange["end"], "000005")
+        self.assertEqual(orange["numbers"], ["000003"])
+        self.assertEqual(
+            orange["ranges"],
+            [{"start": "000003", "end": "000003", "count": 1}],
+        )
+
+    def test_large_unpadded_number_does_not_pad_small_missing_range(self):
+        blue_id = key_repository.create_key_type("Синий переменной длины", "#168EE8")
+        for number in ("1", "2", "4", "5", "40630"):
+            self._create_key(blue_id, number, f"CC{int(number):06d}")
+
+        result = key_repository.get_missing_key_numbers(blue_id, "1", "5")
+
+        self.assertEqual(result["start"], "1")
+        self.assertEqual(result["end"], "5")
+        self.assertEqual(result["numbers"], ["3"])
 
     def test_scanner_rejects_duplicate_hex(self):
         key_type_id = key_repository.create_key_type("Стикер", "#9B72E8")
@@ -433,6 +471,115 @@ class KeyInventoryTests(PostgreSQLTestCase):
 
         self.assertEqual(second_report["added"], 1)
         self.assertGreaterEqual(second_report["duplicates"], 2)
+
+    def test_excel_import_preserves_leading_zeroes(self):
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Оранжевый"
+        sheet.append(["Номер", "HEX"])
+        sheet.append(["000050", "AA000050"])
+        sheet.append(["50", "AA000051"])
+        content = io.BytesIO()
+        workbook.save(content)
+
+        report = import_keys_file("keys.xlsx", content.getvalue(), "Тест")
+
+        self.assertEqual(report["added"], 2)
+        with database.db() as conn:
+            numbers = [
+                row[0]
+                for row in conn.execute(
+                    "SELECT number FROM keys ORDER BY id"
+                ).fetchall()
+            ]
+        self.assertEqual(numbers, ["000050", "50"])
+
+    def test_large_excel_import_uses_one_key_snapshot_and_one_batch_insert(self):
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Синий"
+        sheet.append(["№", "HEX", "Комментарий"])
+        for number in range(1, 41):
+            sheet.append([number, f"AA{number:06X}", "Пакетный импорт"])
+        content = io.BytesIO()
+        workbook.save(content)
+
+        statements: list[tuple[str, bool]] = []
+
+        def capture(_conn, _cursor, statement, _parameters, _context, executemany):
+            statements.append((" ".join(statement.lower().split()), bool(executemany)))
+
+        engine = database.get_engine()
+        event.listen(engine, "before_cursor_execute", capture)
+        try:
+            report = import_keys_file("keys.xlsx", content.getvalue(), "Тест")
+        finally:
+            event.remove(engine, "before_cursor_execute", capture)
+
+        key_snapshots = [
+            statement
+            for statement, _many in statements
+            if statement.startswith("select id, key_type_id, number, hex_value")
+            and " from keys" in statement
+        ]
+        key_inserts = [
+            many
+            for statement, many in statements
+            if statement.startswith("insert into keys(")
+        ]
+        self.assertEqual(report["added"], 40)
+        self.assertEqual(len(key_snapshots), 1)
+        self.assertEqual(key_inserts, [True])
+
+    def test_key_export_has_download_headers_and_valid_empty_workbook(self):
+        with patch.object(keys_router, "get_all_keys_for_export", return_value=[]):
+            response = keys_router.keys_export()
+
+        async def read_response() -> bytes:
+            chunks = []
+            async for chunk in response.body_iterator:
+                chunks.append(chunk)
+            return b"".join(chunks)
+
+        self.assertEqual(
+            response.media_type,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        self.assertEqual(
+            response.headers["content-disposition"],
+            'attachment; filename="keys_export.xlsx"',
+        )
+        workbook = load_workbook(
+            io.BytesIO(asyncio.run(read_response())),
+            read_only=True,
+        )
+        self.assertEqual(workbook.sheetnames, ["Ключи"])
+        self.assertEqual(workbook["Ключи"]["A1"].value, "Номер")
+
+    def test_key_export_preserves_padded_number_as_excel_text(self):
+        exported = [{
+            "type_name": "Оранжевый",
+            "number": "000050",
+            "hex_value": "AA000050",
+            "status": "free",
+            "note": "",
+            "created_at": "2026-08-14 10:00:00",
+            "created_by": "Тест",
+        }]
+        with patch.object(keys_router, "get_all_keys_for_export", return_value=exported):
+            response = keys_router.keys_export()
+
+        async def read_response() -> bytes:
+            chunks = []
+            async for chunk in response.body_iterator:
+                chunks.append(chunk)
+            return b"".join(chunks)
+
+        workbook = load_workbook(io.BytesIO(asyncio.run(read_response())))
+        cell = workbook["Оранжевый"]["A2"]
+        self.assertEqual(cell.value, "000050")
+        self.assertEqual(cell.data_type, "s")
+        self.assertEqual(cell.number_format, "@")
 
     def test_problem_key_is_not_sent_to_crm(self):
         key_type_id = key_repository.create_key_type("Детский", "#5CC878")

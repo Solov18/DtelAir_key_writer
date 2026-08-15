@@ -154,6 +154,35 @@
     letter-spacing: .02em;
 }
 
+.global-loader__collapse {
+    display: none;
+    min-width: 96px;
+    min-height: 36px;
+    padding: 7px 15px;
+    color: var(--color-heading);
+    background: color-mix(in srgb, var(--surface-panel-strong) 88%, transparent);
+    border: 1px solid color-mix(in srgb, var(--blue) 58%, var(--border-strong));
+    border-radius: 10px;
+    box-shadow: 0 0 14px color-mix(in srgb, var(--blue) 18%, transparent);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 750;
+    cursor: pointer;
+}
+
+.global-loader.is-collapsible .global-loader__collapse {
+    display: inline-grid;
+    place-items: center;
+}
+
+.global-loader__collapse:hover,
+.global-loader__collapse:focus-visible {
+    color: var(--color-heading);
+    border-color: var(--blue);
+    background: color-mix(in srgb, var(--blue) 14%, var(--surface-panel-strong));
+    outline: none;
+}
+
 body.global-loader-blocking {
     cursor: progress;
 }

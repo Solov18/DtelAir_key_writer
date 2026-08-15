@@ -4,19 +4,27 @@ import hmac
 import secrets
 from urllib.parse import parse_qs
 
+from fastapi.concurrency import run_in_threadpool
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import PlainTextResponse, RedirectResponse
+from starlette.responses import JSONResponse, PlainTextResponse, RedirectResponse
 
-from app.access_control import has_permission
+from app.access_control import has_permission, is_lookup_user
 from app.repositories.user_repository import get_user_by_id
 
 
-PUBLIC_PATHS = ("/login", "/static")
+PUBLIC_PATHS = ("/login", "/static", "/healthz")
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+LOOKUP_ALLOWED_METHODS = {
+    "/search": {"GET", "HEAD", "POST"},
+    "/api/search/suggestions": {"GET", "HEAD"},
+    "/logout": {"POST"},
+}
 
 
 def _required_permission(path: str, method: str) -> str:
     unsafe = method not in SAFE_METHODS
+    if path == "/search" or path == "/api/search/suggestions":
+        return "use_universal_search"
     if path.startswith("/settings"):
         return "manage_settings"
     if path.startswith("/users"):
@@ -87,7 +95,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if not user_id:
             return RedirectResponse("/login", status_code=303)
 
-        user = get_user_by_id(int(user_id))
+        # Repositories use synchronous SQLAlchemy sessions.  Middleware runs
+        # in the async request path, so the user lookup must not block the
+        # Uvicorn event loop on every authenticated request.
+        user = await run_in_threadpool(get_user_by_id, int(user_id))
         if not user or not int(user.get("active", 1)):
             request.session.clear()
             return RedirectResponse("/login", status_code=303)
@@ -102,6 +113,23 @@ class AuthMiddleware(BaseHTTPMiddleware):
             "permissions": sorted(user["permissions"]),
             "active": user["active"],
         }
+
+        if is_lookup_user(user):
+            if path == "/" and request.method in {"GET", "HEAD"}:
+                return RedirectResponse("/search", status_code=303)
+            allowed_methods = LOOKUP_ALLOWED_METHODS.get(path, set())
+            if request.method not in allowed_methods:
+                if path.startswith("/api/"):
+                    return JSONResponse(
+                        {"detail": "Недостаточно прав"},
+                        status_code=403,
+                    )
+                return RedirectResponse(
+                    "/search?notice=read_only",
+                    status_code=303,
+                )
+            if path == "/logout":
+                return await call_next(request)
 
         permission = _required_permission(path, request.method)
         if not has_permission(user, permission):

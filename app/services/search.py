@@ -12,6 +12,7 @@ from app.search_utils import (
     search_score,
 )
 from app.services.keys import find_keys
+from app.key_numbers import key_number_search_sql
 
 
 _APARTMENT_QUERY_RE = re.compile(
@@ -330,6 +331,8 @@ def get_search_suggestions(
     query: str,
     scope: str = "universal",
     limit: int = 8,
+    *,
+    include_uk_credentials: bool = True,
 ) -> list[dict]:
     query = (query or "").strip()
     normalized_query = normalize_search_text(query)
@@ -455,8 +458,11 @@ def get_search_suggestions(
                 )
 
         if scope in {"universal", "keys"}:
+            key_number_sql, key_number_params = key_number_search_sql(
+                "k.number", query, pattern=pattern
+            )
             key_rows = conn.execute(
-                """
+                f"""
                 SELECT
                     k.id,
                     k.number,
@@ -472,7 +478,7 @@ def get_search_suggestions(
                 LEFT JOIN employees e ON e.id = ka.employee_id
                 WHERE TRIM(k.hex_value) <> ''
                   AND (
-                    SMART_NORM(k.number) LIKE ?
+                    {key_number_sql}
                     OR SMART_NORM(k.hex_value) LIKE ?
                     OR SMART_NORM(kt.name) LIKE ?
                     OR SMART_NORM(e.full_name) LIKE ?
@@ -482,7 +488,7 @@ def get_search_suggestions(
                 ORDER BY k.id DESC
                 LIMIT 100
                 """,
-                [pattern] * 6,
+                [*key_number_params, *([pattern] * 5)],
             ).fetchall()
             candidates.extend(
                 {
@@ -508,8 +514,24 @@ def get_search_suggestions(
             )
 
         if scope in {"universal", "uk"}:
+            uk_credential_select = ", g.crm_login" if include_uk_credentials else ""
+            uk_credential_condition = (
+                " OR SMART_NORM(g.crm_login) LIKE ?"
+                if include_uk_credentials
+                else ""
+            )
+            uk_search_fields = (
+                "name",
+                "legal_name",
+                "note",
+                "contact_name",
+                "phone",
+                "email",
+                "legal_address",
+                "actual_address",
+            ) + (("crm_login",) if include_uk_credentials else ())
             uk_rows = conn.execute(
-                """
+                f"""
                 SELECT
                     g.id,
                     g.name,
@@ -519,8 +541,8 @@ def get_search_suggestions(
                     g.phone,
                     g.email,
                     g.legal_address,
-                    g.actual_address,
-                    g.crm_login
+                    g.actual_address
+                    {uk_credential_select}
                 FROM uk_groups g
                 WHERE g.archived_at IS NULL
                   AND (
@@ -532,12 +554,12 @@ def get_search_suggestions(
                     OR SMART_NORM(g.email) LIKE ?
                     OR SMART_NORM(g.legal_address) LIKE ?
                     OR SMART_NORM(g.actual_address) LIKE ?
-                    OR SMART_NORM(g.crm_login) LIKE ?
+                    {uk_credential_condition}
                   )
                 ORDER BY LOWER(g.name), g.name
                 LIMIT 80
                 """,
-                [pattern] * 9,
+                [pattern] * len(uk_search_fields),
             ).fetchall()
             candidates.extend(
                 {
@@ -554,25 +576,18 @@ def get_search_suggestions(
                     ) or "Управляющая компания",
                     "search_text": " ".join(
                         str(row[field] or "")
-                        for field in (
-                            "name",
-                            "legal_name",
-                            "note",
-                            "contact_name",
-                            "phone",
-                            "email",
-                            "legal_address",
-                            "actual_address",
-                            "crm_login",
-                        )
+                        for field in uk_search_fields
                     ),
                 }
                 for row in uk_rows
             )
 
         if scope in {"universal", "log"}:
+            log_number_sql, log_number_params = key_number_search_sql(
+                "printed_number", query, pattern=pattern
+            )
             log_rows = conn.execute(
-                """
+                f"""
                 SELECT
                     action,
                     object_name,
@@ -586,12 +601,12 @@ def get_search_suggestions(
                     OR SMART_NORM(object_name) LIKE ?
                     OR SMART_NORM(details) LIKE ?
                     OR SMART_NORM(user_full_name) LIKE ?
-                    OR SMART_NORM(printed_number) LIKE ?
+                    OR {log_number_sql}
                     OR SMART_NORM(address) LIKE ?
                 ORDER BY id DESC
                 LIMIT 100
                 """,
-                [pattern] * 6,
+                [*([pattern] * 4), *log_number_params, pattern],
             ).fetchall()
             candidates.extend(
                 {
@@ -636,7 +651,7 @@ def get_search_suggestions(
     return rank_search_candidates(query, candidates, limit=limit)
 
 
-def universal_search(query: str):
+def universal_search(query: str, *, include_uk_credentials: bool = True):
     query = (query or "").strip()
     normalized_query = normalize_search_text(query)
 
@@ -709,28 +724,32 @@ def universal_search(query: str):
             result["last_operation"] = history[0] if history else None
 
         normalized_pattern = f"%{normalized_query}%"
+        log_number_sql, log_number_params = key_number_search_sql(
+            "printed_number", query, pattern=normalized_pattern
+        )
         result["address_results"] = [
             normalize_operation_row(dict(row))
             for row in conn.execute(
-                """
+                f"""
                 SELECT *
                 FROM operation_log
                 WHERE SMART_NORM(address) LIKE ?
                    OR SMART_NORM(apartment) LIKE ?
                    OR SMART_NORM(flat_num) LIKE ?
-                   OR SMART_NORM(printed_number) LIKE ?
+                   OR {log_number_sql}
                    OR SMART_NORM(hex_value) LIKE ?
                 ORDER BY id DESC
                 LIMIT 50
                 """,
-                [normalized_pattern] * 5,
+                [normalized_pattern, normalized_pattern, normalized_pattern,
+                 *log_number_params, normalized_pattern],
             )
         ]
 
         employee_rows = [
             dict(row)
             for row in conn.execute(
-                """
+                f"""
                 SELECT
                     e.*,
                     COUNT(CASE WHEN ek.status = 'active' THEN 1 END) AS key_count,
@@ -793,10 +812,21 @@ def universal_search(query: str):
             limit=20,
         )
 
+        uk_credential_select = ", g.crm_login" if include_uk_credentials else ""
+        uk_search_fields = (
+            "name",
+            "legal_name",
+            "note",
+            "contact_name",
+            "phone",
+            "email",
+            "legal_address",
+            "actual_address",
+        ) + (("crm_login",) if include_uk_credentials else ())
         uk_rows = [
             dict(row)
             for row in conn.execute(
-                """
+                f"""
                 SELECT
                     g.id,
                     g.name,
@@ -806,8 +836,8 @@ def universal_search(query: str):
                     g.phone,
                     g.email,
                     g.legal_address,
-                    g.actual_address,
-                    g.crm_login,
+                    g.actual_address
+                    {uk_credential_select},
                     COUNT(DISTINCT pl.panel_id)
                         FILTER (WHERE pl.active IS TRUE) AS panel_count,
                     COUNT(DISTINCT ki.key_id)
@@ -826,17 +856,7 @@ def universal_search(query: str):
         result["uk_results"] = _rank_records(
             query,
             uk_rows,
-            (
-                "name",
-                "legal_name",
-                "note",
-                "contact_name",
-                "phone",
-                "email",
-                "legal_address",
-                "actual_address",
-                "crm_login",
-            ),
+            uk_search_fields,
             limit=20,
         )
 

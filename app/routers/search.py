@@ -1,6 +1,6 @@
 from urllib.parse import quote_plus
 
-from fastapi import APIRouter, Request, Form, Query
+from fastapi import APIRouter, Request, Form, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.services import universal_search
@@ -8,6 +8,7 @@ from app.services.search import get_search_suggestions
 from app.repositories.key_repository import search_keys_for_selection
 from app.services.panel_search import PanelSearchProfile, PanelSearchService
 from app.templates_config import templates
+from app.access_control import is_lookup_user
 
 router = APIRouter()
 
@@ -81,26 +82,36 @@ def panel_picker_search(
 
 @router.get("/api/search/suggestions")
 def search_suggestions(
+    request: Request,
     q: str = Query(""),
     scope: str = Query("universal"),
     limit: int = Query(8, ge=1, le=12),
 ):
+    lookup_only = is_lookup_user(request.session.get("user"))
+    if lookup_only and scope != "universal":
+        raise HTTPException(status_code=403, detail="Недостаточно прав")
     return {
         "items": get_search_suggestions(
             query=q,
             scope=scope,
             limit=limit,
+            include_uk_credentials=not lookup_only,
         )
     }
 
 
 @router.get("/search", response_class=HTMLResponse)
 def search_page(request: Request, q: str = Query("")):
+    lookup_only = is_lookup_user(request.session.get("user"))
     return templates.TemplateResponse(
         "search.html",
         {
             "request": request,
-            "result": universal_search(q) if q.strip() else None,
+            "result": (
+                universal_search(q, include_uk_credentials=not lookup_only)
+                if q.strip()
+                else None
+            ),
         },
     )
 

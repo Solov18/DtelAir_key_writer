@@ -6,7 +6,7 @@ from fastapi import Request
 from fastapi.templating import Jinja2Templates
 
 from app.presentation import operation_status_name, operation_status_tone
-from app.access_control import has_permission, role_label
+from app.access_control import has_permission, is_lookup_user, role_label
 
 BASE = Path(__file__).resolve().parent
 
@@ -60,6 +60,7 @@ templates.env.globals["operation_status_name"] = operation_status_name
 templates.env.globals["operation_status_tone"] = operation_status_tone
 templates.env.globals["role_label"] = role_label
 templates.env.globals["has_permission"] = has_permission
+templates.env.globals["is_lookup_user"] = is_lookup_user
 templates.env.globals["training_mode"] = (
     lambda request: bool(request.session.get("training_mode"))
 )

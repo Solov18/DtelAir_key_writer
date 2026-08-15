@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Dtel Key Writer PostgreSQL backup
+
+[Timer]
+OnCalendar=*-*-* 02:15:00
+RandomizedDelaySec=30m
+Persistent=true
+Unit=key-writer-backup.service
+
+[Install]
+WantedBy=timers.target

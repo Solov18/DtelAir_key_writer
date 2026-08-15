@@ -182,22 +182,11 @@
             submit.disabled = true;
             submit.textContent = "Запись выполняется…";
         }
-        let pageResponse = null;
-        try {
-            pageResponse = await window.submitHtmlFormWithLoader(form, {submitter: submit});
-        } catch (error) {
-            console.error("key_write.request.error", error);
-            await window.showAlert({
-                title: "Запись не завершена",
-                message: error?.message || "Не удалось получить ответ сервера.",
-                source: submit,
-            });
-        } finally {
-            writeInFlight = false;
-            if (form.isConnected) updateState();
-            console.info("key_write.loader.closed");
+        if (window.GlobalLoader?.submitForm) {
+            window.GlobalLoader.submitForm(form);
+        } else {
+            form.submit();
         }
-        if (pageResponse) window.renderHtmlResponse(pageResponse);
     });
     window.addEventListener("pageshow", () => {
         writeInFlight = false;

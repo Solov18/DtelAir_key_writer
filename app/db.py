@@ -156,6 +156,11 @@ def configure_database(database_url: str | None = None) -> Engine:
         engine = create_engine(
             target_url,
             pool_pre_ping=True,
+            pool_size=settings.database_pool_size,
+            max_overflow=settings.database_max_overflow,
+            pool_timeout=settings.database_pool_timeout,
+            pool_recycle=settings.database_pool_recycle,
+            pool_use_lifo=True,
             echo=settings.database_echo,
             connect_args=connect_args,
         )

@@ -8,7 +8,7 @@ Session и драйвер psycopg 3. Структурой управляет Ale
 
 ## Требования
 
-- Python 3.12+;
+- Python 3.11+;
 - Docker Compose или отдельный PostgreSQL;
 - учётные данные CRM/панелей для реальных внешних операций.
 
@@ -167,6 +167,13 @@ alembic revision --autogenerate -m "описание изменения"
 Фактические таблицы, колонки, индексы, внешние ключи, `ON DELETE`, жизненный
 цикл ключа, ER-схема и резервное копирование описаны в
 [docs/database.md](docs/database.md).
+
+## Развёртывание на Debian 12
+
+Production-зависимости, PostgreSQL, systemd, Nginx, HTTPS, резервное
+копирование, обновление и откат описаны в
+[docs/deployment-debian12.md](docs/deployment-debian12.md). Для сервера с
+4 CPU и 5.7 ГБ RAM рекомендуется 3 worker-процесса Uvicorn.
 
 ## Резервное копирование
 

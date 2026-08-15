@@ -67,7 +67,13 @@ def users_add(
             "users.html",
             _page_context(request, f"Пользователь с логином «{login}» уже существует."),
         )
-    create_user(full_name, login, hash_password(password), role["code"])
+    try:
+        create_user(full_name, login, hash_password(password), role["code"])
+    except ValueError as error:
+        return templates.TemplateResponse(
+            "users.html",
+            _page_context(request, str(error)),
+        )
     log_event(
         request=request,
         action="user_create",
@@ -111,7 +117,13 @@ def users_update(
         and count_admins() <= 1
     ):
         return RedirectResponse("/users?notice=last_admin", status_code=303)
-    update_user(user_id, full_name, login, role_id)
+    try:
+        update_user(user_id, full_name, login, role_id)
+    except ValueError as error:
+        return templates.TemplateResponse(
+            "users.html",
+            _page_context(request, str(error)),
+        )
     log_event(
         request=request,
         action="user_update",
@@ -165,7 +177,10 @@ def users_active(
         return RedirectResponse("/users?notice=self_disable", status_code=303)
     if user["role"] == "admin" and bool(user["active"]) and not enabled and count_admins() <= 1:
         return RedirectResponse("/users?notice=last_admin", status_code=303)
-    set_user_active(user_id, enabled)
+    try:
+        set_user_active(user_id, enabled)
+    except ValueError:
+        return RedirectResponse("/users?notice=last_admin", status_code=303)
     log_event(
         request=request,
         action="user_status_change",
@@ -189,7 +204,10 @@ def users_delete(request: Request, user_id: int = Form(...)):
         return RedirectResponse("/users?notice=self_delete", status_code=303)
     if user["role"] == "admin" and bool(user["active"]) and count_admins() <= 1:
         return RedirectResponse("/users?notice=last_admin", status_code=303)
-    delete_user(user_id)
+    try:
+        delete_user(user_id)
+    except ValueError:
+        return RedirectResponse("/users?notice=last_admin", status_code=303)
     log_event(
         request=request,
         action="user_delete",

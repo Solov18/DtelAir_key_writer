@@ -19,6 +19,7 @@ from app.services import (
 from app.response_utils import async_document_response
 from app.repositories.panel_repository import normalize_panel_row
 from app.services.panel_search import PanelSearchProfile, PanelSearchService
+from app.key_numbers import key_numbers_equal
 from app.templates_config import templates
 
 router = APIRouter()
@@ -98,7 +99,7 @@ def _build_key_rows(requests: list[dict] | list[str]) -> list[dict]:
             and not ambiguous
             and request.get("hex_value")
             and number
-            and str(item.get("number") or "").casefold() != number.casefold()
+            and not key_numbers_equal(item.get("number"), number)
         )
         keys.append(
             {

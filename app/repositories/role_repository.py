@@ -2,10 +2,17 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+from sqlalchemy.exc import IntegrityError
+
 from app.db import db
 
 
 PERMISSION_DEFINITIONS = (
+    (
+        "use_universal_search",
+        "Универсальный поиск",
+        "Поиск адресов, квартир, ключей, назначений и доступной истории",
+    ),
     ("view", "Просмотр", "Просмотр доступных разделов и карточек"),
     ("write_keys", "Запись ключей", "Отправка ключей в CRM"),
     ("manage_keys", "Управление ключами", "Реестр, типы и состояния ключей"),
@@ -19,11 +26,14 @@ PERMISSION_DEFINITIONS = (
 
 SYSTEM_ROLES = (
     ("admin", "Администратор", "Полный доступ и управление безопасностью системы.", {item[0] for item in PERMISSION_DEFINITIONS}),
-    ("operator", "Оператор", "Работа с реестрами, панелями и записью ключей.", {"view", "write_keys", "manage_keys", "manage_panels", "manage_uk", "manage_employees", "view_logs"}),
-    ("viewer", "Наблюдатель", "Просмотр данных и журналов без изменений.", {"view", "view_logs"}),
+    ("operator", "Оператор", "Работа с реестрами, панелями и записью ключей.", {"use_universal_search", "view", "write_keys", "manage_keys", "manage_panels", "manage_uk", "manage_employees", "view_logs"}),
+    ("viewer", "Наблюдатель", "Просмотр данных и журналов без изменений.", {"use_universal_search", "view", "view_logs"}),
+    ("lookup", "Справочная", "Только универсальный поиск без доступа к изменениям и реестрам.", {"use_universal_search"}),
 )
 
-ADMIN_CRITICAL_PERMISSIONS = frozenset({"view", "manage_users", "manage_settings"})
+ADMIN_CRITICAL_PERMISSIONS = frozenset(
+    {"use_universal_search", "view", "manage_users", "manage_settings"}
+)
 
 
 def ensure_system_roles() -> None:
@@ -129,13 +139,16 @@ def create_role(name: str, description: str, permission_codes: set[str]) -> int:
         ).fetchone()
         if duplicate:
             raise ValueError("Роль с таким названием уже существует")
-        result = conn.execute(
-            """
-            INSERT INTO roles(code, name, description, is_system)
-            VALUES (?, ?, ?, false)
-            """,
-            (code, clean_name, description.strip()),
-        )
+        try:
+            result = conn.execute(
+                """
+                INSERT INTO roles(code, name, description, is_system)
+                VALUES (?, ?, ?, false)
+                """,
+                (code, clean_name, description.strip()),
+            )
+        except IntegrityError as error:
+            raise ValueError("Роль с таким названием уже существует") from error
         role_id = int(result.lastrowid)
     set_role_permissions(role_id, permission_codes)
     return role_id
@@ -155,14 +168,17 @@ def update_role(role_id: int, name: str, description: str) -> None:
         ).fetchone()
         if duplicate:
             raise ValueError("Роль с таким названием уже существует")
-        conn.execute(
-            """
-            UPDATE roles
-            SET name = ?, description = ?, updated_at = CAST(CURRENT_TIMESTAMP AS TEXT)
-            WHERE id = ?
-            """,
-            (clean_name, description.strip(), role_id),
-        )
+        try:
+            conn.execute(
+                """
+                UPDATE roles
+                SET name = ?, description = ?, updated_at = CAST(CURRENT_TIMESTAMP AS TEXT)
+                WHERE id = ?
+                """,
+                (clean_name, description.strip(), role_id),
+            )
+        except IntegrityError as error:
+            raise ValueError("Роль с таким названием уже существует") from error
 
 
 def set_role_permissions(role_id: int, permission_codes: set[str]) -> None:
@@ -173,6 +189,8 @@ def set_role_permissions(role_id: int, permission_codes: set[str]) -> None:
     selected = set(permission_codes) & allowed
     if role["code"] == "admin":
         selected |= set(ADMIN_CRITICAL_PERMISSIONS)
+    elif role["code"] == "lookup":
+        selected = {"use_universal_search"}
     with db() as conn:
         conn.execute("DELETE FROM role_permissions WHERE role_id = ?", (role_id,))
         for permission_code in sorted(selected):

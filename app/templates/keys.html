@@ -371,7 +371,7 @@
             <div><h2 id="keyImportModalTitle">Импорт из Excel</h2><p class="subtitle">Каждый лист файла будет отдельным типом ключа.</p></div>
             <button type="button" class="btn-small btn-ghost modal-close keys-modal-close" data-close="keyImportModal" aria-label="Закрыть">×</button>
         </div>
-        <form method="post" action="/keys/import" enctype="multipart/form-data" class="keys-modal-form">
+        <form method="post" action="/keys/import" enctype="multipart/form-data" class="keys-modal-form" data-loader-long-navigation>
             <label>Excel или CSV</label>
             <input type="file" name="file" accept=".xlsx,.xlsm,.csv" required>
             <div class="keys-format-note">

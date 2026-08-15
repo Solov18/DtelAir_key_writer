@@ -1,0 +1,40 @@
+[Unit]
+Description=Dtel Key Writer CRM
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=key-writer
+Group=key-writer
+WorkingDirectory=/opt/key-writer
+EnvironmentFile=/etc/key-writer/key-writer.env
+Environment=PYTHONUNBUFFERED=1
+ExecStartPre=/opt/key-writer/.venv/bin/python -m alembic current
+ExecStart=/opt/key-writer/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8100 --workers 3 --proxy-headers --forwarded-allow-ips=127.0.0.1 --no-server-header
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=90
+TimeoutStopSec=45
+KillSignal=SIGTERM
+UMask=0027
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=key-writer
+
+[Install]
+WantedBy=multi-user.target
