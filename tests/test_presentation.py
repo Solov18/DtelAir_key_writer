@@ -522,6 +522,11 @@ class PresentationTests(unittest.TestCase):
 
     def test_shared_panel_picker_owns_search_lifecycle_and_selection(self):
         base = Path("app/templates/base.html").read_text(encoding="utf-8")
+        message_template = Path("app/templates/message_preview.html").read_text(encoding="utf-8")
+        manual_template = Path("app/templates/manual_write.html").read_text(encoding="utf-8")
+        employee_template = Path("app/templates/employee_detail.html").read_text(encoding="utf-8")
+        picker_styles = Path("app/static/css/panel-picker.css").read_text(encoding="utf-8")
+        message_styles = Path("app/static/css/pages/message.css").read_text(encoding="utf-8")
         picker = Path("app/static/js/panel-picker.js").read_text(encoding="utf-8")
         smart_search = Path("app/static/js/smart-search.js").read_text(encoding="utf-8")
         message = Path("app/static/js/message.js").read_text(encoding="utf-8")
@@ -543,6 +548,7 @@ class PresentationTests(unittest.TestCase):
         self.assertIn("addSelected()", picker)
         self.assertIn("removeManual(event)", picker)
         self.assertIn("emptyText", picker)
+        self.assertIn('class="app-panel-picker__item', picker)
         self.assertIn("new window.PanelPicker", message)
         self.assertIn("new window.PanelPicker", manual)
         self.assertIn('endpoint: "/message/panels/search"', message)
@@ -551,6 +557,17 @@ class PresentationTests(unittest.TestCase):
         self.assertNotIn("new AbortController()", manual)
         self.assertNotIn("async function searchPanels", message)
         self.assertNotIn("async function searchPanels", manual)
+        self.assertNotIn("message-detected-meta", message_template)
+        for template in (message_template, manual_template, employee_template):
+            self.assertIn("app-panel-picker__header", template)
+            self.assertIn("app-panel-picker__results", template)
+            self.assertIn("app-panel-picker__footer", template)
+        self.assertIn("position: fixed", picker_styles)
+        self.assertIn("grid-template-columns: repeat(2, minmax(0, 1fr))", picker_styles)
+        self.assertIn(
+            "grid-template-columns: minmax(0, 1.05fr) minmax(390px, .95fr)",
+            message_styles,
+        )
 
     def test_key_assignment_picker_is_scoped_to_selected_address(self):
         template = Path("app/templates/key_detail.html").read_text(encoding="utf-8")

@@ -129,6 +129,28 @@ class CrmServiceTests(unittest.TestCase):
         )
         self.assertEqual(session.calls[0][2]["json"]["value"], "363FFAD7")
 
+    def test_crm_hex_normalization_uses_endpoint_specific_contracts(self):
+        self.assertEqual(
+            crm.normalize_crm_key_hex("ED5B1625", operation="delete"),
+            "000000ED5B1625",
+        )
+        self.assertEqual(
+            crm.normalize_crm_key_hex("000000ED5B1625", operation="delete"),
+            "000000ED5B1625",
+        )
+        self.assertEqual(
+            crm.normalize_crm_key_hex("ed5b1625", operation="create"),
+            "ED5B1625",
+        )
+        # Key type is not part of the external URL contract. Representative
+        # values from different CRM key types use the same fixed-width VALUE.
+        for internal_hex in ("A9F0663A", "3DE9A1A0", "82AF11C4"):
+            external_hex = crm.normalize_crm_key_hex(
+                internal_hex, operation="delete"
+            )
+            self.assertEqual(len(external_hex), 14)
+            self.assertTrue(external_hex.endswith(internal_hex))
+
     def test_existing_key_has_separate_status(self):
         self.configure(crm_cookie="PHPSESSID=test-session")
         session = FakeSession()
@@ -345,7 +367,7 @@ class CrmServiceTests(unittest.TestCase):
         self.assertEqual(session.calls[2][0], "DELETE")
         self.assertEqual(
             session.calls[2][1],
-            "https://crm.example/front/device/08:13:CD:00:1D:C2/key/363FFAD7/delete",
+            "https://crm.example/front/device/08:13:CD:00:1D:C2/key/000000363FFAD7/delete",
         )
         self.assertNotIn("json", session.calls[2][2])
 
@@ -364,9 +386,39 @@ class CrmServiceTests(unittest.TestCase):
         self.assertEqual(session.calls[0][0], "DELETE")
         self.assertEqual(
             session.calls[0][1],
-            "https://crm.example/front/device/08:13:CD:00:1D:C2/key/363FFAD7/delete",
+            "https://crm.example/front/device/08:13:CD:00:1D:C2/key/000000363FFAD7/delete",
         )
         self.assertNotIn("json", session.calls[0][2])
+
+    def test_cookie_remove_pads_internal_hex_to_crm_device_value(self):
+        self.configure(crm_cookie="PHPSESSID=test-session")
+        session = FakeSession()
+
+        with patch.object(crm.requests, "Session", return_value=session):
+            result = crm.crm_remove_key(
+                "08:53:CD:03:22:5E", "ED5B1625", "2", 0,
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(
+            session.calls[0][1],
+            "https://crm.example/front/device/08:53:CD:03:22:5E/key/000000ED5B1625/delete",
+        )
+
+    def test_cookie_remove_does_not_confirm_200_key_not_found(self):
+        self.configure(crm_cookie="PHPSESSID=test-session")
+        session = FakeSession()
+        session.create_responses.append(
+            FakeResponse(data={"result": False, "message": "Ключ не найден"})
+        )
+
+        with patch.object(crm.requests, "Session", return_value=session):
+            result = crm.crm_remove_key(
+                "08:53:CD:03:22:5E", "ED5B1625", "2", 0,
+            )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["status"], "DELETE_NOT_CONFIRMED")
 
     def test_cookie_remove_does_not_treat_generic_route_404_as_absent_key(self):
         self.configure(crm_cookie="PHPSESSID=test-session")
@@ -408,7 +460,7 @@ class CrmServiceTests(unittest.TestCase):
         self.assertEqual(result["status"], "ALREADY_ABSENT")
         self.assertEqual(session.calls[0][0], "DELETE")
 
-    def test_company_existing_and_absent_results_are_idempotent(self):
+    def test_company_existing_is_idempotent_but_200_not_found_is_unconfirmed(self):
         self.configure(crm_buyer_id="42")
         add_session = FakeSession()
         add_session.create_responses.append(
@@ -431,8 +483,8 @@ class CrmServiceTests(unittest.TestCase):
                 "08:13:CD:00:1D:C2", "363FFAD7", "87", 0,
                 login="uk-operator", password="uk-secret",
             )
-        self.assertTrue(removed["ok"])
-        self.assertEqual(removed["status"], "ALREADY_ABSENT")
+        self.assertFalse(removed["ok"])
+        self.assertEqual(removed["status"], "DELETE_NOT_CONFIRMED")
 
     def test_company_remove_does_not_treat_generic_route_404_as_absent_key(self):
         self.configure(crm_buyer_id="42")

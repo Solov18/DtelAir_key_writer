@@ -233,6 +233,15 @@ class BackendSearchServiceTests(PostgreSQLTestCase):
             "ул. Бамбуковая 44 к.2", "подъезд 3",
             "D4:A0:FB:1B:3C:59", enabled=0,
         )
+        with db() as conn:
+            conn.execute(
+                """
+                UPDATE panels
+                SET api_status = 'online', last_checked_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (exact,),
+            )
         self._panel("ул. Другая 144", "калитка", "D4:A0:FB:1B:3C:60")
 
         by_house = PanelSearchService.search("Бамбуковая 44", limit=20)
@@ -257,6 +266,9 @@ class BackendSearchServiceTests(PostgreSQLTestCase):
             limit=20,
         )
         self.assertEqual(old_contract["total"], 3)
+        exact_old_dto = next(item for item in old_contract["items"] if item["id"] == exact)
+        self.assertEqual(exact_old_dto["status_name"], "В сети")
+        self.assertEqual(exact_old_dto["status_tone"], "success")
         self.assertEqual(neutral_contract["total"], 3)
         self.assertEqual(
             {item["id"] for item in old_contract["items"]},

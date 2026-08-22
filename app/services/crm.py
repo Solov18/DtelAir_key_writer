@@ -291,11 +291,41 @@ def _get_session(*, deadline: float | None = None) -> requests.Session:
     return _crm_session
 
 
+CRM_CREATE_KEY_HEX_LENGTH = 8
+CRM_DEVICE_KEY_VALUE_LENGTH = 14
+
+
+def normalize_crm_key_hex(hex_value: str, *, operation: str) -> str:
+    """Return the key representation required by a crm.dtel.ru endpoint.
+
+    The create-key form sends the scanned 32-bit key code (eight hexadecimal
+    characters) together with ``numberSystem=16``.  Device-key records returned
+    by CRM expose a different, fixed-width ``VALUE`` field: the frontend passes
+    that 14-character value verbatim to the DELETE URL.  Locally we keep the
+    scanned value and expand it only at the integration boundary.
+    """
+
+    clean_hex = (hex_value or "").strip().upper()
+    if not re.fullmatch(r"[0-9A-F]+", clean_hex):
+        raise ValueError(f"Некорректный HEX ключа: {hex_value}")
+    if operation == "create":
+        if len(clean_hex) != CRM_CREATE_KEY_HEX_LENGTH:
+            raise ValueError(f"Некорректный HEX ключа: {hex_value}")
+        return clean_hex
+    if operation == "delete":
+        if len(clean_hex) > CRM_DEVICE_KEY_VALUE_LENGTH:
+            raise ValueError(f"Некорректный HEX ключа: {hex_value}")
+        return clean_hex.zfill(CRM_DEVICE_KEY_VALUE_LENGTH)
+    raise ValueError(f"Неизвестная CRM-операция с ключом: {operation}")
+
+
 def _validate_write_data(mac: str, hex_value: str) -> str | None:
     if not re.fullmatch(r"[0-9A-F]{2}(?::[0-9A-F]{2}){5}", mac.upper()):
         return f"Некорректный MAC-адрес панели: {mac}"
 
-    if not re.fullmatch(r"[0-9A-F]{8}", hex_value.upper()):
+    if not re.fullmatch(
+        rf"[0-9A-F]{{{CRM_CREATE_KEY_HEX_LENGTH}}}", hex_value.upper()
+    ):
         return f"Некорректный HEX ключа: {hex_value}"
 
     return None
@@ -379,15 +409,15 @@ def _classify_operation_response(data: dict, *, operation: str) -> dict:
             response=message or fallback,
         )
 
-    idempotent = not ok and any(
+    not_confirmed = not ok and any(
         marker in normalized
         for marker in ("не найден", "не существует", "already absent", "not found")
     )
-    status = "SUCCESS" if ok else "ALREADY_ABSENT" if idempotent else "CRM_ERROR"
+    status = "SUCCESS" if ok else "DELETE_NOT_CONFIRMED" if not_confirmed else "CRM_ERROR"
     return _result(
-        ok=ok or idempotent,
+        ok=ok,
         status=status,
-        response=message or ("Ключ успешно удалён" if ok else "CRM отклонила удаление ключа"),
+        response=message or ("Ключ успешно удалён" if ok else "CRM не подтвердила удаление ключа"),
     )
 
 
@@ -537,10 +567,17 @@ def _company_key_operation(
             response="Тестовый режим: запрос в CRM не отправлен",
         )
 
+    external_hex = (
+        normalize_crm_key_hex(clean_hex, operation="create")
+        if operation == "add"
+        else normalize_crm_key_hex(clean_hex, operation="delete")
+    )
+    if operation == "add":
+        payload["value"] = external_hex
     url = (
         f"{_base_url()}/front/device-keys/{clean_mac}/create-key"
         if operation == "add"
-        else f"{_base_url()}/front/device/{clean_mac}/key/{clean_hex}/delete"
+        else f"{_base_url()}/front/device/{clean_mac}/key/{external_hex}/delete"
     )
     sender = _send_create_key if operation == "add" else _send_delete_key
     session = _new_session()
@@ -682,6 +719,8 @@ def crm_add_key(
             response=validation_error,
         )
 
+    payload["value"] = normalize_crm_key_hex(clean_hex, operation="create")
+
     if settings.dry_run:
         return _result(
             ok=True,
@@ -821,7 +860,8 @@ def crm_remove_key(mac: str, hex_value: str, flat_num: str, inner: int) -> dict:
 
     operation_timeout = max(1, float(settings.request_timeout))
     deadline = monotonic() + operation_timeout
-    url = f"{_base_url()}/front/device/{clean_mac}/key/{clean_hex}/delete"
+    external_hex = normalize_crm_key_hex(clean_hex, operation="delete")
+    url = f"{_base_url()}/front/device/{clean_mac}/key/{external_hex}/delete"
     logger.info("key_delete.crm.start mac=%s timeout_seconds=%s", clean_mac, operation_timeout)
     if not _crm_lock.acquire(timeout=operation_timeout):
         return _result(ok=False, status="TIMEOUT", response="Превышено время ожидания очереди удаления в CRM")

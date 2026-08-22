@@ -233,13 +233,13 @@
     </section>
     <div class="employee-panel-picker app-panel-picker" id="employeePanelPicker" hidden aria-hidden="true">
         <div class="employee-panel-picker__dialog app-panel-picker__dialog panel" role="dialog" aria-modal="true" aria-labelledby="employeePanelPickerTitle">
-            <header><div><span class="page-eyebrow">Физическая запись</span><h2 id="employeePanelPickerTitle">Выберите панели</h2></div><button type="button" class="employee-panel-picker__close" id="closeEmployeePanelPicker" aria-label="Закрыть">×</button></header>
-            <p>Найдите панели по адресу, входу, назначению, MAC или номеру.</p>
-            <div class="employee-panel-picker__search"><input id="employeePanelSearch" type="search" autocomplete="off" placeholder="Адрес, подъезд, парковка, калитка или MAC"><button type="button" class="btn-secondary" id="findEmployeePanels">Найти</button></div>
-            <p class="employee-panel-picker__status" id="employeePanelSearchStatus">Введите не менее двух символов.</p>
-            <div class="employee-panel-picker__results custom-scroll" id="employeePanelSearchResults"></div>
-            <div class="employee-panel-picker__selection" id="employeePanelPickerSelection" hidden>Отмечено: <b id="employeePanelPickerCount">0</b><span id="employeePanelPickerChips"></span></div>
-            <footer><button type="button" id="cancelEmployeePanelPicker">Отмена</button><button type="button" class="btn" id="addEmployeePanels" disabled>Добавить выбранные</button></footer>
+            <header class="app-panel-picker__header"><div><span class="page-eyebrow">Физическая запись</span><h2 id="employeePanelPickerTitle">Выберите панели</h2></div><button type="button" class="employee-panel-picker__close app-panel-picker__close" id="closeEmployeePanelPicker" aria-label="Закрыть">×</button></header>
+            <p class="app-panel-picker__note">Найдите панели по адресу, входу, назначению, MAC или номеру.</p>
+            <div class="employee-panel-picker__search app-panel-picker__search"><input id="employeePanelSearch" type="search" autocomplete="off" placeholder="Адрес, подъезд, парковка, калитка или MAC"><button type="button" class="btn-secondary" id="findEmployeePanels">Найти</button></div>
+            <p class="employee-panel-picker__status app-panel-picker__status" id="employeePanelSearchStatus">Введите не менее двух символов.</p>
+            <div class="employee-panel-picker__results app-panel-picker__results custom-scroll" id="employeePanelSearchResults"></div>
+            <div class="employee-panel-picker__selection app-panel-picker__selection" id="employeePanelPickerSelection" hidden>Отмечено: <b id="employeePanelPickerCount">0</b><span id="employeePanelPickerChips"></span></div>
+            <footer class="app-panel-picker__footer"><button type="button" id="cancelEmployeePanelPicker">Отмена</button><button type="button" class="btn" id="addEmployeePanels" disabled>Добавить выбранные</button></footer>
         </div>
     </div>
     {% endif %}

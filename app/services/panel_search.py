@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from enum import StrEnum
 import re
 
@@ -32,6 +33,7 @@ class PanelSearchResult:
     group_id: int | None
     link_id: int | None
     status: str
+    last_checked_at: datetime | None
     display_label: str
     rank: int
 
@@ -133,7 +135,7 @@ class PanelSearchService:
             rows = conn.execute(
                 f"""
                 SELECT p.id, p.address, p.entrance, p.name, p.mac, p.ip,
-                       p.enabled, p.api_status, {select_link},
+                       p.enabled, p.api_status, p.last_checked_at, {select_link},
                        COUNT(*) OVER() AS total_count,
                        CASE
                          WHEN ? <> '' AND SMART_NORM(p.address) = ? THEN 0
@@ -171,6 +173,7 @@ class PanelSearchService:
                     group_id=int(item["group_id"]) if item.get("group_id") is not None else None,
                     link_id=int(item["link_id"]) if item.get("link_id") is not None else None,
                     status=str(item.get("api_status") or "unknown"),
+                    last_checked_at=item.get("last_checked_at"),
                     display_label=" · ".join(
                         filter(None, [address, point_name, str(item.get("mac") or "")])
                     ),

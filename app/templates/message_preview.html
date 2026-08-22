@@ -219,12 +219,6 @@
             </div>
             {% endif %}
 
-            <dl class="message-detected-meta">
-                <div><dt>Квартира</dt><dd>{{ parsed.apartment or 'Не указана' }}</dd></div>
-                <div><dt>Подъезд</dt><dd>{{ parsed.entrance or 'Не указан' }}</dd></div>
-                <div><dt>Телефон</dt><dd>{{ parsed.phones|join(', ') if parsed.phones else 'Не найден' }}</dd></div>
-                <div><dt>Тип из текста</dt><dd>{{ parsed.key_type or 'Не определён' }}</dd></div>
-            </dl>
         </section>
     </div>
 
@@ -278,22 +272,22 @@
 
 <div class="message-panel-picker app-panel-picker" id="messagePanelPicker" hidden aria-hidden="true">
     <section class="message-panel-picker__dialog app-panel-picker__dialog panel modal-scroll" role="dialog" aria-modal="true" aria-labelledby="messagePanelPickerTitle">
-        <header>
+        <header class="app-panel-picker__header">
             <div><span class="page-eyebrow">Все панели CRM</span><h2 id="messagePanelPickerTitle">Добавить панели для записи</h2></div>
-            <button type="button" class="message-panel-picker__close" id="close-panel-picker" aria-label="Закрыть">×</button>
+            <button type="button" class="message-panel-picker__close app-panel-picker__close" id="close-panel-picker" aria-label="Закрыть">×</button>
         </header>
-        <p class="message-panel-picker__note">Дополнительные панели дают ключу доступ к другим точкам, но не меняют адрес и квартиру владельца.</p>
-        <label class="search-field message-panel-picker__search">
+        <p class="message-panel-picker__note app-panel-picker__note">Дополнительные панели дают ключу доступ к другим точкам, но не меняют адрес и квартиру владельца.</p>
+        <label class="search-field message-panel-picker__search app-panel-picker__search">
             <span class="search-icon" aria-hidden="true">⌕</span>
             <input id="messagePanelSearch" type="search" placeholder="Адрес, калитка, парковка, MAC или номер панели" autocomplete="off">
         </label>
-        <div class="message-panel-picker__status" id="messagePanelSearchStatus">Введите не менее двух символов.</div>
-        <div class="message-panel-picker__results custom-scroll" id="messagePanelSearchResults"></div>
-        <div class="message-panel-picker__selection" id="messagePanelPickerSelection" hidden>
+        <div class="message-panel-picker__status app-panel-picker__status" id="messagePanelSearchStatus">Введите не менее двух символов.</div>
+        <div class="message-panel-picker__results app-panel-picker__results custom-scroll" id="messagePanelSearchResults"></div>
+        <div class="message-panel-picker__selection app-panel-picker__selection" id="messagePanelPickerSelection" hidden>
             <span>Выбрано: <b id="messagePanelPickerCount">0</b></span>
             <div class="message-panel-picker__chips" id="messagePanelPickerChips"></div>
         </div>
-        <footer>
+        <footer class="app-panel-picker__footer">
             <button type="button" class="btn btn-ghost" id="cancel-panel-picker">Отмена</button>
             <button type="button" class="btn" id="add-selected-panels" disabled>Добавить выбранные</button>
         </footer>

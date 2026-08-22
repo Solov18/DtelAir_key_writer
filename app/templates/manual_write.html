@@ -162,25 +162,25 @@
 {% if key and panels and not error %}
 <div class="manual-panel-picker app-panel-picker" id="manualPanelPicker" hidden aria-hidden="true">
     <section class="manual-panel-picker__dialog app-panel-picker__dialog panel modal-scroll" role="dialog" aria-modal="true" aria-labelledby="manualPanelPickerTitle">
-        <header>
+        <header class="app-panel-picker__header">
             <div><span class="page-eyebrow">Все панели CRM</span><h2 id="manualPanelPickerTitle">Добавить дополнительные панели</h2></div>
-            <button type="button" class="manual-panel-picker__close" id="close-manual-panel-picker" aria-label="Закрыть">×</button>
+            <button type="button" class="manual-panel-picker__close app-panel-picker__close" id="close-manual-panel-picker" aria-label="Закрыть">×</button>
         </header>
-        <p class="manual-panel-picker__note">Основной адрес <b>{{ address }}</b>{% if apartment %}, кв. {{ apartment }}{% endif %} останется без изменений.</p>
-        <div class="manual-panel-picker__search-row">
+        <p class="manual-panel-picker__note app-panel-picker__note">Основной адрес <b>{{ address }}</b>{% if apartment %}, кв. {{ apartment }}{% endif %} останется без изменений.</p>
+        <div class="manual-panel-picker__search-row app-panel-picker__search">
             <label class="search-field manual-panel-picker__search">
                 <span class="search-icon" aria-hidden="true">⌕</span>
                 <input id="manualPanelSearch" type="search" placeholder="Адрес, калитка, парковка, лифт или MAC" autocomplete="off">
             </label>
             <button type="button" class="btn" id="find-manual-panels">Найти</button>
         </div>
-        <div class="manual-panel-picker__status" id="manualPanelSearchStatus">Введите не менее двух символов.</div>
-        <div class="manual-panel-picker__results custom-scroll" id="manualPanelSearchResults"></div>
-        <div class="manual-panel-picker__selection" id="manualPanelPickerSelection" hidden>
+        <div class="manual-panel-picker__status app-panel-picker__status" id="manualPanelSearchStatus">Введите не менее двух символов.</div>
+        <div class="manual-panel-picker__results app-panel-picker__results custom-scroll" id="manualPanelSearchResults"></div>
+        <div class="manual-panel-picker__selection app-panel-picker__selection" id="manualPanelPickerSelection" hidden>
             <span>Выбрано: <b id="manualPanelPickerCount">0</b></span>
             <div class="manual-panel-picker__chips" id="manualPanelPickerChips"></div>
         </div>
-        <footer>
+        <footer class="app-panel-picker__footer">
             <button type="button" class="btn btn-ghost" id="cancel-manual-panel-picker">Отмена</button>
             <button type="button" class="btn" id="add-manual-panels" disabled>Добавить выбранные</button>
         </footer>

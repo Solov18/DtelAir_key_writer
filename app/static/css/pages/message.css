@@ -545,13 +545,13 @@
 
 .message-review-grid {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1.05fr) minmax(390px, .95fr);
     gap: 14px;
     margin-top: 14px;
     align-items: start;
 }
 
-.message-keys-card { order: -1; }
+.message-keys-card { min-width: 0; }
 
 .preview-panel-list {
     max-height: 240px;
@@ -1051,7 +1051,7 @@ body.light-theme .message-panel-picker__selection { background: #eef8ff; }
 }
 
 .message-empty-state {
-    min-height: 200px;
+    min-height: 122px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -1190,8 +1190,7 @@ body.light-theme .message-steps .is-active {
 }
 
 @media (max-width: 1120px) {
-    .message-start-grid,
-    .message-review-grid {
+    .message-start-grid {
         grid-template-columns: 1fr;
     }
 
@@ -1202,6 +1201,11 @@ body.light-theme .message-steps .is-active {
     .message-capabilities {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+}
+
+@media (max-width: 940px) {
+    .message-review-grid { grid-template-columns: 1fr; }
+    .message-keys-card { order: -1; }
 }
 
 @media (max-width: 780px) {

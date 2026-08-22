@@ -53,6 +53,7 @@ def message_panel_search(
                 "ip": result.ip,
                 "enabled": 1 if result.active else 0,
                 "api_status": result.status,
+                "last_checked_at": result.last_checked_at,
             }
         )
         has_mac = bool((panel.get("mac") or "").strip())

@@ -138,7 +138,7 @@
                 const disabled = exists || !panel.selectable;
                 const reason = exists ? "Панель уже выбрана" : panel.unavailable_reason;
                 const title = panel.entrance || panel.name || "Точка доступа";
-                return `<label class="${escapeHtml(o.itemClass)} ${disabled ? "is-disabled" : ""}">
+                return `<label class="app-panel-picker__item ${escapeHtml(o.itemClass)} ${disabled ? "is-disabled" : ""}">
                     <span class="${escapeHtml(o.bodyClass)}">
                         <b>${escapeHtml(panel.address || "Адрес не указан")}</b>
                         <span>${escapeHtml(title)}</span>

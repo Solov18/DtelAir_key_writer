@@ -1,11 +1,23 @@
 .app-panel-picker {
     --picker-surface: color-mix(in srgb, var(--panel, #061b2d) 96%, transparent);
     --picker-card: color-mix(in srgb, var(--surface, #071d30) 88%, var(--blue-2, #14aaff) 12%);
+    position: fixed;
+    inset: 0;
+    z-index: 4200;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    overflow: auto;
+    background: rgba(0, 10, 21, .72);
+    backdrop-filter: blur(7px);
 }
 
 .app-panel-picker[hidden] { display: none !important; }
 
 .app-panel-picker .app-panel-picker__dialog {
+    display: grid;
+    grid-template-rows: auto auto auto auto minmax(0, 1fr) auto auto;
+    gap: 13px;
     width: min(1040px, calc(100vw - 32px));
     max-height: min(820px, calc(100vh - 32px));
     padding: 22px;
@@ -13,10 +25,14 @@
     border-radius: 16px;
     background: var(--picker-surface);
     box-shadow: 0 24px 80px rgba(0, 8, 18, .58), 0 0 34px rgba(0, 174, 255, .16);
+    overflow: hidden;
 }
 
 .app-panel-picker__header,
 .app-panel-picker .app-panel-picker__dialog > header {
+    display: flex;
+    justify-content: space-between;
+    gap: 18px;
     min-height: 52px;
     align-items: center;
 }
@@ -48,11 +64,27 @@
 .app-panel-picker__close:hover,
 .app-panel-picker__close:focus-visible { color: var(--text-strong); border-color: var(--blue-2); outline: none; box-shadow: 0 0 18px rgba(0,174,255,.18); }
 
-.app-panel-picker__search { align-items: center; }
+.app-panel-picker__search {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+}
+.app-panel-picker label.app-panel-picker__search { grid-template-columns: minmax(0, 1fr); }
 .app-panel-picker__search input { min-width: 0; }
 .app-panel-picker__search .btn { min-width: 142px; white-space: nowrap; }
 
-.app-panel-picker__results { min-height: 170px; max-height: 390px; padding: 2px 5px 2px 2px; }
+.app-panel-picker__results {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
+    gap: 10px;
+    min-height: 150px;
+    max-height: 390px;
+    padding: 2px 5px 2px 2px;
+    overflow: auto;
+}
 .app-panel-picker__item,
 .app-panel-picker .panel-picker__item,
 .app-panel-picker [class$="panel-picker__item"] {
@@ -61,7 +93,7 @@
     align-items: center;
     gap: 16px;
     min-width: 0;
-    min-height: 92px;
+    min-height: 82px;
     padding: 13px 14px;
     border: 1px solid var(--line-soft);
     border-radius: 12px;
@@ -80,14 +112,25 @@
 .app-panel-picker .panel-picker__body b { color: var(--text-strong); font-size: 14px; line-height: 1.25; overflow-wrap: anywhere; }
 .app-panel-picker .panel-picker__body span { color: var(--text); font-size: 12px; line-height: 1.35; overflow-wrap: anywhere; }
 .app-panel-picker .panel-picker__body small { color: var(--blue-2); font: 11px/1.3 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: nowrap; }
+.app-panel-picker .panel-picker__body em { color: var(--muted); font-size: 11px; line-height: 1.35; font-style: normal; }
 .app-panel-picker .panel-picker__actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex: 0 0 auto; }
 .app-panel-picker .panel-picker__actions input[type="checkbox"] { width: 21px; height: 21px; min-height: 0; margin: 0; accent-color: var(--blue-2); }
 
 .app-panel-picker__selection { padding: 9px 11px; border: 1px solid var(--line-soft); border-radius: 10px; background: color-mix(in srgb, var(--blue-2) 9%, transparent); }
 .app-panel-picker__footer,
-.app-panel-picker .app-panel-picker__dialog > footer { padding-top: 2px; justify-content: flex-end; }
+.app-panel-picker .app-panel-picker__dialog > footer {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-top: 2px;
+    justify-content: flex-end;
+}
 
-body.light-theme .app-panel-picker { --picker-surface: #f8fcff; --picker-card: #f2f9fd; }
+body.light-theme .app-panel-picker {
+    --picker-surface: #f8fcff;
+    --picker-card: #f2f9fd;
+    background: rgba(35, 55, 72, .42);
+}
 body.light-theme .app-panel-picker__item:has(input:checked) { background: #e1f4ff; }
 
 @media (max-width: 720px) {
