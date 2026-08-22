@@ -162,7 +162,7 @@ def _search_exact_location(result: dict, parsed: dict) -> dict | None:
                 for row in conn.execute(
                     """
                     SELECT key_id, address, apartment
-                    FROM key_assignments
+                    FROM key_accesses
                     WHERE active = 1
                     """
                 )
@@ -174,7 +174,7 @@ def _search_exact_location(result: dict, parsed: dict) -> dict | None:
                 for row in conn.execute(
                     """
                     SELECT key_id, address, apartment
-                    FROM key_assignments
+                    FROM key_accesses
                     WHERE active = 1
                       AND LOWER(BTRIM(COALESCE(apartment, ''))) = ?
                     """,
@@ -468,22 +468,30 @@ def get_search_suggestions(
                     k.number,
                     k.hex_value,
                     kt.name AS type_name,
-                    e.full_name AS employee_name,
-                    ka.address,
-                    ka.apartment
+                    access.owner_name,
+                    access.address,
+                    access.apartment
                 FROM keys k
                 JOIN key_types kt ON kt.id = k.key_type_id
-                LEFT JOIN key_assignments ka
-                    ON ka.key_id = k.id AND ka.active = 1
-                LEFT JOIN employees e ON e.id = ka.employee_id
+                LEFT JOIN LATERAL (
+                    SELECT
+                        STRING_AGG(NULLIF(kac.owner_name, ''), '; ' ORDER BY kac.id)
+                            AS owner_name,
+                        STRING_AGG(NULLIF(kac.address, ''), '; ' ORDER BY kac.id)
+                            AS address,
+                        STRING_AGG(NULLIF(kac.apartment, ''), '; ' ORDER BY kac.id)
+                            AS apartment
+                    FROM key_accesses kac
+                    WHERE kac.key_id = k.id AND kac.active = 1
+                ) access ON TRUE
                 WHERE TRIM(k.hex_value) <> ''
                   AND (
                     {key_number_sql}
                     OR SMART_NORM(k.hex_value) LIKE ?
                     OR SMART_NORM(kt.name) LIKE ?
-                    OR SMART_NORM(e.full_name) LIKE ?
-                    OR SMART_NORM(ka.address) LIKE ?
-                    OR SMART_NORM(ka.apartment) LIKE ?
+                    OR SMART_NORM(access.owner_name) LIKE ?
+                    OR SMART_NORM(access.address) LIKE ?
+                    OR SMART_NORM(access.apartment) LIKE ?
                   )
                 ORDER BY k.id DESC
                 LIMIT 100
@@ -504,7 +512,7 @@ def get_search_suggestions(
                             "number",
                             "hex_value",
                             "type_name",
-                            "employee_name",
+                            "owner_name",
                             "address",
                             "apartment",
                         )

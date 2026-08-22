@@ -9,7 +9,7 @@ from starlette.requests import Request
 from tests.postgres_test_case import PostgreSQLTestCase
 
 import app.db as database
-from app.repositories import key_repository, panel_repository
+from app.repositories import key_lifecycle_repository, key_repository, panel_repository
 from app.routers import keys as keys_router
 from app.routers.keys import key_assignment_update_route
 from app.services.importer import import_keys_file
@@ -337,23 +337,28 @@ class KeyInventoryTests(PostgreSQLTestCase):
         self.assertEqual(len(assignments), 1)
         self.assertEqual(assignments[0]["active"], 0)
 
-    def test_assignment_can_be_edited_without_panel_requests_and_keeps_history(self):
+    def test_assignment_edit_rewrites_external_flat_and_keeps_history(self):
         key_type_id = key_repository.create_key_type("Оранжевый", "#FF982A")
         key = self._create_key(key_type_id, "003602", "A0F0BD52")
         with database.db() as conn:
-            conn.execute(
+            panel_id = conn.execute(
                 """
                 INSERT INTO panels(address, entrance, name, mac, enabled)
                 VALUES ('ул. Голубые Дали 80', 'подъезд 1', 'Голубые Дали 80',
                         '08:13:CD:80:00:01', 1)
                 """
-            )
+            ).lastrowid
         key_repository.set_key_assignment(
             key["id"],
             "resident",
             address="ул. Голубые Дали 80",
+            apartment="1",
             assigned_by="Импорт",
             note="Перенос старой базы",
+        )
+        key_lifecycle_repository.record_panel_result(
+            key_id=key["id"], panel_id=panel_id, operation="write",
+            status="SUCCESS", success=True, flat_num="1",
         )
         request = Request(
             {
@@ -372,18 +377,24 @@ class KeyInventoryTests(PostgreSQLTestCase):
             }
         )
 
-        with patch("app.services.writer.crm_add_key") as crm_add_key:
+        success = {"ok": True, "written": True, "status": "SUCCESS", "response": "ok"}
+        with (
+            patch("app.services.key_lifecycle.crm_remove_key", return_value=success) as crm_remove,
+            patch("app.services.writer.crm_add_key", return_value=success) as crm_add_key,
+        ):
             response = key_assignment_update_route(
                 request,
                 key["id"],
                 assignment_type="uk",
                 address="ул. Голубые Дали 80",
-                apartment="",
+                apartment="2",
                 owner_name="УК Голубые Дали",
                 reason="Исправление владельца при переносе старой базы",
+                target_panel_ids=[panel_id],
             )
 
-        crm_add_key.assert_not_called()
+        crm_remove.assert_called_once_with("08:13:CD:80:00:01", "A0F0BD52", "1", 1)
+        crm_add_key.assert_called_once_with("08:13:CD:80:00:01", "A0F0BD52", "2", 1)
         self.assertEqual(response.status_code, 303)
         updated = key_repository.get_key(key["id"])
         assignments = key_repository.get_key_assignments(key["id"])
@@ -393,7 +404,7 @@ class KeyInventoryTests(PostgreSQLTestCase):
         self.assertEqual(len(assignments), 2)
         self.assertEqual(assignments[0]["assignment_type"], "uk")
         self.assertEqual(assignments[0]["address"], "ул. Голубые Дали 80")
-        self.assertEqual(assignments[0]["apartment"], "")
+        self.assertEqual(assignments[0]["apartment"], "2")
         self.assertEqual(assignments[0]["note"], "УК Голубые Дали")
         self.assertEqual(assignments[0]["active"], 1)
         self.assertEqual(assignments[1]["assignment_type"], "resident")
@@ -409,12 +420,117 @@ class KeyInventoryTests(PostgreSQLTestCase):
                     (key["id"],),
                 ).fetchone()
             )
-        self.assertIn("Жилец, ул. Голубые Дали 80, квартира не указана", operation["details"])
-        self.assertIn("УК, ул. Голубые Дали 80, квартира не указана, УК Голубые Дали", operation["details"])
+        self.assertIn("Жилец, ул. Голубые Дали 80, квартира 1", operation["details"])
+        self.assertIn("УК, ул. Голубые Дали 80, квартира 2, УК Голубые Дали", operation["details"])
         self.assertIn("Исправление владельца", operation["details"])
         self.assertEqual(operation["address"], "ул. Голубые Дали 80")
-        self.assertEqual(operation["apartment"], "")
+        self.assertEqual(operation["apartment"], "2")
         self.assertEqual(operation["username"], "admin")
+
+    def test_assignment_edit_rewrites_to_selected_panels_of_new_address(self):
+        key_type_id = key_repository.create_key_type("Синий", "#168EE8")
+        key = self._create_key(key_type_id, "930", "5FC183C6")
+        with database.db() as conn:
+            old_panel_id = conn.execute(
+                """
+                INSERT INTO panels(address, entrance, name, mac, enabled)
+                VALUES ('пер. Богдана Хмельницкого 10', 'основной вход',
+                        'Старый вход', '08:13:CD:10:00:01', 1)
+                """
+            ).lastrowid
+            new_panel_id = conn.execute(
+                """
+                INSERT INTO panels(address, entrance, name, mac, enabled)
+                VALUES ('ул. Малышева 3', 'подъезд 2',
+                        'Новый вход', '08:13:CD:03:00:02', 1)
+                """
+            ).lastrowid
+        key_repository.set_key_assignment(
+            key["id"], "resident", address="пер. Богдана Хмельницкого 10",
+            apartment="2", assigned_by="Оператор",
+        )
+        key_lifecycle_repository.record_panel_result(
+            key_id=key["id"], panel_id=old_panel_id, operation="write",
+            status="SUCCESS", success=True, flat_num="2",
+        )
+        request = Request({
+            "type": "http", "method": "POST",
+            "path": f"/keys/{key['id']}/assignment", "headers": [],
+            "session": {"user": {"login": "admin", "full_name": "Admin", "role": "admin"}},
+            "client": ("127.0.0.1", 12345),
+        })
+        success = {"ok": True, "written": True, "status": "SUCCESS", "response": "ok"}
+        with (
+            patch("app.services.key_lifecycle.crm_remove_key", return_value=success) as remove,
+            patch("app.services.writer.crm_add_key", return_value=success) as add,
+        ):
+            response = key_assignment_update_route(
+                request, key["id"], assignment_type="resident",
+                address="ул. Малышева 3", apartment="7", owner_name="",
+                reason="Переезд", target_panel_ids=[new_panel_id],
+            )
+
+        remove.assert_called_once_with("08:13:CD:10:00:01", "5FC183C6", "2", 1)
+        add.assert_called_once_with("08:13:CD:03:00:02", "5FC183C6", "7", 1)
+        self.assertEqual(response.status_code, 303)
+        updated = key_repository.get_key(key["id"])
+        self.assertEqual(updated["assignment_address"], "ул. Малышева 3")
+        self.assertEqual(updated["assignment_apartment"], "7")
+        context = key_repository.get_key_write_contexts([key["id"]])[key["id"]]
+        self.assertEqual(context["panel_ids"], [new_panel_id])
+
+    def test_assignment_edit_rejects_panel_of_another_address_before_crm(self):
+        key_type_id = key_repository.create_key_type("Синий", "#168EE8")
+        key = self._create_key(key_type_id, "931", "5FC183C7")
+        with database.db() as conn:
+            old_panel_id = conn.execute(
+                """
+                INSERT INTO panels(address, entrance, name, mac, enabled)
+                VALUES ('пер. Богдана Хмельницкого 10', 'основной вход',
+                        'Старый вход', '08:13:CD:10:00:11', 1)
+                """
+            ).lastrowid
+            conn.execute(
+                """
+                INSERT INTO panels(address, entrance, name, mac, enabled)
+                VALUES ('ул. Малышева 3', 'подъезд 1',
+                        'Разрешённая панель', '08:13:CD:03:00:11', 1)
+                """
+            )
+            foreign_panel_id = conn.execute(
+                """
+                INSERT INTO panels(address, entrance, name, mac, enabled)
+                VALUES ('ул. Чужая 99', 'калитка',
+                        'Чужая панель', '08:13:CD:99:00:11', 1)
+                """
+            ).lastrowid
+        key_repository.set_key_assignment(
+            key["id"], "resident", address="пер. Богдана Хмельницкого 10",
+            apartment="2", assigned_by="Оператор",
+        )
+        key_lifecycle_repository.record_panel_result(
+            key_id=key["id"], panel_id=old_panel_id, operation="write",
+            status="SUCCESS", success=True, flat_num="2",
+        )
+        request = self._write_request()
+
+        with (
+            patch("app.services.key_lifecycle.crm_remove_key") as remove,
+            patch("app.services.writer.crm_add_key") as add,
+        ):
+            response = key_assignment_update_route(
+                request, key["id"], assignment_type="resident",
+                address="ул. Малышева 3", apartment="3", owner_name="",
+                reason="Переезд", target_panel_ids=[foreign_panel_id],
+            )
+
+        self.assertEqual(response.status_code, 303)
+        self.assertIn("%D0%92%D1%8B%D0%B1%D1%80%D0%B0%D0%BD%D0%BD%D1%8B%D0%B5", response.headers["location"])
+        remove.assert_not_called()
+        add.assert_not_called()
+        current = key_repository.get_key(key["id"])
+        self.assertEqual(current["assignment_address"], "пер. Богдана Хмельницкого 10")
+        self.assertEqual(current["assignment_apartment"], "2")
 
     def test_assignment_edit_rejects_unknown_address_without_changing_current_row(self):
         key_type_id = key_repository.create_key_type("Синий", "#168EE8")

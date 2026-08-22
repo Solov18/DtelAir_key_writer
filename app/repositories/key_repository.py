@@ -28,6 +28,7 @@ KEY_STATUSES = {
     "lost": "Утерян",
     "defective": "Брак",
     "archived": "Архив",
+    "replaced": "Заменён",
 }
 
 KEY_STATUS_TONES = {
@@ -41,6 +42,7 @@ KEY_STATUS_TONES = {
     "lost": "danger",
     "defective": "warning",
     "archived": "muted",
+    "replaced": "muted",
 }
 
 ASSIGNMENT_STATUSES = {
@@ -74,6 +76,8 @@ def _normalize_hex(value: str) -> str:
 
 
 def _assignment_text(row: dict) -> str:
+    if row.get("active_access_text"):
+        return str(row["active_access_text"])
     assignment_type = row.get("assignment_type") or ""
     # ``note`` belongs to the physical key itself; only the active assignment
     # note may describe its current owner.
@@ -426,16 +430,24 @@ def _keys_filter_sql(
     if normalized_query:
         parsed = parse_assignment_search_query(query)
         if parsed["has_apartment"]:
-            conditions.append("ka.id IS NOT NULL")
-            conditions.append("SMART_NORM(ka.apartment) = ?")
-            params.append(normalize_search_text(parsed["apartment"]))
+            access_conditions = ["kxa.key_id = k.id", "kxa.active = 1", "SMART_NORM(kxa.apartment) = ?"]
+            access_params = [normalize_search_text(parsed["apartment"])]
             if parsed["looks_like_address"]:
-                address_sql, address_params = assignment_address_sql(parsed)
-                conditions.append(f"({address_sql})")
-                params.extend(address_params)
+                address_sql, address_params = assignment_address_sql(parsed, "kxa.address")
+                access_conditions.append(f"({address_sql})")
+                access_params.extend(address_params)
+            conditions.append(
+                "EXISTS (SELECT 1 FROM key_accesses kxa WHERE "
+                + " AND ".join(access_conditions)
+                + ")"
+            )
+            params.extend(access_params)
         elif parsed["looks_like_address"]:
-            address_sql, address_params = assignment_address_sql(parsed)
-            conditions.extend(("ka.id IS NOT NULL", f"({address_sql})"))
+            address_sql, address_params = assignment_address_sql(parsed, "kxa.address")
+            conditions.append(
+                "EXISTS (SELECT 1 FROM key_accesses kxa "
+                f"WHERE kxa.key_id = k.id AND kxa.active = 1 AND ({address_sql}))"
+            )
             params.extend(address_params)
         elif is_numeric_key_number(query):
             number_sql, number_params = exact_key_number_sql("k.number", query)
@@ -466,8 +478,16 @@ def _keys_filter_sql(
                     OR SMART_NORM(k.hex_value) LIKE ?
                     OR SMART_NORM(kt.name) LIKE ?
                     OR SMART_NORM(k.note) LIKE ?
-                    OR SMART_NORM(ka.address) LIKE ?
-                    OR SMART_NORM(ka.apartment) LIKE ?
+                    OR EXISTS (
+                        SELECT 1 FROM key_accesses kxa
+                        WHERE kxa.key_id = k.id AND kxa.active = 1
+                          AND (
+                            SMART_NORM(kxa.address) LIKE ?
+                            OR SMART_NORM(kxa.apartment) LIKE ?
+                            OR SMART_NORM(kxa.owner_name) LIKE ?
+                            OR SMART_NORM(kxa.note) LIKE ?
+                          )
+                    )
                     OR SMART_NORM(e.full_name) LIKE ?
                     OR SMART_NORM(ug.name) LIKE ?
                     OR SMART_NORM(ka.note) LIKE ?
@@ -499,7 +519,7 @@ def _keys_filter_sql(
                 )
                 """
             )
-            params.extend([*number_params, *([pattern] * 10)])
+            params.extend([*number_params, *([pattern] * 12)])
 
     if key_type_id:
         conditions.append("k.key_type_id = ?")
@@ -512,8 +532,58 @@ def _keys_filter_sql(
     if availability == "free":
         conditions.append("k.status = 'free'")
         conditions.append("ka.id IS NULL")
+        conditions.append(
+            "NOT EXISTS (SELECT 1 FROM key_accesses kxa_free "
+            "WHERE kxa_free.key_id = k.id AND kxa_free.active = 1)"
+        )
+        conditions.append(
+            """NOT EXISTS (
+                SELECT 1 FROM employee_keys ek_free
+                WHERE ek_free.key_id = k.id AND ek_free.status = 'active'
+            )"""
+        )
+        conditions.append(
+            """NOT EXISTS (
+                SELECT 1 FROM uk_key_issues uki_free
+                WHERE uki_free.key_id = k.id AND uki_free.status IN ('pending', 'active')
+            )"""
+        )
+        conditions.append(
+            """NOT EXISTS (
+                SELECT 1 FROM key_panel_states kps_free
+                WHERE kps_free.key_id = k.id
+                  AND (
+                    kps_free.state IN ('active', 'pending_delete')
+                    OR (kps_free.state = 'error' AND kps_free.last_operation = 'delete')
+                  )
+            )"""
+        )
     elif availability == "used":
-        conditions.append("k.status <> 'free'")
+        conditions.append(
+            """(
+                k.status <> 'free' OR ka.id IS NOT NULL
+                OR EXISTS (
+                    SELECT 1 FROM key_accesses kxa_used
+                    WHERE kxa_used.key_id = k.id AND kxa_used.active = 1
+                )
+                OR EXISTS (
+                    SELECT 1 FROM employee_keys ek_used
+                    WHERE ek_used.key_id = k.id AND ek_used.status = 'active'
+                )
+                OR EXISTS (
+                    SELECT 1 FROM uk_key_issues uki_used
+                    WHERE uki_used.key_id = k.id AND uki_used.status IN ('pending', 'active')
+                )
+                OR EXISTS (
+                    SELECT 1 FROM key_panel_states kps_used
+                    WHERE kps_used.key_id = k.id
+                      AND (
+                        kps_used.state IN ('active', 'pending_delete')
+                        OR (kps_used.state = 'error' AND kps_used.last_operation = 'delete')
+                      )
+                )
+            )"""
+        )
 
     if added_from:
         conditions.append("substr(k.created_at, 1, 10) >= ?")
@@ -524,11 +594,17 @@ def _keys_filter_sql(
         params.append(added_to)
 
     if assigned_from:
-        conditions.append("substr(ka.assigned_at, 1, 10) >= ?")
+        conditions.append(
+            "EXISTS (SELECT 1 FROM key_accesses kxa_from WHERE kxa_from.key_id = k.id "
+            "AND kxa_from.active = 1 AND substr(kxa_from.assigned_at, 1, 10) >= ?)"
+        )
         params.append(assigned_from)
 
     if assigned_to:
-        conditions.append("substr(ka.assigned_at, 1, 10) <= ?")
+        conditions.append(
+            "EXISTS (SELECT 1 FROM key_accesses kxa_to WHERE kxa_to.key_id = k.id "
+            "AND kxa_to.active = 1 AND substr(kxa_to.assigned_at, 1, 10) <= ?)"
+        )
         params.append(assigned_to)
 
     return " AND ".join(conditions), params
@@ -592,6 +668,19 @@ def get_keys_page(
                 e.full_name AS employee_name,
                 e.position AS employee_position,
                 ug.name AS uk_name
+                ,(
+                    SELECT STRING_AGG(
+                        CONCAT_WS(' / ',
+                            NULLIF(kac.address, ''),
+                            CASE WHEN NULLIF(kac.apartment, '') IS NOT NULL
+                                 THEN 'кв. ' || kac.apartment ELSE NULL END,
+                            NULLIF(kac.owner_name, '')
+                        ),
+                        '; ' ORDER BY kac.is_primary DESC, kac.assigned_at, kac.id
+                    )
+                    FROM key_accesses kac
+                    WHERE kac.key_id = k.id AND kac.active = 1
+                ) AS active_access_text
             FROM keys k
             {joins}
             WHERE {where_sql}
@@ -648,10 +737,8 @@ def get_key(key_id: int) -> dict | None:
 def get_key_write_contexts(key_ids: list[int]) -> dict[int, dict]:
     """Return active assignments and known panel access for a group of keys.
 
-    A panel is considered known only after a successful write (or an explicit
-    ``already exists`` response).  The latest successful remove operation
-    closes that relation.  This keeps preview and write validation on one
-    server-side source without issuing requests to physical panels.
+    Current panel access comes from ``key_panel_states``. ``operation_log`` is
+    immutable history and is intentionally not interpreted as current state.
     """
 
     clean_ids = sorted({int(value) for value in key_ids if int(value) > 0})
@@ -686,30 +773,29 @@ def get_key_write_contexts(key_ids: list[int]) -> dict[int, dict]:
             """,
             clean_ids,
         ).fetchall()
+        access_rows = conn.execute(
+            f"""
+            SELECT id, key_id, assignment_id, access_type, address, apartment,
+                   owner_name, is_primary, source, assigned_at
+            FROM key_accesses
+            WHERE key_id IN ({placeholders}) AND active = 1
+            ORDER BY key_id, is_primary DESC, assigned_at, id
+            """,
+            clean_ids,
+        ).fetchall()
         panel_rows = conn.execute(
             f"""
-            WITH latest_success AS (
-                SELECT DISTINCT ON (ol.key_id, ol.panel_id)
-                    ol.key_id,
-                    ol.panel_id,
-                    ol.action,
-                    ol.mode,
-                    ol.created_at,
-                    ol.id
-                FROM operation_log ol
-                WHERE ol.key_id IN ({placeholders})
-                  AND ol.panel_id IS NOT NULL
-                  AND UPPER(COALESCE(ol.status, '')) IN ('SUCCESS', 'ALREADY_EXISTS')
-                ORDER BY ol.key_id, ol.panel_id, ol.id DESC
-            )
             SELECT
-                ls.*,
-                p.address,
-                p.entrance,
-                p.name,
-                p.mac
-            FROM latest_success ls
-            JOIN panels p ON p.id = ls.panel_id
+                kps.key_id, kps.panel_id, kps.access_id, kps.flat_num,
+                kps.state, kps.last_operation,
+                p.address, p.entrance, p.name, p.mac
+            FROM key_panel_states kps
+            JOIN panels p ON p.id = kps.panel_id
+            WHERE kps.key_id IN ({placeholders})
+              AND (
+                  kps.state IN ('active', 'pending_delete')
+                  OR (kps.state = 'error' AND kps.last_operation = 'delete')
+              )
             ORDER BY p.address, p.entrance, p.name
             """,
             clean_ids,
@@ -748,6 +834,7 @@ def get_key_write_contexts(key_ids: list[int]) -> dict[int, dict]:
                     or item.get("key_status") not in {"", "free"}
                 ),
                 "assignments": [],
+                "accesses": [],
                 "panels": [],
                 "panel_ids": [],
             }
@@ -755,15 +842,20 @@ def get_key_write_contexts(key_ids: list[int]) -> dict[int, dict]:
         if assignment["id"]:
             context["assignments"].append(assignment)
 
-    removal_markers = ("remove", "delete", "unlink")
-    for row in panel_rows:
+    for row in access_rows:
         item = dict(row)
-        action = f"{item.get('action') or ''} {item.get('mode') or ''}".lower()
-        if any(marker in action for marker in removal_markers):
-            continue
         context = contexts.setdefault(
             int(item["key_id"]),
-            {"is_used": True, "assignments": [], "panels": [], "panel_ids": []},
+            {"is_used": True, "assignments": [], "accesses": [], "panels": [], "panel_ids": []},
+        )
+        context["is_used"] = True
+        context["accesses"].append(item)
+
+    for row in panel_rows:
+        item = dict(row)
+        context = contexts.setdefault(
+            int(item["key_id"]),
+            {"is_used": True, "assignments": [], "accesses": [], "panels": [], "panel_ids": []},
         )
         # A recorded physical-panel relation also means the key is already in
         # use, including legacy/imported rows without an active assignment.
@@ -774,6 +866,8 @@ def get_key_write_contexts(key_ids: list[int]) -> dict[int, dict]:
             "entrance": item.get("entrance") or "",
             "name": item.get("name") or "",
             "mac": item.get("mac") or "",
+            "access_id": item.get("access_id"),
+            "flat_num": item.get("flat_num") or "",
         }
         context["panels"].append(panel)
         context["panel_ids"].append(panel["id"])
@@ -1307,6 +1401,139 @@ def update_key(
             raise ValueError("Ключ не найден.")
 
 
+def _sync_primary_access_on_connection(
+    conn,
+    key_id: int,
+    assignment_type: str,
+    *,
+    address: str = "",
+    apartment: str = "",
+    owner_name: str = "",
+    assignment_id: int | None = None,
+    created_by: str = "",
+    note: str = "",
+) -> int:
+    """Keep the authoritative access projection aligned with legacy writes.
+
+    A few older repository consumers still write ``key_assignments`` directly.
+    Synchronising here keeps those consumers compatible without making the
+    read side fall back to two competing sources of current state.
+    """
+    access_type = "resident" if assignment_type == "resident" else "service"
+    clean_address = (address or "").strip()
+    clean_apartment = (apartment or "").strip()
+    clean_owner = (owner_name or "").strip()
+    clean_actor = (created_by or "").strip()
+    clean_note = (note or "").strip()
+
+    matching = conn.execute(
+        """
+        SELECT id
+        FROM key_accesses
+        WHERE key_id = ? AND active = 1 AND access_type = ?
+          AND address = ? AND apartment = ?
+        ORDER BY is_primary DESC, id DESC
+        LIMIT 1
+        """,
+        (key_id, access_type, clean_address, clean_apartment),
+    ).fetchone()
+
+    target_id = int(matching[0]) if matching else None
+    if target_id is None:
+        conn.execute(
+            """
+            UPDATE key_accesses
+            SET active = 0, is_primary = 0, released_at = CURRENT_TIMESTAMP,
+                note = CASE WHEN ? <> '' THEN ? ELSE note END
+            WHERE key_id = ? AND active = 1 AND is_primary = 1
+            """,
+            (clean_note, clean_note, key_id),
+        )
+    else:
+        conn.execute(
+            """
+            UPDATE key_accesses
+            SET active = 0, is_primary = 0, released_at = CURRENT_TIMESTAMP,
+                note = CASE WHEN ? <> '' THEN ? ELSE note END
+            WHERE key_id = ? AND active = 1 AND is_primary = 1 AND id <> ?
+            """,
+            (clean_note, clean_note, key_id, target_id),
+        )
+    conn.execute(
+        "UPDATE key_accesses SET is_primary = 0 WHERE key_id = ? AND active = 1",
+        (key_id,),
+    )
+
+    if target_id is None:
+        row = conn.execute(
+            """
+            INSERT INTO key_accesses(
+                key_id, assignment_id, access_type, address, apartment,
+                owner_name, active, is_primary, source, created_by, note
+            ) VALUES (?, ?, ?, ?, ?, ?, 1, 1, 'assignment', ?, ?)
+            RETURNING id
+            """,
+            (
+                key_id, assignment_id, access_type, clean_address,
+                clean_apartment, clean_owner, clean_actor, clean_note,
+            ),
+        ).fetchone()
+        return int(row[0])
+
+    conn.execute(
+        """
+        UPDATE key_accesses
+        SET assignment_id = COALESCE(?, assignment_id), access_type = ?,
+            address = ?, apartment = ?, owner_name = ?, is_primary = 1,
+            created_by = CASE WHEN ? <> '' THEN ? ELSE created_by END,
+            note = CASE WHEN ? <> '' THEN ? ELSE note END
+        WHERE id = ?
+        """,
+        (
+            assignment_id, access_type, clean_address, clean_apartment,
+            clean_owner, clean_actor, clean_actor, clean_note, clean_note,
+            target_id,
+        ),
+    )
+    return target_id
+
+
+def update_active_assignment_metadata(
+    key_id: int, *, owner_name: str = "", assigned_by: str = ""
+) -> None:
+    """Update descriptive owner data after a physical lifecycle operation."""
+    clean_owner = (owner_name or "").strip()
+    clean_actor = (assigned_by or "").strip()
+    with db() as conn:
+        current = conn.execute(
+            """
+            SELECT id, assignment_type, address, apartment
+            FROM key_assignments
+            WHERE key_id = ? AND active = 1
+            ORDER BY id DESC LIMIT 1
+            """,
+            (key_id,),
+        ).fetchone()
+        if not current:
+            return
+        conn.execute(
+            """
+            UPDATE key_assignments
+            SET note = ?, assigned_by = CASE WHEN ? <> '' THEN ? ELSE assigned_by END
+            WHERE id = ?
+            """,
+            (clean_owner, clean_actor, clean_actor, current["id"]),
+        )
+        _sync_primary_access_on_connection(
+            conn, key_id, current["assignment_type"],
+            address=current["address"] or "",
+            apartment=current["apartment"] or "",
+            owner_name=clean_owner,
+            assignment_id=int(current["id"]),
+            created_by=clean_actor,
+        )
+
+
 def set_key_assignment_on_connection(
     conn,
     key_id: int,
@@ -1401,6 +1628,17 @@ def set_key_assignment_on_connection(
             """,
             (ASSIGNMENT_STATUSES[assignment_type], key_id),
         )
+        _sync_primary_access_on_connection(
+            conn,
+            key_id,
+            assignment_type,
+            address=(address or "").strip() or (current["address"] or ""),
+            apartment=(apartment or "").strip() or (current["apartment"] or ""),
+            owner_name=(note or "").strip() or (current["note"] or ""),
+            assignment_id=int(current["id"]),
+            created_by=assigned_by,
+            note=note,
+        )
         return
 
     conn.execute(
@@ -1446,6 +1684,25 @@ def set_key_assignment_on_connection(
         """,
         (ASSIGNMENT_STATUSES[assignment_type], key_id),
     )
+    assignment = conn.execute(
+        """
+        SELECT id FROM key_assignments
+        WHERE key_id = ? AND active = 1
+        ORDER BY id DESC LIMIT 1
+        """,
+        (key_id,),
+    ).fetchone()
+    _sync_primary_access_on_connection(
+        conn,
+        key_id,
+        assignment_type,
+        address=address,
+        apartment=apartment,
+        owner_name=note,
+        assignment_id=int(assignment[0]) if assignment else None,
+        created_by=assigned_by,
+        note=note,
+    )
 
 
 def set_key_assignment(
@@ -1488,6 +1745,15 @@ def release_key_on_connection(conn, key_id: int, note: str = "") -> None:
             close_reason = CASE WHEN ? <> '' THEN ? ELSE 'Ключ освобождён' END,
             updated_at = CURRENT_TIMESTAMP
         WHERE key_id = ? AND status = 'active'
+        """,
+        ((note or "").strip(), (note or "").strip(), key_id),
+    )
+    conn.execute(
+        """
+        UPDATE key_accesses
+        SET active = 0, is_primary = 0, released_at = CURRENT_TIMESTAMP,
+            note = CASE WHEN ? <> '' THEN ? ELSE note END
+        WHERE key_id = ? AND active = 1
         """,
         ((note or "").strip(), (note or "").strip(), key_id),
     )

@@ -27,6 +27,7 @@ from app.settings import settings
 
 logger = logging.getLogger(__name__)
 ADVISORY_LOCK_ID = 0x4454454C50414E45
+MAX_SAFE_MONITOR_CONCURRENCY = 12
 
 
 def _safe_check(panel: dict, checker) -> dict:
@@ -59,7 +60,11 @@ def run_monitor_cycle(*, checker=check_panel, concurrency: int | None = None) ->
 
     worker_limit = max(
         1,
-        min(int(concurrency or runtime.panel_monitor_concurrency), 50, total),
+        min(
+            int(concurrency or runtime.panel_monitor_concurrency),
+            MAX_SAFE_MONITOR_CONCURRENCY,
+            total,
+        ),
     )
     iterator = iter(panels)
     futures: dict[Future, dict] = {}
@@ -95,7 +100,7 @@ def run_monitor_cycle(*, checker=check_panel, concurrency: int | None = None) ->
                     result = future.result()
                     update_panel_api_status(panel["id"], result)
                     completed += 1
-                    if result.get("status") == "online":
+                    if result.get("status") in {"online", "sip_auth_error"}:
                         online += 1
                     else:
                         failed += 1

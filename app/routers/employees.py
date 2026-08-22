@@ -38,6 +38,7 @@ from app.services import (
     write_key_to_panels,
 )
 from app.services.audit import log_event
+from app.services.key_lifecycle import release_key as release_key_lifecycle
 from app.templates_config import templates
 
 
@@ -80,6 +81,38 @@ def _employee_write_response(request, employee: dict, key: dict, write_result: K
             }],
         },
     )
+
+
+def _selected_employee_panels(panel_scope: str, panel_ids) -> list[dict]:
+    raw_panel_ids = panel_ids if isinstance(panel_ids, (list, tuple, set)) else []
+    clean_panel_ids = list(dict.fromkeys(
+        int(value) for value in raw_panel_ids if int(value) > 0
+    ))
+    if panel_scope == "all":
+        return get_panels()
+    return get_panels(panel_ids=clean_panel_ids) if clean_panel_ids else []
+
+
+def _release_replaced_employee_keys(
+    request: Request, employee_id: int, new_key_id: int,
+    *, old_key_status: str, reason: str,
+) -> dict:
+    """Remove every previous employee key before closing its local history."""
+    final_key_status = {
+        "lost": "lost", "damaged": "defective",
+    }.get(old_key_status, "free")
+    for active_key in get_employee_active_keys(employee_id):
+        if int(active_key["key_id"]) == int(new_key_id):
+            continue
+        result = release_key_lifecycle(
+            int(active_key["key_id"]), reason=reason,
+            final_status=final_key_status,
+            employee_assignment_status=old_key_status,
+            request=request,
+        )
+        if not result["ok"]:
+            return result
+    return {"ok": True, "status": "SUCCESS", "results": []}
 
 
 KEY_STATUS_LABELS = {
@@ -336,6 +369,17 @@ def employee_dismiss(
 ):
     employee = get_employee_any_status(employee_id)
     active_keys = get_employee_active_keys(employee_id)
+    for active_key in active_keys:
+        result = release_key_lifecycle(
+            int(active_key["key_id"]),
+            reason=comment or "Сотрудник уволен",
+            request=request,
+        )
+        if not result["ok"]:
+            return RedirectResponse(
+                f"/employees/{employee_id}?{urlencode({'error': 'Увольнение остановлено: не удалось удалить один из ключей со всех панелей.'})}",
+                status_code=303,
+            )
     dismiss_employee(employee_id=employee_id, comment=comment)
     log_event(
         request=request,
@@ -376,6 +420,17 @@ def employee_restore(request: Request, employee_id: int):
 def employees_delete(request: Request, employee_id: int = Form(...)):
     employee = get_employee_any_status(employee_id)
     active_keys = get_employee_active_keys(employee_id)
+    for active_key in active_keys:
+        result = release_key_lifecycle(
+            int(active_key["key_id"]),
+            reason="Сотрудник уволен",
+            request=request,
+        )
+        if not result["ok"]:
+            return RedirectResponse(
+                f"/employees/{employee_id}?{urlencode({'error': 'Увольнение остановлено: ключ не удалён со всех панелей.'})}",
+                status_code=303,
+            )
     dismiss_employee(
         employee_id=employee_id,
         comment="Сотрудник уволен",
@@ -453,16 +508,7 @@ def employee_issue_key(
             ),
         )
 
-    raw_panel_ids = panel_ids if isinstance(panel_ids, (list, tuple, set)) else []
-    clean_panel_ids = list(dict.fromkeys(
-        int(value) for value in raw_panel_ids if int(value) > 0
-    ))
-    if panel_scope == "all":
-        panels = get_panels()
-    elif clean_panel_ids:
-        panels = get_panels(panel_ids=clean_panel_ids)
-    else:
-        panels = []
+    panels = _selected_employee_panels(panel_scope, panel_ids)
     if not panels:
         return templates.TemplateResponse(
             "employee_detail.html",
@@ -518,21 +564,32 @@ def employee_create_and_issue_key(
     number: str = Form(...),
     hex_value: str = Form(...),
     comment: str = Form(""),
+    panel_scope: str = Form("selected"),
+    panel_ids: list[int] = Form([]),
 ):
     employee = get_employee(employee_id)
     if not employee:
         return RedirectResponse("/employees/dismissed", status_code=303)
+    panels = _selected_employee_panels(panel_scope, panel_ids)
+    if not panels:
+        return templates.TemplateResponse(
+            "employee_detail.html",
+            _employee_detail_context(
+                request,
+                employee_id,
+                {
+                    "type": "error",
+                    "text": "Выберите хотя бы одну панель для физической записи ключа.",
+                },
+                {"value": number, "key_type_id": key_type_id, "comment": comment},
+            ),
+        )
     try:
         key = save_prepared_key(
             key_type_id,
             number,
             hex_value,
             username=(request.session.get("user") or {}).get("full_name", ""),
-        )
-        issue_key_to_employee(
-            employee_id=employee_id,
-            key_id=key["id"],
-            new_key_comment=comment,
         )
     except ValueError as error:
         return templates.TemplateResponse(
@@ -545,19 +602,41 @@ def employee_create_and_issue_key(
             ),
         )
 
-    log_event(
-        request=request,
-        action="employee_key_create_and_issue",
-        object_type="Сотрудник",
-        object_name=employee.get("full_name") or str(employee_id),
-        details=f"Ключ №{key.get('number')} создан только в CRM и выдан сотруднику",
-        printed_number=key.get("number", ""),
-        hex_value=key.get("hex_value", "-"),
-        key_id=key.get("id"),
-        key_type=key.get("type_name") or key.get("key_type", ""),
-        employee_id=employee_id,
+    write_result = _employee_write_result(request, employee, key, panels)
+    confirmed = bool(
+        write_result.succeeded_panel_ids or write_result.already_present_panel_ids
     )
-    return RedirectResponse(f"/employees/{employee_id}?notice=key_created", status_code=303)
+    if confirmed and not request.session.get("training_mode"):
+        try:
+            issue_key_to_employee(
+                employee_id=employee_id,
+                key_id=key["id"],
+                new_key_comment=comment,
+            )
+        except ValueError as error:
+            return templates.TemplateResponse(
+                "employee_detail.html",
+                _employee_detail_context(
+                    request,
+                    employee_id,
+                    {"type": "error", "text": str(error)},
+                ),
+            )
+
+    if confirmed and not request.session.get("training_mode"):
+        log_event(
+            request=request,
+            action="employee_key_create_and_issue",
+            object_type="Сотрудник",
+            object_name=employee.get("full_name") or str(employee_id),
+            details=f"Ключ №{key.get('number')} создан и физически записан сотруднику",
+            printed_number=key.get("number", ""),
+            hex_value=key.get("hex_value", "-"),
+            key_id=key.get("id"),
+            key_type=key.get("type_name") or key.get("key_type", ""),
+            employee_id=employee_id,
+        )
+    return _employee_write_response(request, employee, key, write_result)
 
 
 @router.post("/employees/{employee_id}/keys/add", response_class=HTMLResponse)
@@ -566,6 +645,8 @@ def employee_add_keys(
     employee_id: int,
     key_values: str = Form(...),
     key_type_id: int = Form(0),
+    panel_scope: str = Form("selected"),
+    panel_ids: list[int] = Form([]),
 ):
     values = [
         value.strip()
@@ -598,38 +679,68 @@ def employee_add_keys(
         )
         keys.append(key)
 
-    try:
-        for key in keys:
-            issue_key_to_employee(
-                employee_id=employee_id,
-                key_id=key["id"],
-            )
-    except ValueError as error:
+    employee = get_employee(employee_id)
+    if not employee:
+        return RedirectResponse("/employees/dismissed", status_code=303)
+    panels = _selected_employee_panels(panel_scope, panel_ids)
+    if not panels:
         return templates.TemplateResponse(
             "employee_detail.html",
-            _employee_detail_context(
-                request,
-                employee_id,
-                {"type": "error", "text": str(error)},
-            ),
+            _employee_detail_context(request, employee_id, {
+                "type": "error",
+                "text": "Выберите хотя бы одну панель для физической записи ключа.",
+            }),
         )
 
-    employee = get_employee_any_status(employee_id)
+    all_results = []
     for key in keys:
-        log_event(
-            request=request,
-            action="employee_key_issue",
-            object_type="Сотрудник",
-            object_name=(employee or {}).get("full_name") or str(employee_id),
-            details=f"Выдан ключ {key.get('number') or key.get('hex_value')}",
-            printed_number=key.get("number", ""),
-            hex_value=key.get("hex_value", "-"),
-            key_id=key.get("id"),
-            key_type=key.get("type_name") or key.get("key_type", ""),
-            employee_id=employee_id,
+        write_result = _employee_write_result(request, employee, key, panels)
+        confirmed = bool(
+            write_result.succeeded_panel_ids or write_result.already_present_panel_ids
         )
+        if confirmed and not request.session.get("training_mode"):
+            try:
+                issue_key_to_employee(
+                    employee_id=employee_id,
+                    key_id=key["id"],
+                )
+            except ValueError as error:
+                write_result = KeyWriteResult.from_writer(key.get("id"), [
+                    *write_result.to_legacy_results(),
+                    {
+                        "status": "ERROR",
+                        "response": str(error),
+                        "panel": {},
+                    },
+                ])
+                confirmed = False
+        if confirmed and not request.session.get("training_mode"):
+            log_event(
+                request=request,
+                action="employee_key_issue",
+                object_type="Сотрудник",
+                object_name=employee.get("full_name") or str(employee_id),
+                details=f"Ключ {key.get('number') or key.get('hex_value')} физически записан сотруднику",
+                printed_number=key.get("number", ""),
+                hex_value=key.get("hex_value", "-"),
+                key_id=key.get("id"),
+                key_type=key.get("type_name") or key.get("key_type", ""),
+                employee_id=employee_id,
+            )
+        all_results.append({
+            "key": key,
+            "results": write_result.to_legacy_results(),
+            "write_result": write_result,
+        })
 
-    return RedirectResponse(f"/employees/{employee_id}", status_code=303)
+    return templates.TemplateResponse(
+        "write_results.html",
+        {
+            "request": request,
+            "title": f"Результат записи ключей сотруднику: {employee.get('full_name') or employee_id}",
+            "all_results": all_results,
+        },
+    )
 
 
 @router.post("/employees/{employee_id}/keys/close")
@@ -643,13 +754,18 @@ def employee_close_key(
 ):
     employee = get_employee_any_status(employee_id)
     assignment = _employee_assignment_context(employee_id, assignment_id)
-    close_employee_key(
-        employee_id=employee_id,
-        assignment_id=assignment_id,
-        status=status,
-        close_reason=close_reason,
-        comment=comment,
+    final_status = {"lost": "lost", "damaged": "defective"}.get(status, "free")
+    result = release_key_lifecycle(
+        int(assignment["key_id"]),
+        reason=close_reason,
+        final_status=final_status,
+        request=request,
     )
+    if not result["ok"]:
+        return RedirectResponse(
+            f"/employees/{employee_id}?{urlencode({'error': 'Ключ не освобождён: не все записи ключа удалены из CRM.'})}",
+            status_code=303,
+        )
     log_event(
         request=request,
         action="employee_key_close",
@@ -738,12 +854,16 @@ def employee_remove_key(
     )
 
     if active_key and active_key["key_id"] == key_id:
-        close_employee_key(
-            employee_id=employee_id,
-            assignment_id=active_key["assignment_id"],
-            status="inactive",
-            close_reason="Ключ деактивирован вручную",
+        result = release_key_lifecycle(
+            key_id,
+            reason="Ключ деактивирован вручную",
+            request=request,
         )
+        if not result["ok"]:
+            return RedirectResponse(
+                f"/employees/{employee_id}?{urlencode({'error': 'Одна или несколько записей ключа не удалены из CRM.'})}",
+                status_code=303,
+            )
 
         log_event(
             request=request,
@@ -812,46 +932,38 @@ def employees_write(
             },
         )
 
-    try:
-        issue_key_to_employee(
-            employee_id=employee["id"],
-            key_id=item["id"],
-            new_key_comment=new_key_comment,
-            old_key_status=old_key_status,
-            old_key_reason=old_key_reason,
-        )
-    except ValueError as error:
-        return templates.TemplateResponse(
-            "write_results.html",
-            {
-                "request": request,
-                "title": "Ошибка выдачи ключа",
-                "all_results": [
-                    {
-                        "key": {
-                            "number": key_value,
-                            "hex_value": str(error),
-                        },
-                        "results": [],
-                    }
-                ],
-            },
-        )
-
     panels = get_panels(panel_ids=panel_ids) if scope == "selected" else get_panels()
-
-    results = write_key_to_panels(
-        "employee",
-        item,
-        panels,
-        flat_num=flat_num,
-        inner=inner,
-        address=f"Сотрудник: {employee_name}",
-        request=request,
-        assignment_type="employee",
-        employee_id=employee["id"],
-    )
-    write_result = KeyWriteResult.from_writer(item.get("id"), results)
+    if not panels:
+        write_result = KeyWriteResult.from_writer(item.get("id"), [])
+    else:
+        write_result = _employee_write_result(request, employee, item, panels)
+    confirmed = bool(write_result.succeeded_panel_ids or write_result.already_present_panel_ids)
+    if confirmed and not request.session.get("training_mode"):
+        replacement = _release_replaced_employee_keys(
+            request, int(employee["id"]), int(item["id"]),
+            old_key_status=old_key_status, reason=old_key_reason,
+        )
+        if replacement["ok"]:
+            try:
+                issue_key_to_employee(
+                    employee_id=employee["id"], key_id=item["id"],
+                    new_key_comment=new_key_comment,
+                    old_key_status=old_key_status, old_key_reason=old_key_reason,
+                )
+            except ValueError as error:
+                write_result = KeyWriteResult.from_writer(item.get("id"), [
+                    *write_result.to_legacy_results(),
+                    {"status": "ERROR", "response": str(error), "panel": {}},
+                ])
+        else:
+            write_result = KeyWriteResult.from_writer(item.get("id"), [
+                *write_result.to_legacy_results(),
+                {
+                    "status": "ERROR",
+                    "response": "Прежний ключ не удалён со всех панелей; назначение сотрудника не изменено.",
+                    "panel": {},
+                },
+            ])
 
     return templates.TemplateResponse(
         "write_results.html",

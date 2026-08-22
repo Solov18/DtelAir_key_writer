@@ -9,10 +9,12 @@ from app.services import (
     is_ambiguous_key,
     write_key_to_panels,
     get_key_write_context,
+    key_write_state_token,
     resolve_key_write_decision,
     KeyWriteResult,
 )
 from app.response_utils import async_document_response
+from app.services.key_lifecycle import reassign_key as reassign_key_lifecycle
 from app.templates_config import templates
 
 router = APIRouter()
@@ -78,8 +80,9 @@ def manual_write_preview(
     if is_ambiguous_key(key):
         error = "Номер встречается в нескольких типах. Выберите тип ключа."
         key = None
-    elif not key:
+    elif not key or not key.get("id"):
         error = "Ключ не найден в базе"
+        key = None
     elif not panels:
         error = "Панели по этому адресу не найдены"
     elif not apartment:
@@ -88,7 +91,7 @@ def manual_write_preview(
     if panels:
         address = panels[0].get("address") or address
 
-    write_context = get_key_write_context(key["id"], panels) if key else {}
+    write_context = get_key_write_context(key["id"], panels) if key and key.get("id") else {}
 
     return templates.TemplateResponse(
         "manual_write.html",
@@ -103,6 +106,7 @@ def manual_write_preview(
             "apartment": apartment,
             "error": error,
             "write_context": write_context,
+            "key_state_token": key_write_state_token(write_context) if key else "",
         },
     )
 
@@ -119,6 +123,7 @@ def manual_write_execute(
     manual_panel_ids: list[int] = Form([]),
     key_type_id: int = Form(0),
     occupied_action: str = Form(""),
+    key_state_token: str = Form(""),
 ):
     key = find_key(key_query, key_type_id or None)
 
@@ -144,6 +149,8 @@ def manual_write_execute(
     all_results = []
 
     warning = None
+    if key and not key.get("id"):
+        key = None
     context = get_key_write_context(key["id"], panels) if key else {}
     decision = resolve_key_write_decision(context, occupied_action)
     if not key:
@@ -152,26 +159,39 @@ def manual_write_execute(
         warning = "Квартира не указана. Запись не выполнялась."
     elif not panels:
         warning = "Не выбрана ни одна панель. Запись не выполнялась."
+    elif isinstance(key_state_token, str) and key_state_token and key_write_state_token(context) != key_state_token:
+        warning = "Состояние ключа изменилось. Проверьте данные повторно перед записью."
     elif decision["action_required"]:
         warning = "Ключ уже используется. Выберите: переназначить его или только добавить на выбранные панели."
 
-    if key and apartment.strip() and panels and not decision["action_required"]:
-        legacy_results = write_key_to_panels(
-            "resident_manual",
-            key,
-            panels,
-            flat_num=apartment,
-            inner=inner,
-            address=address,
-            request=request,
-            assignment_type="resident",
-            assignment_policy=decision["assignment_policy"],
-            known_panel_ids=decision["known_panel_ids"],
-            write_option=decision["write_option"],
-            previous_assignment=decision["previous_assignment"],
-            automatic_panel_ids=set(automatic_panel_ids),
-            manual_panel_ids=set(manual_panel_ids),
-        )
+    state_is_current = not (
+        isinstance(key_state_token, str)
+        and key_state_token
+        and key_write_state_token(context) != key_state_token
+    )
+    if key and apartment.strip() and panels and state_is_current and not decision["action_required"]:
+        def write_target(_snapshot=None):
+            return write_key_to_panels(
+                "resident_manual", key, panels, flat_num=apartment, inner=inner,
+                address=address, request=request, assignment_type="resident",
+                assignment_policy=decision["assignment_policy"],
+                known_panel_ids=(set() if decision["action"] == "reassign" else decision["known_panel_ids"]),
+                write_option=decision["write_option"],
+                previous_assignment=decision["previous_assignment"],
+                automatic_panel_ids=set(automatic_panel_ids),
+                manual_panel_ids=set(manual_panel_ids),
+            )
+
+        if decision["action"] == "reassign":
+            lifecycle_result = reassign_key_lifecycle(
+                int(key["id"]), write_callback=write_target,
+                reason=f"Переназначение на {address}, кв. {apartment}", request=request,
+            )
+            legacy_results = lifecycle_result.get("write") or lifecycle_result["release"].get("results", [])
+            if lifecycle_result.get("write") is None:
+                warning = "Переназначение не выполнено: старый доступ удалён не со всех панелей."
+        else:
+            legacy_results = write_target()
         write_result = KeyWriteResult.from_writer(key.get("id"), legacy_results)
         all_results.append(
             {

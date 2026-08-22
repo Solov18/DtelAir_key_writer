@@ -4,6 +4,16 @@
 
 :root {
     --sidebar-width: 230px;
+    --page-padding-x: clamp(24px, 2.4vw, 52px);
+    --page-padding-top: clamp(24px, 2vw, 42px);
+    --page-padding-bottom: 48px;
+    --page-gap: 18px;
+    --card-padding: 18px;
+    --button-height: 44px;
+    --table-row-height: 56px;
+    --inspector-width: clamp(350px, 22vw, 410px);
+    --font-size-ui: 13px;
+    --font-size-small: 12px;
 
     --bg-color: #02111a;
     --text: #ffffff;

@@ -128,6 +128,18 @@ class SystemSafetyTests(PostgreSQLTestCase):
         self.assertIn(f"Ключ №{key['number']}", body)
         self.assertNotIn("Ключ не найден в базе", body)
 
+    def test_manual_write_unknown_hex_returns_validation_instead_of_500(self):
+        response = manual_write_preview(
+            request=self._request("/write/manual/preview"),
+            key_query="9E122A28",
+            address="ул. Тестовая 50",
+            apartment="5",
+            key_type_id=0,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Ключ не найден в базе", response.body.decode("utf-8"))
+
     def test_manual_write_keeps_assignment_address_and_tracks_panel_sources(self):
         request = self._request("/write/manual/write")
         key = {"id": 1, "number": "973", "hex_value": "AABBCCDD", "status": "free"}
@@ -195,6 +207,14 @@ class SystemSafetyTests(PostgreSQLTestCase):
             patch("app.routers.manual_write.get_panels", return_value=panels),
             patch("app.routers.manual_write.get_key_write_context", return_value=context),
             patch("app.routers.manual_write.write_key_to_panels", return_value=[]) as writer,
+            patch(
+                "app.routers.manual_write.reassign_key_lifecycle",
+                side_effect=lambda _key_id, **kwargs: {
+                    "ok": True, "status": "SUCCESS",
+                    "write": kwargs["write_callback"]({}),
+                    "release": {"results": []},
+                },
+            ) as lifecycle,
         ):
             manual_write_execute(
                 request=request, key_query="408", address="Новый дом 2", apartment="8",
@@ -203,7 +223,8 @@ class SystemSafetyTests(PostgreSQLTestCase):
         kwargs = writer.call_args.kwargs
         self.assertEqual(kwargs["assignment_policy"], "replace")
         self.assertEqual(kwargs["write_option"], "reassign_to_new_address")
-        self.assertEqual(kwargs["known_panel_ids"], {9})
+        self.assertEqual(kwargs["known_panel_ids"], set())
+        lifecycle.assert_called_once()
 
     def test_manual_write_adds_panels_without_changing_assignment(self):
         request = self._request("/write/manual/write")

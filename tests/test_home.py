@@ -141,6 +141,25 @@ class HomeDashboardTests(PostgreSQLTestCase):
                     ),
                 )
 
+            for index in range(6):
+                conn.execute(
+                    """
+                    INSERT INTO operation_log(
+                        mode, action, object_type, object_name, hex_value,
+                        mac, status, created_at, username, user_full_name
+                    )
+                    VALUES (?, ?, ?, ?, ?, '', 'success', ?, 'admin', 'Администратор')
+                    """,
+                    (
+                        "key_update",
+                        "key_update",
+                        "Ключ",
+                        f"Ключ {index}",
+                        f"AABBCC0{index}",
+                        f"2026-07-31 10:0{index}:00",
+                    ),
+                )
+
     def test_home_uses_saved_values_real_counters_and_five_recent_logs(self):
         self._seed_dashboard()
 
@@ -154,7 +173,11 @@ class HomeDashboardTests(PostgreSQLTestCase):
         self.assertIn("Управление доступом", html)
         self.assertIn("Панели в сети", html)
         self.assertIn(">1</b>", html)
-        self.assertIn("Панели с низким напряжением", html)
+        self.assertIn("Панели с низким или повышенным напряжением", html)
+        self.assertIn("Температура выше 100 °C", html)
+        self.assertIn("Время работы вне нормы", html)
+        self.assertIn('href="/panels?status=temperature_alert"', html)
+        self.assertIn('href="/panels?status=uptime_alert"', html)
         self.assertIn("Проблемы с SIP-авторизацией", html)
         self.assertIn('href="/panels?status=sip_error"', html)
         self.assertIn('href="/panels?status=online"', html)
@@ -162,10 +185,11 @@ class HomeDashboardTests(PostgreSQLTestCase):
         self.assertIn('href="/panels?status=offline"', html)
         self.assertIn("Панели не в сети", html)
         self.assertIn("С предупреждениями", html)
-        self.assertIn("Панель 5", html)
-        self.assertNotIn("Панель 0", html)
+        self.assertIn("Ключ 5", html)
+        self.assertNotIn("Ключ 0", html)
+        self.assertNotIn("Проверка панели", html)
         self.assertEqual(html.count('class="operations-row"'), 5)
-        self.assertLess(html.index("Панель 5"), html.index("Панель 4"))
+        self.assertLess(html.index("Ключ 5"), html.index("Ключ 4"))
 
         self.assertIn("<b>2</b><small>Сотрудники</small>", html)
         self.assertIn("<b>1</b><small>Управляющие", html)

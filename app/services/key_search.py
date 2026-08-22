@@ -148,10 +148,32 @@ class KeySearchService:
             params.append(int(type_id))
 
         available_sql = """(
-            k.status = 'free' AND NOT EXISTS (
+            k.status = 'free'
+            AND k.is_used = 0
+            AND NOT EXISTS (
+                SELECT 1 FROM key_assignments ka
+                WHERE ka.key_id = k.id AND ka.active = 1
+            )
+            AND NOT EXISTS (
+                SELECT 1 FROM key_accesses kac
+                WHERE kac.key_id = k.id AND kac.active = 1
+            )
+            AND NOT EXISTS (
+                SELECT 1 FROM employee_keys ek
+                WHERE ek.key_id = k.id AND ek.status = 'active'
+            )
+            AND NOT EXISTS (
                 SELECT 1 FROM uk_key_issues ki
                 WHERE ki.key_id = k.id
                   AND ki.status IN ('pending', 'active')
+            )
+            AND NOT EXISTS (
+                SELECT 1 FROM key_panel_states kps
+                WHERE kps.key_id = k.id
+                  AND (
+                      kps.state IN ('active', 'pending_delete')
+                      OR (kps.state = 'error' AND kps.last_operation = 'delete')
+                  )
             )
         )"""
         if available_only:
@@ -185,21 +207,44 @@ class KeySearchService:
                     LIMIT ?
                 )
                 SELECT ranked.*,
-                       COALESCE(owner.current_owner, '') AS current_owner
+                       COALESCE(NULLIF(owner.current_owner, ''), legacy_owner.current_owner, '') AS current_owner
                 FROM ranked
                 LEFT JOIN LATERAL (
                     SELECT STRING_AGG(
                         NULLIF(CONCAT_WS(', ',
-                            NULLIF(ka.assignment_type, ''),
+                            CASE ka.access_type
+                                WHEN 'resident' THEN 'Жилец'
+                                ELSE 'Служебный доступ'
+                            END,
                             NULLIF(ka.address, ''),
                             CASE WHEN NULLIF(ka.apartment, '') IS NOT NULL
                                  THEN 'кв. ' || ka.apartment ELSE NULL END,
+                            NULLIF(ka.owner_name, ''),
                             NULLIF(ka.note, '')
                         ), ''), '; ' ORDER BY ka.id
                     ) AS current_owner
-                    FROM key_assignments ka
+                    FROM key_accesses ka
                     WHERE ka.key_id = ranked.id AND ka.active = 1
                 ) owner ON TRUE
+                LEFT JOIN LATERAL (
+                    SELECT STRING_AGG(
+                        NULLIF(CONCAT_WS(', ',
+                            NULLIF(legacy.assignment_type, ''),
+                            NULLIF(legacy.address, ''),
+                            CASE WHEN NULLIF(legacy.apartment, '') IS NOT NULL
+                                 THEN 'кв. ' || legacy.apartment ELSE NULL END,
+                            NULLIF(legacy.note, '')
+                        ), ''), '; ' ORDER BY legacy.id
+                    ) AS current_owner
+                    FROM key_assignments legacy
+                    WHERE legacy.key_id = ranked.id
+                      AND legacy.active = 1
+                      AND NOT EXISTS (
+                          SELECT 1 FROM key_accesses current_access
+                          WHERE current_access.key_id = ranked.id
+                            AND current_access.active = 1
+                      )
+                ) legacy_owner ON TRUE
                 ORDER BY ranked.search_rank,
                          CASE WHEN ranked.available THEN 0 ELSE 1 END,
                          LOWER(ranked.type_name), LENGTH(ranked.number),

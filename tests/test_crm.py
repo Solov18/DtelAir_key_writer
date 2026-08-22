@@ -58,6 +58,14 @@ class FakeSession:
             data={"result": True, "message": "Ключ добавлен"}
         )
 
+    def delete(self, url, **kwargs):
+        self.calls.append(("DELETE", url, kwargs))
+        if self.create_responses:
+            return self.create_responses.pop(0)
+        return FakeResponse(
+            data={"result": True, "message": "Ключ удалён"}
+        )
+
     def close(self):
         pass
 
@@ -138,6 +146,7 @@ class CrmServiceTests(unittest.TestCase):
 
         self.assertFalse(result["written"])
         self.assertEqual(result["status"], "ALREADY_EXISTS")
+        self.assertTrue(result["ok"])
 
     def test_write_lock_wait_has_timeout(self):
         self.configure(crm_cookie="PHPSESSID=test-session", request_timeout=3)
@@ -333,8 +342,118 @@ class CrmServiceTests(unittest.TestCase):
 
         self.assertTrue(result["ok"])
         self.assertFalse(result["written"])
-        self.assertTrue(session.calls[2][1].endswith("/delete-key"))
-        self.assertEqual(session.calls[2][2]["json"]["flatNum"], "87")
+        self.assertEqual(session.calls[2][0], "DELETE")
+        self.assertEqual(
+            session.calls[2][1],
+            "https://crm.example/front/device/08:13:CD:00:1D:C2/key/363FFAD7/delete",
+        )
+        self.assertNotIn("json", session.calls[2][2])
+
+    def test_cookie_remove_uses_current_crm_delete_contract(self):
+        self.configure(crm_cookie="PHPSESSID=test-session")
+        session = FakeSession()
+
+        with patch.object(crm.requests, "Session", return_value=session):
+            result = crm.crm_remove_key(
+                "08:13:CD:00:1D:C2", "363FFAD7", "87", 0,
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["status"], "SUCCESS")
+        self.assertEqual(len(session.calls), 1)
+        self.assertEqual(session.calls[0][0], "DELETE")
+        self.assertEqual(
+            session.calls[0][1],
+            "https://crm.example/front/device/08:13:CD:00:1D:C2/key/363FFAD7/delete",
+        )
+        self.assertNotIn("json", session.calls[0][2])
+
+    def test_cookie_remove_does_not_treat_generic_route_404_as_absent_key(self):
+        self.configure(crm_cookie="PHPSESSID=test-session")
+        session = FakeSession()
+        session.create_responses.append(
+            FakeResponse(
+                status_code=404,
+                text="<html><body>Not Found</body></html>",
+                headers={"Content-Type": "text/html"},
+            )
+        )
+
+        with patch.object(crm.requests, "Session", return_value=session):
+            result = crm.crm_remove_key(
+                "08:13:CD:00:1D:C2", "363FFAD7", "87", 0,
+            )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["status"], "INVALID_ROUTE")
+        self.assertIn("неверный маршрут", result["response"])
+        self.assertEqual(session.calls[0][0], "DELETE")
+
+    def test_cookie_remove_treats_explicit_key_absence_as_idempotent(self):
+        self.configure(crm_cookie="PHPSESSID=test-session")
+        session = FakeSession()
+        session.create_responses.append(
+            FakeResponse(
+                status_code=404,
+                data={"message": "Ключ не найден"},
+            )
+        )
+
+        with patch.object(crm.requests, "Session", return_value=session):
+            result = crm.crm_remove_key(
+                "08:13:CD:00:1D:C2", "363FFAD7", "87", 0,
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["status"], "ALREADY_ABSENT")
+        self.assertEqual(session.calls[0][0], "DELETE")
+
+    def test_company_existing_and_absent_results_are_idempotent(self):
+        self.configure(crm_buyer_id="42")
+        add_session = FakeSession()
+        add_session.create_responses.append(
+            FakeResponse(data={"result": False, "message": "Ключ уже существует"})
+        )
+        with patch.object(crm.requests, "Session", return_value=add_session):
+            added = crm.crm_add_key_for_company(
+                "08:13:CD:00:1D:C2", "363FFAD7", "87", 0,
+                login="uk-operator", password="uk-secret",
+            )
+        self.assertTrue(added["ok"])
+        self.assertEqual(added["status"], "ALREADY_EXISTS")
+
+        remove_session = FakeSession()
+        remove_session.create_responses.append(
+            FakeResponse(data={"result": False, "message": "Ключ не найден"})
+        )
+        with patch.object(crm.requests, "Session", return_value=remove_session):
+            removed = crm.crm_remove_key_for_company(
+                "08:13:CD:00:1D:C2", "363FFAD7", "87", 0,
+                login="uk-operator", password="uk-secret",
+            )
+        self.assertTrue(removed["ok"])
+        self.assertEqual(removed["status"], "ALREADY_ABSENT")
+
+    def test_company_remove_does_not_treat_generic_route_404_as_absent_key(self):
+        self.configure(crm_buyer_id="42")
+        session = FakeSession()
+        session.create_responses.append(
+            FakeResponse(
+                status_code=404,
+                text="<html><body>Not Found</body></html>",
+                headers={"Content-Type": "text/html"},
+            )
+        )
+
+        with patch.object(crm.requests, "Session", return_value=session):
+            result = crm.crm_remove_key_for_company(
+                "08:13:CD:00:1D:C2", "363FFAD7", "87", 0,
+                login="uk-operator", password="uk-secret",
+            )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["status"], "INVALID_ROUTE")
+        self.assertEqual(session.calls[2][0], "DELETE")
 
 
 if __name__ == "__main__":

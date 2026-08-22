@@ -54,11 +54,11 @@
     <legend>{{ legend }}</legend>
     <label>
         <input type="radio" name="{{ field_name }}" value="reassign"{% if selected_action == 'reassign' %} checked{% endif %}{% if form_id %} form="{{ form_id }}"{% endif %}>
-        <span><b>Переназначить ключ</b><small>Заменить назначение в CRM новым адресом и квартирой. История сохранится, со старых панелей ключ автоматически не удаляется.</small></span>
+        <span><b>Переназначить ключ</b><small>Старое назначение будет удалено из CRM, после чего ключ будет записан на выбранный новый адрес и панели.</small></span>
     </label>
     <label>
         <input type="radio" name="{{ field_name }}" value="add_panels"{% if selected_action == 'add_panels' %} checked{% endif %}{% if form_id %} form="{{ form_id }}"{% endif %}>
-        <span><b>Только добавить на выбранные панели</b><small>Сохранить текущее назначение и записать ключ только на панели, где его ещё нет.</small></span>
+        <span><b>Только добавить на выбранные панели</b><small>Текущее назначение сохранится. Ключ будет дополнительно записан на выбранные панели.</small></span>
     </label>
 </fieldset>
 {%- endmacro %}

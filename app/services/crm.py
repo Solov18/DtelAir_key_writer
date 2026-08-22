@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from html.parser import HTMLParser
 from threading import RLock
 from time import monotonic
+from urllib.parse import urlsplit
 
 import requests
 
@@ -338,13 +339,119 @@ def _send_create_key(
 def _send_delete_key(
     session: requests.Session,
     url: str,
-    payload: dict,
+    *,
+    timeout: float | None = None,
 ) -> requests.Response:
-    return session.post(
+    """Delete a regular key using the contract used by crm.dtel.ru frontend.
+
+    The central CRM endpoint owns communication with the physical device.  A
+    regular-key delete has MAC and HEX in the URL and intentionally has no JSON
+    body (flatNum/inner are create-key fields, not delete fields).
+    """
+    return session.delete(
         url,
-        json=payload,
-        timeout=max(1, float(settings.request_timeout)),
+        timeout=(
+            max(0.1, float(timeout))
+            if timeout is not None
+            else max(1, float(settings.request_timeout))
+        ),
         allow_redirects=False,
+    )
+
+
+def _classify_operation_response(data: dict, *, operation: str) -> dict:
+    """Convert the real CRM response into stable, idempotent semantics."""
+
+    ok = data.get("result") is True
+    message = _message_text(data.get("message"))
+    normalized = message.casefold().replace("ё", "е")
+    if operation == "add":
+        idempotent = not ok and any(
+            marker in normalized
+            for marker in ("уже существует", "уже добавлен", "already exists")
+        )
+        status = "SUCCESS" if ok else "ALREADY_EXISTS" if idempotent else "CRM_ERROR"
+        fallback = "Ключ успешно записан" if ok else "CRM отклонила запись ключа"
+        return _result(
+            ok=ok or idempotent,
+            written=ok,
+            status=status,
+            response=message or fallback,
+        )
+
+    idempotent = not ok and any(
+        marker in normalized
+        for marker in ("не найден", "не существует", "already absent", "not found")
+    )
+    status = "SUCCESS" if ok else "ALREADY_ABSENT" if idempotent else "CRM_ERROR"
+    return _result(
+        ok=ok or idempotent,
+        status=status,
+        response=message or ("Ключ успешно удалён" if ok else "CRM отклонила удаление ключа"),
+    )
+
+
+def _classify_delete_http_error(response: requests.Response) -> dict | None:
+    """Accept only an explicit key-absence response as idempotent.
+
+    A generic HTML ``404 Not Found`` means that the route itself is wrong.  It
+    must never be converted into a successful deletion, otherwise local state
+    can be freed while the key is still present in the central CRM.
+    """
+    if response.status_code != 404:
+        return None
+    message = ""
+    try:
+        data = response.json()
+        if isinstance(data, dict):
+            message = _message_text(data.get("message") or data.get("error"))
+    except (TypeError, ValueError):
+        message = re.sub(r"<[^>]+>", " ", response.text or "")
+    normalized = " ".join(message.casefold().replace("ё", "е").split())
+    explicitly_absent = any(
+        marker in normalized
+        for marker in (
+            "ключ не найден",
+            "ключ не существует",
+            "key not found",
+            "key does not exist",
+            "key already absent",
+        )
+    )
+    if not explicitly_absent:
+        return _result(
+            ok=False,
+            status="INVALID_ROUTE",
+            response=(
+                "Удаление в crm.dtel.ru не выполнено: HTTP 404, "
+                "неверный маршрут"
+            ),
+        )
+    return _result(
+        ok=True,
+        status="ALREADY_ABSENT",
+        response="Ключ уже отсутствует в прежнем месте CRM",
+    )
+
+
+def _safe_response_fragment(response: requests.Response) -> str:
+    """Small diagnostic fragment without headers, cookies or credentials."""
+    try:
+        data = response.json()
+        value = _message_text(data.get("message") or data.get("error")) if isinstance(data, dict) else ""
+    except (TypeError, ValueError):
+        value = re.sub(r"<[^>]+>", " ", response.text or "")
+    value = " ".join(value.split())
+    return value[:240]
+
+
+def _log_key_response(*, action: str, url: str, response: requests.Response) -> None:
+    logger.info(
+        "crm.key.response action=%s path=%s http_status=%s fragment=%s",
+        action,
+        urlsplit(url).path,
+        response.status_code,
+        _safe_response_fragment(response),
     )
 
 
@@ -430,14 +537,32 @@ def _company_key_operation(
             response="Тестовый режим: запрос в CRM не отправлен",
         )
 
-    endpoint = "create-key" if operation == "add" else "delete-key"
-    url = f"{_base_url()}/front/device-keys/{clean_mac}/{endpoint}"
+    url = (
+        f"{_base_url()}/front/device-keys/{clean_mac}/create-key"
+        if operation == "add"
+        else f"{_base_url()}/front/device/{clean_mac}/key/{clean_hex}/delete"
+    )
     sender = _send_create_key if operation == "add" else _send_delete_key
     session = _new_session()
     session.headers.pop("Cookie", None)
     try:
         _login_explicit(session, login=login, password=password)
-        response = sender(session, url, payload)
+        logger.info(
+            "crm.key.request action=%s method=%s path=%s mac=%s flat_num=%s inner=%s",
+            operation, "POST" if operation == "add" else "DELETE",
+            urlsplit(url).path, clean_mac, payload["flatNum"], payload["inner"],
+        )
+        if operation == "add":
+            response = sender(
+                session, url, payload,
+                timeout=max(1, float(settings.request_timeout)),
+            )
+        else:
+            response = sender(
+                session, url,
+                timeout=max(1, float(settings.request_timeout)),
+            )
+        _log_key_response(action=operation, url=url, response=response)
         if _is_auth_response(response):
             return _result(
                 ok=False,
@@ -445,6 +570,10 @@ def _company_key_operation(
                 response="Авторизация CRM для управляющей компании истекла",
             )
         if not response.ok:
+            if operation == "remove":
+                idempotent = _classify_delete_http_error(response)
+                if idempotent:
+                    return idempotent
             return _result(
                 ok=False,
                 status=f"HTTP_{response.status_code}",
@@ -458,20 +587,7 @@ def _company_key_operation(
                 status="INVALID_RESPONSE",
                 response=_response_text(response),
             )
-        ok = data.get("result") is True
-        message = _message_text(data.get("message"))
-        return _result(
-            ok=ok,
-            written=ok and operation == "add",
-            status="SUCCESS" if ok else "CRM_ERROR",
-            response=message or (
-                "Ключ успешно записан"
-                if ok and operation == "add"
-                else "Ключ успешно удалён"
-                if ok
-                else "CRM отклонила операцию"
-            ),
-        )
+        return _classify_operation_response(data, operation=operation)
     except CrmAuthError as error:
         return _result(
             ok=False,
@@ -647,34 +763,13 @@ def crm_add_key(
                     response=_response_text(response),
                 )
 
-            message = _message_text(data.get("message"))
-            ok = data.get("result") is True
-            normalized_message = message.casefold().replace("ё", "е")
-            already_exists = (
-                not ok
-                and (
-                    "уже существует" in normalized_message
-                    or "уже добавлен" in normalized_message
-                    or "already exists" in normalized_message
-                )
-            )
-            status = "SUCCESS" if ok else "ALREADY_EXISTS" if already_exists else "CRM_ERROR"
+            classified = _classify_operation_response(data, operation="add")
             logger.info(
                 "key_write.crm.response mac=%s status=%s",
                 clean_mac,
-                status,
+                classified["status"],
             )
-
-            return _result(
-                ok=ok,
-                written=ok,
-                status=status,
-                response=message or (
-                    "Ключ успешно записан"
-                    if ok
-                    else "CRM отклонила запись ключа"
-                ),
-            )
+            return classified
 
         except CrmAuthError as error:
             logger.warning("key_write.crm.auth_exception mac=%s", clean_mac)
@@ -707,3 +802,68 @@ def crm_add_key(
     finally:
         _crm_lock.release()
         logger.info("key_write.crm.finish mac=%s", clean_mac)
+
+
+def crm_remove_key(mac: str, hex_value: str, flat_num: str, inner: int) -> dict:
+    """Remove a key through the same authenticated CRM API as create-key."""
+
+    clean_mac = (mac or "").strip().upper()
+    clean_hex = (hex_value or "").strip().upper()
+    validation_error = _validate_write_data(clean_mac, clean_hex)
+    if validation_error:
+        return _result(ok=False, status="VALIDATION_ERROR", response=validation_error)
+    if settings.dry_run:
+        return _result(
+            ok=True,
+            status="DRY_RUN",
+            response="Тестовый режим: запрос удаления в CRM не отправлен",
+        )
+
+    operation_timeout = max(1, float(settings.request_timeout))
+    deadline = monotonic() + operation_timeout
+    url = f"{_base_url()}/front/device/{clean_mac}/key/{clean_hex}/delete"
+    logger.info("key_delete.crm.start mac=%s timeout_seconds=%s", clean_mac, operation_timeout)
+    if not _crm_lock.acquire(timeout=operation_timeout):
+        return _result(ok=False, status="TIMEOUT", response="Превышено время ожидания очереди удаления в CRM")
+    try:
+        try:
+            session = _get_session(deadline=deadline)
+            logger.info(
+                "crm.key.request action=remove method=DELETE path=%s mac=%s",
+                urlsplit(url).path, clean_mac,
+            )
+            response = _send_delete_key(
+                session, url, timeout=_remaining_timeout(deadline)
+            )
+            _log_key_response(action="remove", url=url, response=response)
+            if _is_auth_response(response) and _has_login_credentials():
+                _reset_session()
+                session = _get_session(deadline=deadline)
+                response = _send_delete_key(
+                    session, url, timeout=_remaining_timeout(deadline)
+                )
+                _log_key_response(action="remove", url=url, response=response)
+            if _is_auth_response(response):
+                return _result(ok=False, status="AUTH_REQUIRED", response="Авторизация CRM истекла")
+            if not response.ok:
+                idempotent = _classify_delete_http_error(response)
+                if idempotent:
+                    return idempotent
+                return _result(ok=False, status=f"HTTP_{response.status_code}", response=_response_text(response))
+            try:
+                data = response.json()
+            except ValueError:
+                return _result(ok=False, status="INVALID_RESPONSE", response=_response_text(response))
+            return _classify_operation_response(data, operation="remove")
+        except CrmAuthError as error:
+            return _result(ok=False, status="AUTH_REQUIRED", response=str(error))
+        except requests.Timeout:
+            return _result(ok=False, status="TIMEOUT", response="CRM не ответила за отведённое время")
+        except requests.RequestException:
+            return _result(ok=False, status="CONNECTION_ERROR", response="CRM или панель недоступны")
+        except Exception:
+            logger.exception("key_delete.crm.unexpected_error mac=%s", clean_mac)
+            return _result(ok=False, status="ERROR", response="Непредвиденная ошибка удаления ключа")
+    finally:
+        _crm_lock.release()
+        logger.info("key_delete.crm.finish mac=%s", clean_mac)

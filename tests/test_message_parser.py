@@ -6,7 +6,9 @@ from starlette.requests import Request
 from tests.postgres_test_case import PostgreSQLTestCase
 
 from app.repositories import key_repository, panel_repository
-from app.routers.message import _build_key_rows, message_write
+from app.routers.message import (
+    _build_key_rows, _key_requests_from_override, message_preview, message_write,
+)
 from app.services.keys import find_keys
 from app.services.panels import find_panels_by_address
 from app.services.parser import find_address_candidates, parse_message
@@ -57,6 +59,27 @@ class MessageParserTests(PostgreSQLTestCase):
             [("Оранжевый", "001185"), ("Уникальный", "112"), ("Стикер", "00341")],
         )
 
+    def test_number_override_preserves_each_grouped_key_type_independently(self):
+        self._create_type("Оранжевый", "#FF982A")
+        self._create_type("Премиальные", "#AA66EE")
+        parsed = parse_message(
+            "ключ: 005300\nПремиальные - 1752, 1812, 1811"
+        )
+
+        requests = _key_requests_from_override(
+            parsed, "005300, 1752, 1812, 1811"
+        )
+
+        self.assertEqual(
+            [(item["type_name"], item["number"]) for item in requests],
+            [
+                ("", "005300"),
+                ("Премиальные", "1752"),
+                ("Премиальные", "1812"),
+                ("Премиальные", "1811"),
+            ],
+        )
+
     def test_grouped_message_extracts_all_six_keys_with_types(self):
         self._create_type("Оранжевый", "#FF982A")
         self._create_type("Стикер", "#9B72E8")
@@ -82,6 +105,177 @@ class MessageParserTests(PostgreSQLTestCase):
                 ("Уникальный", "918"),
             ],
         )
+
+    def test_real_multigroup_message_keeps_types_zeroes_and_deduplicates(self):
+        self._create_type("Простой", "#4AB3FF")
+        self._create_type("Премиальный", "#F0B14A")
+        self._create_type("Стикер", "#9B72E8")
+        self._create_type("Уникальный", "#22B889")
+        self._create_panel("Курортный проспект 98/27", "Основной вход", 61)
+
+        parsed = parse_message(
+            "Адрес: Курортный проспект 98/27\n"
+            "Квартира: 66\nКлючи:\n"
+            "005841 Простые -\n"
+            "007414, 006801 Премиальные -\n"
+            "Стикер 377\nСтикер 372\nСтикер 369\n"
+            "Уникальный - 1040\nУникальный 865\nУникальный 865"
+        )
+
+        self.assertEqual(parsed["address"], "Курортный проспект 98/27")
+        self.assertEqual(parsed["apartment"], "66")
+        self.assertEqual(
+            [(row["type_name"], row["number"]) for row in parsed["key_requests"]],
+            [
+                ("Простой", "005841"),
+                ("Премиальный", "007414"),
+                ("Премиальный", "006801"),
+                ("Стикер", "377"),
+                ("Стикер", "372"),
+                ("Стикер", "369"),
+                ("Уникальный", "1040"),
+                ("Уникальный", "865"),
+            ],
+        )
+
+    def test_real_orange_group_ignores_phone_and_address_numbers(self):
+        self._create_type("Оранжевый", "#FF982A")
+        self._create_panel("Санаторная улица 49/19А", "Основной вход", 62)
+
+        parsed = parse_message(
+            "Прописать 3 БП ключа стандарт\n"
+            "оранжевый - 004601, 009035, 009407\n"
+            "Сочи, Санаторная улица д.49/19а, кв.22\n"
+            "+79301184352"
+        )
+
+        self.assertEqual(parsed["address"], "Санаторная улица 49/19А")
+        self.assertEqual(parsed["apartment"], "22")
+        self.assertEqual(
+            [(row["type_name"], row["number"]) for row in parsed["key_requests"]],
+            [
+                ("Оранжевый", "004601"),
+                ("Оранжевый", "009035"),
+                ("Оранжевый", "009407"),
+            ],
+        )
+
+    def test_group_separators_and_type_after_numbers_are_supported(self):
+        self._create_type("Стикер", "#9B72E8")
+        self._create_type("Оранжевый", "#FF982A")
+        self._create_type("Премиальный", "#F0B14A")
+
+        stickers = parse_message("Стикеры - 377 372,369")["key_requests"]
+        orange = parse_message("Оранжевые 004601 009035,009407")["key_requests"]
+        premium = parse_message("007414, 006801 Премиальные")["key_requests"]
+
+        self.assertEqual([row["number"] for row in stickers], ["377", "372", "369"])
+        self.assertTrue(all(row["type_name"] == "Стикер" for row in stickers))
+        self.assertEqual([row["number"] for row in orange], ["004601", "009035", "009407"])
+        self.assertTrue(all(row["type_name"] == "Оранжевый" for row in orange))
+        self.assertEqual([row["number"] for row in premium], ["007414", "006801"])
+        self.assertTrue(all(row["type_name"] == "Премиальный" for row in premium))
+
+    def test_all_catalog_type_groups_support_inflections_and_mixed_separators(self):
+        for name in (
+            "Синий",
+            "Стикер",
+            "Уникальный",
+            "Простой",
+            "Премиальный",
+            "Бесплатный розовый",
+            "Вездеход",
+        ):
+            self._create_type(name)
+
+        parsed = parse_message(
+            "Синие - 000031, 000032 000033\n"
+            "Стикеры: 377; 372, 369\n"
+            "Уникальные — 1057 918\n"
+            "Простые 000041,000042\n"
+            "Премиальные: 000051; 000052\n"
+            "Бесплатные розовые - 000061, 000062\n"
+            "Вездеходы: 71 72"
+        )
+
+        self.assertEqual(
+            [(row["type_name"], row["number"]) for row in parsed["key_requests"]],
+            [
+                ("Синий", "000031"), ("Синий", "000032"), ("Синий", "000033"),
+                ("Стикер", "377"), ("Стикер", "372"), ("Стикер", "369"),
+                ("Уникальный", "1057"), ("Уникальный", "918"),
+                ("Простой", "000041"), ("Простой", "000042"),
+                ("Премиальный", "000051"), ("Премиальный", "000052"),
+                ("Бесплатный розовый", "000061"), ("Бесплатный розовый", "000062"),
+                ("Вездеход", "71"), ("Вездеход", "72"),
+            ],
+        )
+
+    def test_grouped_type_names_are_not_limited_by_parser_whitelist(self):
+        self._create_type("Служебный")
+
+        parsed = parse_message("Служебные - 001001, 001002; 001003")
+
+        self.assertEqual(
+            [(row["type_name"], row["number"]) for row in parsed["key_requests"]],
+            [("Служебный", "001001"), ("Служебный", "001002"), ("Служебный", "001003")],
+        )
+
+    def test_manual_type_selection_rebuilds_occupied_context_on_preview(self):
+        key = {
+            "id": 71,
+            "number": "004924",
+            "hex_value": "F05F6FD0",
+            "key_type_id": 9,
+            "type_name": "Синий",
+        }
+        occupied_context = {
+            "id": 71,
+            "is_used": True,
+            "assignment_type_name": "Жилец",
+            "assignment_address": "Старый дом 1",
+            "assignment_apartment": "8",
+            "panel_ids": [3],
+        }
+        parsed = {
+            "address": "Новый дом 10",
+            "address_status": "exact",
+            "address_candidates": [],
+            "apartment": "40",
+            "entrance": "",
+            "phones": [],
+            "key_type": "",
+            "key_numbers": ["004924"],
+            "key_requests": [{"number": "004924", "type_id": None, "type_name": ""}],
+        }
+        request = Request({
+            "type": "http", "method": "POST", "path": "/message/preview",
+            "headers": [], "client": ("127.0.0.1", 50000),
+            "session": {"user": {"login": "test", "role": "admin"}},
+        })
+        with (
+            patch("app.routers.message.parse_message", return_value=parsed),
+            patch("app.routers.message.find_key", return_value=key),
+            patch("app.routers.message.is_ambiguous_key", return_value=False),
+            patch("app.routers.message.find_panels_by_address", return_value=[]),
+            patch(
+                "app.services.key_write_context.get_key_write_contexts",
+                return_value={71: occupied_context},
+            ),
+        ):
+            response = message_preview(
+                request=request,
+                text="Ключ 004924",
+                ambiguous_key_numbers=["004924"],
+                key_type_overrides=[9],
+            )
+
+        body = response.body.decode("utf-8")
+        self.assertIn("Ключ уже используется", body)
+        self.assertIn("Действие для ключа №004924", body)
+        self.assertIn('name="occupied_actions"', body)
+        self.assertIn('name="ambiguous_key_numbers" value="004924"', body)
+        self.assertIn('name="key_type_overrides" value="9"', body)
 
     def test_type_aliases_come_back_to_real_catalog_types(self):
         orange_id = self._create_type("Оранжевый", "#FF982A")
@@ -440,6 +634,38 @@ class MessageParserTests(PostgreSQLTestCase):
             "сначала выберите способ",
             response.body.decode("utf-8"),
         )
+
+    def test_message_write_rejects_key_state_changed_after_preview(self):
+        request = Request({
+            "type": "http", "method": "POST", "path": "/message/write",
+            "headers": [], "client": ("127.0.0.1", 50000),
+            "session": {"user": {"login": "test", "role": "admin"}},
+        })
+        key = {"id": 88, "number": "004924", "hex_value": "F05F6FD0"}
+        panel = {"id": 7, "address": "Новый дом 10", "mac": "08:13:CD:00:00:07"}
+        context = {"id": 88, "is_used": True, "assignment_id": 15, "panel_ids": [3]}
+        with (
+            patch("app.routers.message.find_key", return_value=key),
+            patch("app.routers.message.is_ambiguous_key", return_value=False),
+            patch("app.routers.message.get_panels", return_value=[panel]),
+            patch("app.routers.message.get_key_write_context", return_value=context),
+            patch("app.routers.message.write_key_to_panels") as writer,
+        ):
+            response = message_write(
+                request=request,
+                address="Новый дом 10",
+                apartment="8",
+                source_text="",
+                key_numbers=["004924"],
+                key_type_ids=[0],
+                panel_ids=[7],
+                occupied_key_ids=[88],
+                occupied_actions=["add_panels"],
+                key_state_tokens=["stale-preview-token"],
+            )
+
+        writer.assert_not_called()
+        self.assertIn("Состояние ключа изменилось", response.body.decode("utf-8"))
 
 
 if __name__ == "__main__":

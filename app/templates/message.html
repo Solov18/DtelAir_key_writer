@@ -19,6 +19,12 @@
         <span><i>3</i><b>Запись</b><small>Получите результат</small></span>
     </nav>
 
+    {% if validation_error %}
+    <div class="message-alert message-alert-warning" role="alert">
+        {{ validation_error }}
+    </div>
+    {% endif %}
+
     <div class="message-start-grid">
         <section class="panel message-input-panel">
             <header class="message-section-head">
@@ -83,5 +89,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/message.js?v=8"></script>
+<script src="/static/js/message.js?v=11"></script>
 {% endblock %}

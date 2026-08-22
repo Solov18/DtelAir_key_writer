@@ -3,15 +3,20 @@
 from __future__ import annotations
 
 from app.db import db
-from app.panel_health import SUPPLY_VOLTAGE_MAX, SUPPLY_VOLTAGE_MIN
+from app.panel_health import (
+    SUPPLY_VOLTAGE_MAX, SUPPLY_VOLTAGE_MIN, TEMPERATURE_ALERT_C,
+    UPTIME_ALERT_MAX_SECONDS, UPTIME_ALERT_MIN_SECONDS,
+)
+from app.repositories.log_repository import JOURNAL_NOISE_ACTIONS
 
 
 def get_dashboard_snapshot() -> dict:
     """Return all dashboard counters and saved monitor state in one query."""
 
+    noise_placeholders = ", ".join("?" for _ in JOURNAL_NOISE_ACTIONS)
     with db() as conn:
         row = conn.execute(
-            """
+            f"""
             SELECT
                 (SELECT COUNT(*) FROM employees) AS employees,
                 (
@@ -25,7 +30,11 @@ def get_dashboard_snapshot() -> dict:
                     FROM keys
                     WHERE TRIM(COALESCE(hex_value, '')) <> ''
                 ) AS keys,
-                (SELECT COUNT(*) FROM operation_log) AS logs,
+                (
+                    SELECT COUNT(*)
+                    FROM operation_log
+                    WHERE action NOT IN ({noise_placeholders})
+                ) AS logs,
                 (
                     SELECT COUNT(*)
                     FROM panels
@@ -38,7 +47,7 @@ def get_dashboard_snapshot() -> dict:
                     FROM panels
                     WHERE enabled = 1
                       AND last_checked_at IS NOT NULL
-                      AND api_status = 'offline'
+                      AND api_status IN ('offline', 'timeout')
                 ) AS panels_offline,
                 (
                     SELECT COUNT(*)
@@ -49,18 +58,29 @@ def get_dashboard_snapshot() -> dict:
                       AND supply_voltage NOT BETWEEN ? AND ?
                 ) AS panels_voltage_alert,
                 (
+                    SELECT COUNT(*) FROM panels
+                    WHERE enabled = 1 AND last_checked_at IS NOT NULL
+                      AND temperature > ?
+                ) AS panels_temperature_alert,
+                (
+                    SELECT COUNT(*) FROM panels
+                    WHERE enabled = 1 AND last_checked_at IS NOT NULL
+                      AND api_status IN ('online', 'sip_auth_error') AND uptime_seconds IS NOT NULL
+                      AND (uptime_seconds < ? OR uptime_seconds > ?)
+                ) AS panels_uptime_alert,
+                (
                     SELECT COUNT(*)
                     FROM panels
                     WHERE enabled = 1
                       AND last_checked_at IS NOT NULL
-                      AND sip_registered IS NOT NULL
+                      AND (api_status = 'sip_auth_error' OR sip_registered IS NOT NULL)
                 ) AS panels_sip_known,
                 (
                     SELECT COUNT(*)
                     FROM panels
                     WHERE enabled = 1
                       AND last_checked_at IS NOT NULL
-                      AND sip_registered = 0
+                      AND (api_status = 'sip_auth_error' OR sip_registered = 0)
                 ) AS panels_sip_failed,
                 monitor.status AS monitor_status,
                 monitor.completed AS monitor_completed,
@@ -75,7 +95,12 @@ def get_dashboard_snapshot() -> dict:
             ) AS monitor
             RIGHT JOIN (SELECT 1 AS singleton) AS seed ON TRUE
             """,
-            (SUPPLY_VOLTAGE_MIN, SUPPLY_VOLTAGE_MAX),
+            (
+                *JOURNAL_NOISE_ACTIONS,
+                SUPPLY_VOLTAGE_MIN, SUPPLY_VOLTAGE_MAX,
+                TEMPERATURE_ALERT_C,
+                UPTIME_ALERT_MIN_SECONDS, UPTIME_ALERT_MAX_SECONDS,
+            ),
         ).fetchone()
 
     result = dict(row)
@@ -88,6 +113,8 @@ def get_dashboard_snapshot() -> dict:
         "panels_online",
         "panels_offline",
         "panels_voltage_alert",
+        "panels_temperature_alert",
+        "panels_uptime_alert",
         "panels_sip_known",
         "panels_sip_failed",
         "monitor_completed",

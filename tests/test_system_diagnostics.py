@@ -120,6 +120,29 @@ class SystemDiagnosticsUnitTests(unittest.TestCase):
         self.assertEqual(stale_result["status"], "warning")
         self.assertTrue(stale_result["heartbeat_stale"])
 
+    def test_next_monitor_cycle_is_timezone_aware_and_after_last_cycle(self):
+        runtime = SimpleNamespace(
+            panel_monitor_enabled=True,
+            panel_monitor_interval_seconds=300,
+            panel_monitor_concurrency=12,
+            panel_monitor_stale_seconds=600,
+            panel_manual_check_cooldown_seconds=10,
+        )
+        finished_at = datetime(2026, 8, 20, 12, 0, tzinfo=timezone(timedelta(hours=3)))
+        state = {
+            "status": "completed", "finished_at": finished_at,
+            "heartbeat_at": finished_at, "total": 1, "completed": 1,
+            "online": 1, "failed": 0, "active_panel_ids": [],
+        }
+        with (
+            patch("app.services.system_diagnostics.get_monitor_runtime_settings", return_value=runtime),
+            patch("app.services.system_diagnostics.get_monitor_state", return_value=state),
+        ):
+            result = monitoring_diagnostics()
+        self.assertEqual(result["last_cycle_at"], finished_at)
+        self.assertGreater(result["next_cycle_at"], result["last_cycle_at"])
+        self.assertEqual(result["next_cycle_at"].utcoffset(), finished_at.utcoffset())
+
     def test_production_http_and_cookie_warning(self):
         with (
             patch.object(settings, "app_environment", "production"),

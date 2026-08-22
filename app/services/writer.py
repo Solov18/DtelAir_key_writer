@@ -8,8 +8,10 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.pool import NullPool
 
 from app.db import db, get_engine
-from app.repositories.key_repository import get_key_write_contexts, set_key_assignment
+from app.repositories import key_access_repository
+from app.repositories.key_repository import get_key, get_key_write_contexts, set_key_assignment
 from app.services.crm import crm_add_key
+from app.services.key_lifecycle import record_write_result
 
 
 logger = logging.getLogger("uvicorn.error")
@@ -20,6 +22,7 @@ UNAVAILABLE_KEY_STATUSES = {
     "lost": "Ключ отмечен как утерянный",
     "defective": "Ключ отмечен как брак",
     "archived": "Ключ находится в архиве",
+    "replaced": "Ключ заменён другим физическим ключом",
 }
 _WRITE_LOCK_CONNECTIONS = BoundedSemaphore(2)
 
@@ -304,6 +307,27 @@ def _write_key_to_panels_unlocked(
         else:
             result = {**result, "persisted": True}
 
+        if key_item.get("id") and panel_id:
+            try:
+                record_write_result(
+                    key_id=int(key_item["id"]),
+                    panel=panel,
+                    result=result,
+                    flat_num=str(flat_num or "0"),
+                    inner=int(inner),
+                    uk_group_id=uk_group_id,
+                )
+            except Exception:
+                logger.exception(
+                    "key_write.panel_state.persist_error key_id=%s panel_id=%s",
+                    key_item.get("id"), panel_id,
+                )
+                result = {
+                    **result,
+                    "persisted": False,
+                    "persistence_error": "Текущее состояние панели не удалось сохранить",
+                }
+
         results.append(
             {
                 "panel": panel,
@@ -314,22 +338,26 @@ def _write_key_to_panels_unlocked(
 
     written = any(result.get("written") for result in results)
     confirmed_access = any(
-        result.get("written")
-        or result.get("status") in {"ALREADY_EXISTS", "ALREADY_ON_PANEL"}
+        result.get("persisted") is not False
+        and (
+            result.get("written")
+            or result.get("status") in {"ALREADY_EXISTS", "ALREADY_ON_PANEL"}
+        )
         for result in results
     )
     key_id = key_item.get("id")
 
-    if confirmed_access and key_id and assignment_policy == "replace":
-        resolved_assignment_type = assignment_type
-        if not resolved_assignment_type:
-            if mode in {"resident", "resident_manual", "message"}:
-                resolved_assignment_type = "resident"
-            elif mode == "employee":
-                resolved_assignment_type = "employee"
-            elif mode == "uk":
-                resolved_assignment_type = "uk"
+    resolved_assignment_type = assignment_type
+    if not resolved_assignment_type:
+        if mode in {"resident", "resident_manual", "message", "manual"}:
+            resolved_assignment_type = "resident"
+        elif mode == "employee":
+            resolved_assignment_type = "employee"
+        elif mode == "uk":
+            resolved_assignment_type = "uk"
 
+    assignment_id = None
+    if confirmed_access and key_id and assignment_policy == "replace":
         if resolved_assignment_type:
             try:
                 logger.info("key_write.assignment.persist key_id=%s", key_id)
@@ -346,19 +374,65 @@ def _write_key_to_panels_unlocked(
                         or "Система"
                     ),
                 )
+                assignment_id = (get_key(int(key_id)) or {}).get("assignment_id")
             except Exception:
                 logger.exception("key_write.assignment.persist_error key_id=%s", key_id)
                 for result in results:
-                    if result.get("written"):
+                    if result.get("written") or result.get("status") in {
+                        "ALREADY_EXISTS", "ALREADY_ON_PANEL"
+                    }:
+                        result["persisted"] = False
                         result["assignment_error"] = (
                             "Ключ записан, но назначение не удалось сохранить в CRM"
                         )
 
+    if confirmed_access and key_id and resolved_assignment_type:
+        successful_panel_ids = [
+            int(result["panel"]["id"])
+            for result in results
+            if result.get("panel", {}).get("id")
+            and result.get("persisted") is not False
+            and (
+                result.get("written")
+                or result.get("status") in {"ALREADY_EXISTS", "ALREADY_ON_PANEL"}
+            )
+        ]
+        try:
+            actor = user.get("full_name") or user.get("login") or "Система"
+            access_id = key_access_repository.ensure_access(
+                int(key_id),
+                assignment_type=resolved_assignment_type,
+                address=address,
+                apartment=str(flat_num or ""),
+                assignment_id=assignment_id,
+                primary=assignment_policy == "replace",
+                source=(
+                    "add_access" if assignment_policy == "preserve"
+                    else "assignment"
+                ),
+                created_by=actor,
+                owner_name="",
+            )
+            key_access_repository.attach_panels(
+                int(key_id), access_id, successful_panel_ids,
+            )
+        except Exception:
+            logger.exception("key_write.access.persist_error key_id=%s", key_id)
+            for result in results:
+                if result.get("panel", {}).get("id") in successful_panel_ids:
+                    result["persisted"] = False
+                    result["assignment_error"] = (
+                        "Ключ записан, но активный доступ не удалось сохранить"
+                    )
+
     if key_id and not training_mode:
         successes = [
             result for result in results
-            if result.get("written")
-            or result.get("status") in {"ALREADY_EXISTS", "ALREADY_ON_PANEL"}
+            if result.get("persisted") is not False
+            and (
+                result.get("written")
+                or result.get("status") in {"ALREADY_EXISTS", "ALREADY_ON_PANEL"}
+            )
         ]
         failures = [result for result in results if result not in successes]
         summary_status = (
@@ -378,6 +452,11 @@ def _write_key_to_panels_unlocked(
                 "new_assignment": (
                     {"type": assignment_type or "resident", "address": address, "apartment": str(flat_num or "")}
                     if assignment_policy == "replace" and confirmed_access
+                    else None
+                ),
+                "added_access": (
+                    {"type": assignment_type or "resident", "address": address, "apartment": str(flat_num or "")}
+                    if assignment_policy == "preserve" and confirmed_access
                     else None
                 ),
                 "old_panel_ids": sorted(known_panel_ids),

@@ -37,6 +37,32 @@
         </article>
 
         <article class="health-item health-item--danger">
+            <a class="health-item-hit" href="/panels?status=temperature_alert"
+               aria-label="Показать панели с температурой выше 100 градусов"></a>
+            <div class="health-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M14 14.8V5a4 4 0 0 0-8 0v9.8a6 6 0 1 0 8 0Z"/><path d="M10 9v8"/></svg>
+            </div>
+            <div>
+                <span>Температура выше 100 °C</span>
+                <b>{{ stats.panels_temperature_alert }}</b>
+                <small>{{ 'Требуют внимания' if stats.panels_temperature_alert else 'В норме' }}</small>
+            </div>
+        </article>
+
+        <article class="health-item health-item--danger">
+            <a class="health-item-hit" href="/panels?status=uptime_alert"
+               aria-label="Показать панели с временем работы меньше 10 минут или больше 30 дней"></a>
+            <div class="health-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l4 2"/></svg>
+            </div>
+            <div>
+                <span>Время работы вне нормы</span>
+                <b>{{ stats.panels_uptime_alert }}</b>
+                <small>&lt; 10 мин. или &gt; 30 дней</small>
+            </div>
+        </article>
+
+        <article class="health-item health-item--danger">
             <a class="health-item-hit" href="/panels?status=sip_error"
                aria-label="Показать панели с проблемами SIP-авторизации"></a>
             <div class="health-icon" aria-hidden="true">

@@ -9,7 +9,7 @@ import socket
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from statistics import median
 from typing import Any
@@ -185,7 +185,10 @@ def panel_registry_diagnostics() -> dict[str, Any]:
         result["enabled"] += int(enabled)
         result["online"] += int(enabled and row["api_status"] == "online")
         result["offline"] += int(
-            enabled and row["api_status"] in {"offline", "auth_error", "error"}
+            enabled and row["api_status"] in {
+                "offline", "timeout", "sip_auth_error", "other_error",
+                "auth_error", "error",
+            }
         )
         result["stale"] += int(
             enabled
@@ -235,8 +238,14 @@ def monitoring_diagnostics() -> dict[str, Any]:
         status, label, message = "ok", "OK", "Мониторинг работает штатно"
     next_cycle_at = None
     if finished_at and runtime.panel_monitor_enabled:
-        next_cycle_at = finished_at.timestamp() + runtime.panel_monitor_interval_seconds
-        next_cycle_at = datetime.fromtimestamp(next_cycle_at, tz=timezone.utc)
+        # Work only with timezone-aware datetimes.  Adding a timedelta to the
+        # same persisted finish time also guarantees that UI cannot display a
+        # next run earlier than the last completed run.
+        next_cycle_at = finished_at + timedelta(
+            seconds=max(1, int(runtime.panel_monitor_interval_seconds))
+        )
+        if next_cycle_at < finished_at:
+            next_cycle_at = finished_at
     return {
         "status": status,
         "status_label": label,

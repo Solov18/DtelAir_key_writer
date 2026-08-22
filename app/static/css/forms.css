@@ -58,3 +58,39 @@ select:focus {
     border-color: var(--blue);
     box-shadow: 0 0 0 3px var(--focus-ring);
 }
+
+/* Native choice controls must never inherit the full-width text-field box. */
+input[type="checkbox"],
+input[type="radio"] {
+    width: 18px !important;
+    height: 18px !important;
+    min-width: 18px !important;
+    min-height: 18px !important;
+    max-width: 18px;
+    max-height: 18px;
+    flex: 0 0 18px !important;
+    display: inline-block;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-radius: 4px;
+    box-shadow: none;
+    accent-color: var(--blue);
+    cursor: pointer;
+}
+
+input[type="radio"] {
+    border-radius: 50%;
+}
+
+input[type="checkbox"]:hover,
+input[type="radio"]:hover,
+input[type="checkbox"]:focus,
+input[type="radio"]:focus {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+input[type="checkbox"]:focus:not(:focus-visible),
+input[type="radio"]:focus:not(:focus-visible) {
+    box-shadow: none;
+}

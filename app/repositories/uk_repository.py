@@ -9,6 +9,32 @@ from app.repositories.key_repository import (
     search_keys_for_selection,
     set_key_assignment_on_connection,
 )
+from app.repositories.key_lifecycle_repository import record_panel_result
+
+
+def record_lifecycle_remove_result(
+    key_id: int,
+    panel_id: int,
+    result: dict,
+    *,
+    apartment: str,
+    uk_group_id: int,
+) -> None:
+    status = str(result.get("status") or "ERROR")
+    success = bool(result.get("ok")) or status in {"SUCCESS", "ALREADY_ABSENT", "NOT_FOUND"}
+    if status == "DRY_RUN":
+        success = False
+    record_panel_result(
+        key_id=key_id,
+        panel_id=panel_id,
+        operation="delete",
+        status=status,
+        success=success,
+        flat_num=apartment,
+        inner=0,
+        uk_group_id=uk_group_id,
+        error="" if success else str(result.get("response") or "Ошибка удаления"),
+    )
 from app.search_utils import normalize_search_text
 
 
@@ -827,16 +853,6 @@ def create_key_issue(
                 (issue_id, panel_link_id, apartment),
             )
             programming_id = int(programming_cursor.lastrowid)
-            set_key_assignment_on_connection(
-                conn,
-                key_id,
-                "uk",
-                address=f"УК: {group_id}",
-                apartment=apartment,
-                uk_group_id=group_id,
-                assigned_by=_clean(issued_by) or "Система",
-                note=_clean(comment),
-            )
             return issue_id, programming_id
         except IntegrityError as error:
             raise ValueError("Ключ уже выдан или записан на выбранную панель.") from error
@@ -963,6 +979,26 @@ def record_crm_result(
                     ),
                 )
                 if normalized_status == "success":
+                    issue = conn.execute(
+                        """
+                        SELECT ki.key_id, ki.uk_group_id, ki.comment, ki.issued_by,
+                               kp.apartment
+                        FROM uk_key_programmings kp
+                        JOIN uk_key_issues ki ON ki.id = kp.issue_id
+                        WHERE kp.id = ?
+                        """,
+                        (programming_id,),
+                    ).fetchone()
+                    set_key_assignment_on_connection(
+                        conn,
+                        int(issue["key_id"]),
+                        "uk",
+                        address=f"УК: {int(issue['uk_group_id'])}",
+                        apartment=_clean(issue["apartment"]),
+                        uk_group_id=int(issue["uk_group_id"]),
+                        assigned_by=_clean(issue["issued_by"]) or "Система",
+                        note=_clean(issue["comment"]),
+                    )
                     conn.execute(
                         """
                         UPDATE uk_key_issues

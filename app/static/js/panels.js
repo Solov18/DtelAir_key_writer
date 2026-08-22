@@ -99,9 +99,15 @@ document.addEventListener("DOMContentLoaded", () => {
                 voltage.className = `panel-voltage is-${panel.voltage_tone}`;
             }
             const temperature = row.querySelector('[data-panel-cell="temperature"]');
-            if (temperature) temperature.textContent = formatNumber(panel.temperature, 1, " °C");
+            if (temperature) {
+                temperature.textContent = formatNumber(panel.temperature, 1, " °C");
+                temperature.className = `panel-temperature is-${panel.temperature_tone}`;
+            }
             const uptime = row.querySelector('[data-panel-cell="uptime"]');
-            if (uptime) uptime.textContent = panel.uptime_text || "—";
+            if (uptime) {
+                uptime.textContent = panel.uptime_text || "—";
+                uptime.className = `panel-uptime is-${panel.uptime_tone}`;
+            }
             const firmware = row.querySelector('[data-panel-cell="firmware"]');
             if (firmware) firmware.textContent = panel.firmware_version || "—";
         }
@@ -124,6 +130,10 @@ document.addEventListener("DOMContentLoaded", () => {
         });
         const power = document.querySelector('[data-inspector-field="supply_voltage"]');
         if (power) power.className = `is-${panel.voltage_tone}`;
+        const temperature = document.querySelector('[data-inspector-field="temperature"]');
+        if (temperature) temperature.className = `is-${panel.temperature_tone}`;
+        const uptime = document.querySelector('[data-inspector-field="uptime_text"]');
+        if (uptime) uptime.className = `is-${panel.uptime_tone}`;
         const sip = document.querySelector('[data-inspector-field="sip_registered"]');
         if (sip) {
             const failed = panel.sip_registered === false || panel.sip_registered === 0;
@@ -140,7 +150,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function applyStatistics(statistics) {
-        ["total", "online", "offline", "errors", "disabled", "sip_failed", "unchecked", "stale"].forEach((name) => {
+        ["total", "online", "offline", "errors", "disabled", "sip_failed", "unchecked", "stale", "voltage_alert", "temperature_alert", "uptime_alert"].forEach((name) => {
             const element = document.querySelector(`[data-stat="${name}"]`);
             if (element) element.textContent = statistics[name] ?? 0;
         });
@@ -277,28 +287,51 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const snapshotButton = document.getElementById("loadPanelSnapshot");
     if (snapshotButton) {
-        snapshotButton.addEventListener("click", () => {
+        const loadSelectedSnapshot = async () => {
             const placeholder = document.getElementById("panelCameraPlaceholder");
             if (!placeholder) return;
             snapshotButton.disabled = true;
-            snapshotButton.textContent = "Загружаем…";
-            const image = new Image();
-            image.id = "panelCameraImage";
-            image.alt = `Камера панели ${snapshotButton.dataset.panelId}`;
-            image.addEventListener("load", () => {
+            snapshotButton.hidden = true;
+            placeholder.querySelector("b")?.replaceChildren("Загружаем кадр…");
+            placeholder.querySelector("span")?.replaceChildren("Запрашивается камера выбранной панели");
+            try {
+                const response = await fetch(
+                    `/panels/${snapshotButton.dataset.panelId}/snapshot?t=${Date.now()}`,
+                    {headers: {"Accept": "image/*"}},
+                );
+                if (!response.ok) {
+                    const result = await response.json().catch(() => ({}));
+                    throw new Error(result.error || "Не удалось получить кадр с панели");
+                }
+                const blob = await response.blob();
+                const image = new Image();
+                image.id = "panelCameraImage";
+                image.alt = `Камера панели ${snapshotButton.dataset.panelId}`;
+                image.src = URL.createObjectURL(blob);
+                await image.decode();
                 placeholder.replaceWith(image);
                 const badge = document.createElement("span");
                 badge.className = "panel-live-badge";
                 badge.textContent = "КАДР";
                 image.closest(".panel-camera")?.appendChild(badge);
-            });
-            image.addEventListener("error", () => {
+            } catch (error) {
                 snapshotButton.disabled = false;
+                snapshotButton.hidden = false;
                 snapshotButton.textContent = "Повторить загрузку";
-                showToast("Не удалось получить кадр с панели", "error");
-            });
-            image.src = `/panels/${snapshotButton.dataset.panelId}/snapshot?t=${Date.now()}`;
-        });
+                placeholder.querySelector("b")?.replaceChildren("Кадр недоступен");
+                placeholder.querySelector("span")?.replaceChildren(error.message || "Панель не вернула изображение");
+            }
+        };
+        snapshotButton.addEventListener("click", loadSelectedSnapshot);
+        if (!snapshotButton.disabled) loadSelectedSnapshot();
+        else {
+            snapshotButton.hidden = false;
+            snapshotButton.textContent = "Кадр недоступен";
+            document.querySelector("#panelCameraPlaceholder b")?.replaceChildren("Кадр недоступен");
+            document.querySelector("#panelCameraPlaceholder span")?.replaceChildren(
+                "Для панели нужен IP и настроенный доступ API",
+            );
+        }
     }
 
     if (refreshButton && ["queued", "running"].includes(page.dataset.monitorStatus)) {

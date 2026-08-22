@@ -186,7 +186,7 @@
 
         {% if missing_key %}
         <div class="employee-missing-key" role="alert">
-            <div><b>Ключ не найден в базе CRM</b><span>Проверьте номер или HEX либо сначала создайте ключ только в локальной базе.</span></div>
+            <div><b>Ключ не найден в базе CRM</b><span>Проверьте номер или HEX либо создайте ключ и сразу запишите его на выбранные панели.</span></div>
             <div>
                 <button type="button" data-employee-choose-other>Выбрать другой ключ</button>
                 <button class="btn" type="button" data-modal-open="employeeCreateKeyModal">Добавить ключ в базу</button>
@@ -231,8 +231,8 @@
             <button class="btn" type="submit">Выдать и записать на панели</button>
         </form>
     </section>
-    <div class="employee-panel-picker" id="employeePanelPicker" hidden aria-hidden="true">
-        <div class="employee-panel-picker__dialog panel" role="dialog" aria-modal="true" aria-labelledby="employeePanelPickerTitle">
+    <div class="employee-panel-picker app-panel-picker" id="employeePanelPicker" hidden aria-hidden="true">
+        <div class="employee-panel-picker__dialog app-panel-picker__dialog panel" role="dialog" aria-modal="true" aria-labelledby="employeePanelPickerTitle">
             <header><div><span class="page-eyebrow">Физическая запись</span><h2 id="employeePanelPickerTitle">Выберите панели</h2></div><button type="button" class="employee-panel-picker__close" id="closeEmployeePanelPicker" aria-label="Закрыть">×</button></header>
             <p>Найдите панели по адресу, входу, назначению, MAC или номеру.</p>
             <div class="employee-panel-picker__search"><input id="employeePanelSearch" type="search" autocomplete="off" placeholder="Адрес, подъезд, парковка, калитка или MAC"><button type="button" class="btn-secondary" id="findEmployeePanels">Найти</button></div>
@@ -248,10 +248,12 @@
     <div class="employee-modal" id="employeeCreateKeyModal" aria-hidden="true">
         <div class="employee-modal-card panel custom-scroll" role="dialog" aria-modal="true" aria-labelledby="employeeCreateKeyTitle">
             <header>
-                <div><span class="page-eyebrow">Только учёт в CRM</span><h2 id="employeeCreateKeyTitle">Добавить ключ в базу</h2></div>
+                <div><span class="page-eyebrow">Создание и физическая запись</span><h2 id="employeeCreateKeyTitle">Добавить и выдать ключ</h2></div>
                 <button type="button" aria-label="Закрыть" data-modal-close>×</button>
             </header>
-            <form method="post" action="/employees/{{ employee.id }}/keys/create-and-issue" class="employee-create-key-form">
+            <form method="post" action="/employees/{{ employee.id }}/keys/create-and-issue" class="employee-create-key-form" id="employeeCreateKeyForm">
+                <input type="hidden" name="panel_scope" value="selected" data-create-employee-panel-scope>
+                <div data-create-employee-panel-ids hidden></div>
                 <label>Тип ключа
                     <select name="key_type_id" required>
                         <option value="">Выберите тип</option>
@@ -261,8 +263,8 @@
                 <label>Номер<input name="number" required inputmode="numeric" value="{{ missing_key.value if missing_key else '' }}"></label>
                 <label class="is-wide">HEX<input name="hex_value" required autocomplete="off" pattern="[0-9A-Fa-f]{6,16}" placeholder="6–16 символов 0–9/A–F"></label>
                 <label class="is-wide">Комментарий<input name="comment" value="{{ missing_key.comment if missing_key else '' }}"></label>
-                <p class="employee-modal-note is-wide">Ключ будет создан и назначен сотруднику только в CRM. Запросы на физические панели не выполняются.</p>
-                <div class="employee-modal-actions is-wide"><button type="button" data-modal-close>Отмена</button><button class="btn" type="submit">Создать и выдать</button></div>
+                <p class="employee-modal-note is-wide">Ключ будет создан в базе и физически записан на панели, выбранные в форме выдачи. Назначение сотруднику сохранится только после подтверждённой записи хотя бы на одну панель.</p>
+                <div class="employee-modal-actions is-wide"><button type="button" data-modal-close>Отмена</button><button class="btn" type="submit">Создать, записать и выдать</button></div>
             </form>
         </div>
     </div>

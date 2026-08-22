@@ -106,6 +106,7 @@
                 <input type="hidden" name="address" value="{{ address }}">
                 <input type="hidden" name="apartment" value="{{ apartment }}">
                 <input type="hidden" name="inner" value="1">
+                <input type="hidden" name="key_state_token" value="{{ key_state_token or '' }}">
 
                 <div class="manual-panel-toolbar">
                     <div><b>Панели основного адреса</b><span>Автоматически найдены по адресу назначения</span></div>
@@ -159,8 +160,8 @@
 </div>
 
 {% if key and panels and not error %}
-<div class="manual-panel-picker" id="manualPanelPicker" hidden aria-hidden="true">
-    <section class="manual-panel-picker__dialog panel modal-scroll" role="dialog" aria-modal="true" aria-labelledby="manualPanelPickerTitle">
+<div class="manual-panel-picker app-panel-picker" id="manualPanelPicker" hidden aria-hidden="true">
+    <section class="manual-panel-picker__dialog app-panel-picker__dialog panel modal-scroll" role="dialog" aria-modal="true" aria-labelledby="manualPanelPickerTitle">
         <header>
             <div><span class="page-eyebrow">Все панели CRM</span><h2 id="manualPanelPickerTitle">Добавить дополнительные панели</h2></div>
             <button type="button" class="manual-panel-picker__close" id="close-manual-panel-picker" aria-label="Закрыть">×</button>

@@ -215,6 +215,31 @@
                 document.getElementById("openEmployeePanelPicker")?.focus();
             }
         });
+
+        const createForm = document.getElementById("employeeCreateKeyForm");
+        if (createForm) {
+            createForm.addEventListener("submit", async (event) => {
+                const ids = selectedIds();
+                if (!allPanels.checked && ids.length === 0) {
+                    event.preventDefault();
+                    await window.showAlert?.({
+                        title: "Панели не выбраны",
+                        text: "Сначала закройте это окно и выберите панели для физической записи ключа.",
+                        source: createForm.querySelector("button[type=submit]"),
+                    });
+                    return;
+                }
+                createForm.querySelector("[data-create-employee-panel-scope]").value = allPanels.checked ? "all" : "selected";
+                const target = createForm.querySelector("[data-create-employee-panel-ids]");
+                target.replaceChildren(...ids.map((id) => {
+                    const input = document.createElement("input");
+                    input.type = "hidden";
+                    input.name = "panel_ids";
+                    input.value = id;
+                    return input;
+                }));
+            });
+        }
         updatePanelState();
     }
 })();

@@ -1,6 +1,6 @@
 /* One readable standard for register detail sidebars. */
 .detail-layout {
-    --detail-sidebar-width: clamp(350px, 22vw, 410px);
+    --detail-sidebar-width: var(--inspector-width, clamp(350px, 22vw, 410px));
     min-width: 0;
 }
 

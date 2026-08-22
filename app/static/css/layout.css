@@ -460,9 +460,9 @@ a.user-pill:focus-visible {
     max-width: none;
 
     padding:
-        clamp(24px, 2vw, 42px)
-        clamp(24px, 2.4vw, 52px)
-        48px;
+        var(--page-padding-top)
+        var(--page-padding-x)
+        var(--page-padding-bottom);
 
     box-sizing: border-box;
 }
@@ -502,7 +502,7 @@ a.user-pill:focus-visible {
 
 @media (min-width: 1600px) {
     .content {
-        padding: 40px 48px 52px;
+        padding: var(--page-padding-top) var(--page-padding-x) var(--page-padding-bottom);
     }
 
     .actions-grid {

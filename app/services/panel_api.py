@@ -1,4 +1,5 @@
 import time
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
@@ -6,6 +7,11 @@ import requests
 from requests.auth import HTTPBasicAuth
 
 from app.settings import settings
+
+
+logger = logging.getLogger(__name__)
+TRANSIENT_CHECK_ATTEMPTS = 2
+TRANSIENT_RETRY_DELAY_SECONDS = 0.15
 
 
 class PanelApiError(RuntimeError):
@@ -74,17 +80,19 @@ def _request(
             timeout=max(0.5, float(settings.panel_api_timeout)),
         )
     except requests.Timeout as error:
-        raise PanelApiError("Панель не ответила за отведённое время", "offline") from error
-    except requests.RequestException as error:
+        raise PanelApiError("Панель не ответила за отведённое время", "timeout") from error
+    except requests.ConnectionError as error:
         raise PanelApiError("Нет соединения с панелью", "offline") from error
+    except requests.RequestException as error:
+        raise PanelApiError("Сетевая ошибка при обращении к панели", "other_error") from error
 
     elapsed_ms = max(1, round((time.perf_counter() - started) * 1000))
     if response.status_code == 401:
-        raise PanelApiError("Панель отклонила логин или пароль", "auth_error")
+        raise PanelApiError("Панель отклонила логин или пароль", "other_error")
     if response.status_code >= 400:
         raise PanelApiError(
             f"API панели вернул HTTP {response.status_code}",
-            "error",
+            "other_error",
         )
 
     if not expect_json:
@@ -93,7 +101,7 @@ def _request(
     try:
         payload = response.json() if response.content else {}
     except ValueError as error:
-        raise PanelApiError("Панель вернула некорректный ответ", "error") from error
+        raise PanelApiError("Панель вернула некорректный ответ", "other_error") from error
     return response, payload, elapsed_ms
 
 
@@ -105,7 +113,7 @@ def _firmware_name(payload: dict) -> str:
     return ""
 
 
-def check_panel(panel: dict) -> dict:
+def _check_panel_once(panel: dict) -> dict:
     started = time.perf_counter()
     session = requests.Session()
     session.trust_env = False
@@ -119,7 +127,7 @@ def check_panel(panel: dict) -> dict:
                 if isinstance(power, dict):
                     supply_voltage = power.get("dc")
         except PanelApiError as error:
-            if error.status in {"auth_error", "offline", "not_configured"}:
+            if error.status in {"timeout", "offline", "other_error", "not_configured"}:
                 raise
 
         firmware = ""
@@ -127,23 +135,28 @@ def check_panel(panel: dict) -> dict:
             _, versions, _ = _request(panel, "GET", "/v2/system/versions", session=session)
             firmware = _firmware_name(versions if isinstance(versions, dict) else {})
         except PanelApiError as error:
-            if error.status in {"auth_error", "offline", "not_configured"}:
+            if error.status in {"timeout", "offline", "other_error", "not_configured"}:
                 raise
 
         if not isinstance(info, dict):
             raise PanelApiError("Системная информация панели имеет неверный формат")
 
+        sip_registered = info.get("registerStatus")
+        sip_failed = sip_registered is False or sip_registered == 0
         return {
-            "status": "online",
+            "status": "sip_auth_error" if sip_failed else "online",
             "response_time_ms": max(1, round((time.perf_counter() - started) * 1000)),
             "device_model": str(info.get("deviceModel") or info.get("model") or ""),
             "firmware_version": firmware,
             "temperature": info.get("temperature"),
             "supply_voltage": supply_voltage,
             "uptime_seconds": info.get("uptime"),
-            "sip_registered": info.get("registerStatus"),
+            "sip_registered": sip_registered,
             "reported_mac": str(info.get("mac") or "").upper(),
-            "last_error": "",
+            "last_error": (
+                "Панель доступна, но SIP-регистрация не выполнена"
+                if sip_failed else ""
+            ),
         }
     except PanelApiError as error:
         return {
@@ -153,6 +166,30 @@ def check_panel(panel: dict) -> dict:
         }
     finally:
         session.close()
+
+
+def check_panel(
+    panel: dict,
+    *,
+    attempts: int = TRANSIENT_CHECK_ATTEMPTS,
+    retry_delay: float = TRANSIENT_RETRY_DELAY_SECONDS,
+) -> dict:
+    """Common resilient probe used by manual and background monitoring."""
+
+    attempts = max(1, int(attempts))
+    result: dict = {}
+    for attempt in range(1, attempts + 1):
+        result = _check_panel_once(panel)
+        if result.get("status") not in {"timeout", "offline"} or attempt == attempts:
+            result["attempts"] = attempt
+            return result
+        logger.info(
+            "panel_check.retry panel_id=%s status=%s attempt=%s/%s",
+            panel.get("id"), result.get("status"), attempt, attempts,
+        )
+        if retry_delay > 0:
+            time.sleep(float(retry_delay))
+    return result
 
 
 def check_panel_api_connection() -> dict:
@@ -203,8 +240,9 @@ def check_panel_api_connection() -> dict:
             **common,
         }
     safe_messages = {
-        "auth_error": "Панель отклонила текущие реквизиты API",
+        "sip_auth_error": "Панель доступна, но SIP-регистрация не выполнена",
         "offline": "Тестовая панель не ответила за отведённое время",
+        "timeout": "Тестовая панель не ответила за отведённое время",
         "not_configured": "Реквизиты API панелей не настроены",
     }
     return {

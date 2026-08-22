@@ -61,6 +61,7 @@ class KeyWriteContext(_ReadOnlyMapping):
     is_used: bool = False
     assignment: Mapping[str, Any] = field(default_factory=dict)
     assignments: tuple[Mapping[str, Any], ...] = ()
+    accesses: tuple[Mapping[str, Any], ...] = ()
     panels: tuple[Mapping[str, Any], ...] = ()
     known_panel_ids: frozenset[int] = frozenset()
     selected_panel_ids: frozenset[int] = frozenset()
@@ -143,6 +144,7 @@ class KeyWriteContext(_ReadOnlyMapping):
             is_used=is_used,
             assignment=MappingProxyType(assignment),
             assignments=tuple(MappingProxyType(dict(item)) for item in source.get("assignments", ())),
+            accesses=tuple(MappingProxyType(dict(item)) for item in source.get("accesses", ())),
             panels=tuple(MappingProxyType(dict(item)) for item in source.get("panels", ())),
             known_panel_ids=known,
             selected_panel_ids=selected,
@@ -172,6 +174,7 @@ class KeyWriteContext(_ReadOnlyMapping):
                     dict(item) for item in self.assignment_history_summary
                 ],
                 "assignments": [dict(item) for item in self.assignments],
+                "accesses": [dict(item) for item in self.accesses],
                 "panels": [dict(item) for item in self.panels],
                 "panel_ids": sorted(self.known_panel_ids),
                 "selected_panel_ids": sorted(self.selected_panel_ids),

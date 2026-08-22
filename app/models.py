@@ -437,6 +437,141 @@ key_assignments = Table(
     Column("active", Integer, nullable=False, server_default=text("1")),
     Column("note", Text, server_default=text("''")),
 )
+
+
+key_accesses = Table(
+    "key_accesses",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("key_id", Integer, ForeignKey("keys.id", ondelete="RESTRICT"), nullable=False),
+    Column(
+        "assignment_id",
+        Integer,
+        ForeignKey("key_assignments.id", ondelete="SET NULL"),
+    ),
+    Column("access_type", Text, nullable=False, server_default=text("'resident'")),
+    Column("address", Text, nullable=False, server_default=text("''")),
+    Column("apartment", Text, nullable=False, server_default=text("''")),
+    Column("owner_name", Text, nullable=False, server_default=text("''")),
+    Column("active", Integer, nullable=False, server_default=text("1")),
+    Column("is_primary", Integer, nullable=False, server_default=text("0")),
+    Column("source", Text, nullable=False, server_default=text("'assignment'")),
+    Column("assigned_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("released_at", DateTime(timezone=True)),
+    Column("created_by", Text, nullable=False, server_default=text("''")),
+    Column("note", Text, nullable=False, server_default=text("''")),
+    CheckConstraint("access_type IN ('resident', 'service')", name="ck_key_accesses_type"),
+    CheckConstraint("active IN (0, 1)", name="ck_key_accesses_active"),
+    CheckConstraint("is_primary IN (0, 1)", name="ck_key_accesses_primary"),
+)
+Index("idx_key_accesses_key_active", key_accesses.c.key_id, key_accesses.c.active)
+Index(
+    "idx_key_accesses_address_active",
+    key_accesses.c.address,
+    key_accesses.c.apartment,
+    key_accesses.c.active,
+)
+Index(
+    "uq_key_accesses_active_identity",
+    key_accesses.c.key_id,
+    key_accesses.c.access_type,
+    key_accesses.c.address,
+    key_accesses.c.apartment,
+    unique=True,
+    postgresql_where=key_accesses.c.active == 1,
+)
+
+
+key_panel_states = Table(
+    "key_panel_states",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("key_id", Integer, ForeignKey("keys.id", ondelete="RESTRICT"), nullable=False),
+    Column("panel_id", Integer, ForeignKey("panels.id", ondelete="RESTRICT"), nullable=False),
+    Column("access_id", Integer, ForeignKey("key_accesses.id", ondelete="SET NULL")),
+    Column("state", Text, nullable=False, server_default=text("'active'")),
+    Column("flat_num", Text, nullable=False, server_default=text("'0'")),
+    Column("is_inner", Integer, nullable=False, server_default=text("1")),
+    Column("uk_group_id", Integer, ForeignKey("uk_groups.id", ondelete="SET NULL")),
+    Column("last_operation", Text, nullable=False, server_default=text("'write'")),
+    Column("last_status", Text, nullable=False, server_default=text("''")),
+    Column("last_error", Text, nullable=False, server_default=text("''")),
+    Column("confirmed_at", DateTime(timezone=True)),
+    Column("removed_at", DateTime(timezone=True)),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    UniqueConstraint("key_id", "panel_id", name="uq_key_panel_states_key_panel"),
+    CheckConstraint(
+        "state IN ('unknown', 'pending_write', 'active', 'pending_delete', 'error', 'removed')",
+        name="ck_key_panel_states_state",
+    ),
+)
+Index("idx_key_panel_states_key_active", key_panel_states.c.key_id, key_panel_states.c.state)
+Index("idx_key_panel_states_panel_active", key_panel_states.c.panel_id, key_panel_states.c.state)
+Index("idx_key_panel_states_access", key_panel_states.c.access_id, key_panel_states.c.state)
+
+key_lifecycle_operations = Table(
+    "key_lifecycle_operations",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("operation_type", Text, nullable=False),
+    Column("status", Text, nullable=False, server_default=text("'pending'")),
+    Column("old_key_id", Integer, ForeignKey("keys.id", ondelete="RESTRICT"), nullable=False),
+    Column("new_key_id", Integer, ForeignKey("keys.id", ondelete="RESTRICT")),
+    Column("reason", Text, nullable=False, server_default=text("''")),
+    Column("final_old_status", Text, nullable=False, server_default=text("'free'")),
+    Column("employee_assignment_status", Text, nullable=False, server_default=text("'inactive'")),
+    Column("source_panel_ids", Text, nullable=False, server_default=text("'[]'")),
+    Column("assignment_snapshot", Text, nullable=False, server_default=text("'{}'")),
+    Column("last_error", Text, nullable=False, server_default=text("''")),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("completed_at", DateTime(timezone=True)),
+    CheckConstraint(
+        "operation_type IN ('release', 'reassign', 'replace', 'add_access')",
+        name="ck_key_lifecycle_operation_type",
+    ),
+    CheckConstraint(
+        "status IN ('pending', 'deleting', 'writing', 'partial', 'error', 'completed')",
+        name="ck_key_lifecycle_operation_status",
+    ),
+)
+Index(
+    "idx_key_lifecycle_operations_resume",
+    key_lifecycle_operations.c.old_key_id,
+    key_lifecycle_operations.c.new_key_id,
+    key_lifecycle_operations.c.operation_type,
+    key_lifecycle_operations.c.status,
+)
+
+key_lifecycle_steps = Table(
+    "key_lifecycle_steps",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column(
+        "operation_id", Integer,
+        ForeignKey("key_lifecycle_operations.id", ondelete="CASCADE"), nullable=False,
+    ),
+    Column("panel_id", Integer, ForeignKey("panels.id", ondelete="RESTRICT"), nullable=False),
+    Column("phase", Text, nullable=False),
+    Column("state", Text, nullable=False, server_default=text("'pending'")),
+    Column("attempts", Integer, nullable=False, server_default=text("0")),
+    Column("last_status", Text, nullable=False, server_default=text("''")),
+    Column("last_error", Text, nullable=False, server_default=text("''")),
+    Column("result_payload", Text, nullable=False, server_default=text("'{}'")),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("completed_at", DateTime(timezone=True)),
+    CheckConstraint("phase IN ('delete_old', 'write_new')", name="ck_key_lifecycle_step_phase"),
+    CheckConstraint("state IN ('pending', 'running', 'success', 'error')", name="ck_key_lifecycle_step_state"),
+    UniqueConstraint("operation_id", "panel_id", "phase", name="uq_key_lifecycle_step"),
+)
+Index(
+    "idx_key_lifecycle_steps_pending",
+    key_lifecycle_steps.c.operation_id,
+    key_lifecycle_steps.c.phase,
+    key_lifecycle_steps.c.state,
+)
 Index(
     "idx_key_assignments_one_active",
     key_assignments.c.key_id,

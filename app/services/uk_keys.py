@@ -7,6 +7,7 @@ from app.services.crm import (
     crm_remove_key_for_company,
 )
 from app.services.key_write_models import KeyWriteResult
+from app.services.key_lifecycle import record_write_result
 
 
 def adapt_issue_result(key_id: int, result: dict) -> KeyWriteResult:
@@ -104,6 +105,23 @@ def _run_programming(
         key_id=programming["key_id"],
         uk_group_id=programming["uk_group_id"],
     )
+    if operation == "add":
+        record_write_result(
+            key_id=int(programming["key_id"]),
+            panel={"id": int(programming["panel_id"])},
+            result=result,
+            flat_num=str(programming["apartment"] or "0"),
+            inner=0,
+            uk_group_id=int(programming["uk_group_id"]),
+        )
+    else:
+        uk_repository.record_lifecycle_remove_result(
+            int(programming["key_id"]),
+            int(programming["panel_id"]),
+            result,
+            apartment=str(programming["apartment"] or "0"),
+            uk_group_id=int(programming["uk_group_id"]),
+        )
     return {
         **result,
         "response": safe_response,

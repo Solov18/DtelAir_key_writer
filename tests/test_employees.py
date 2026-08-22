@@ -69,19 +69,45 @@ class EmployeeRepositoryTests(PostgreSQLTestCase):
         self.assertIn("Добавить ключ в базу", html)
 
     def test_create_missing_key_and_issue_to_employee(self):
-        response = employee_create_and_issue_key(
-            self._request(),
-            self.employee_id,
-            key_type_id=self.key_type_id,
-            number="99123",
-            hex_value="AABBCC12",
-            comment="Создан из выдачи сотруднику",
-        )
-        self.assertEqual(response.status_code, 303)
+        panels = [{"id": 31, "address": "Тестовая 1", "entrance": "вход", "mac": "08:13:CD:00:00:31"}]
+        with (
+            patch("app.routers.employees.get_panels", return_value=panels),
+            patch("app.routers.employees._employee_write_result") as write_key,
+            patch("app.routers.employees.log_event"),
+        ):
+            write_key.side_effect = lambda request, employee, key, selected: self._write_result(key["id"], [31])
+            response = employee_create_and_issue_key(
+                self._request(),
+                self.employee_id,
+                key_type_id=self.key_type_id,
+                number="99123",
+                hex_value="AABBCC12",
+                comment="Создан из выдачи сотруднику",
+                panel_ids=[31],
+            )
+        self.assertEqual(response.status_code, 200)
         key = key_repository.get_keys_page(query="99123")["items"][0]
         self.assertEqual(key["status"], "issued_employee")
         active = employee_repository.get_employee_active_keys(self.employee_id)
         self.assertEqual(active[0]["key_id"], key["id"])
+
+    def test_created_key_is_not_assigned_when_physical_write_fails(self):
+        panels = [{"id": 32, "address": "Тестовая 1", "entrance": "вход", "mac": "08:13:CD:00:00:32"}]
+        with (
+            patch("app.routers.employees.get_panels", return_value=panels),
+            patch("app.routers.employees._employee_write_result") as write_key,
+            patch("app.routers.employees.log_event"),
+        ):
+            write_key.side_effect = lambda request, employee, key, selected: self._write_result(key["id"], [32], success=False)
+            response = employee_create_and_issue_key(
+                self._request(), self.employee_id,
+                key_type_id=self.key_type_id, number="99127", hex_value="AABBCC16",
+                comment="Ошибка записи", panel_ids=[32],
+            )
+        self.assertEqual(response.status_code, 200)
+        key = key_repository.get_keys_page(query="99127")["items"][0]
+        self.assertEqual(key["status"], "free")
+        self.assertEqual(employee_repository.get_employee_active_keys(self.employee_id), [])
 
     def test_employee_key_is_physically_written_to_selected_panels_before_assignment(self):
         key = self._create_key(99124, "AABBCC13")

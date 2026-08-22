@@ -1,0 +1,219 @@
+/* Shared desktop-density layer.
+   It changes component geometry, never scales the application canvas. */
+
+html,
+body,
+.app-shell,
+.main,
+.content {
+    max-width: 100%;
+}
+
+.main,
+.content,
+:where(.detail-layout, .panels-main-grid, .keys-console-workspace,
+       .employees-directory-layout, .uk-directory-layout) > * {
+    min-width: 0;
+}
+
+.table-wrap,
+.table-scroll,
+:where(.panels-table-scroll, .keys-console-table-wrap, .employees-table-scroll,
+       .uk-table-scroll, .log-scroll) {
+    max-width: 100%;
+    overscroll-behavior-inline: contain;
+}
+
+@media (min-width: 1800px) {
+    :root {
+        --page-padding-x: 40px;
+        --page-padding-top: 30px;
+        --page-padding-bottom: 42px;
+        --inspector-width: clamp(340px, 20vw, 390px);
+    }
+}
+
+@media (min-width: 1400px) and (max-width: 1799px),
+       (max-height: 950px) and (min-width: 1400px) {
+    :root {
+        --sidebar-width: 205px;
+        --page-padding-x: 24px;
+        --page-padding-top: 22px;
+        --page-padding-bottom: 32px;
+        --page-gap: 14px;
+        --card-padding: 15px;
+        --control-height: 40px;
+        --button-height: 40px;
+        --control-padding-x: 11px;
+        --control-font-size: 11px;
+        --filter-gap: 8px;
+        --table-row-height: 48px;
+        --inspector-width: clamp(300px, 19vw, 350px);
+        --font-size-ui: 12px;
+        --font-size-small: 11px;
+    }
+
+    .brand { height: 62px; padding-inline: 12px; }
+    .brand img { width: 188px; height: 52px; transform: scale(2.25); }
+    .sidebar-nav { gap: 4px; padding: 10px 8px; }
+    .nav-item { min-height: 42px; gap: 10px; padding: 8px 11px; font-size: 13px; }
+    .nav-item svg { width: 20px; height: 20px; }
+    .sidebar-footer { padding: 16px; font-size: 11px; }
+    .topbar { height: 62px; gap: 14px; padding-inline: 16px; }
+    .topbar-left, .topbar-right { gap: 10px; }
+    .burger, .top-info, .user-pill { height: 40px; }
+    .burger { width: 40px; }
+    .top-info { padding-inline: 10px; font-size: 12px; }
+    .user-pill { max-width: 230px; padding-inline: 11px; }
+    .top-title { font-size: 15px; }
+    .grid { gap: var(--page-gap); }
+
+    .panels-page { gap: var(--page-gap); }
+    .panels-stats { grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; }
+    .panel-stat { min-height: 70px; gap: 9px; padding: 10px; }
+    .panel-stat-icon { width: 36px; height: 36px; border-radius: 10px; }
+    .panel-stat-icon svg { width: 19px; height: 19px; }
+    .panel-stat small { margin-bottom: 4px; font-size: 10px; }
+    .panel-stat b { font-size: 20px; }
+    .panels-toolbar { gap: 12px; padding: 11px 13px; }
+    .panels-toolbar .btn { min-height: var(--control-height); padding-inline: 12px; font-size: 11px; }
+    .panels-filters { padding: 10px 13px; }
+    .panels-table th { padding: 9px 7px; font-size: 10px; }
+    .panels-table td { padding: 7px; }
+    .panel-address { font-size: 12px; }
+    .panel-mac { font-size: 11px; }
+    .panel-inspector > header,
+    .panel-detail-list,
+    .panel-health,
+    .panel-quick-actions { padding: 14px 15px; }
+    .panel-camera { min-height: 220px; padding: 13px 15px 15px; }
+    .panel-camera-placeholder,
+    .panel-camera img { height: 170px; }
+    .panel-detail-list > div,
+    .panel-health dl > div { grid-template-columns: 112px minmax(0, 1fr); gap: 10px; padding: 6px 0; }
+
+    .modal-card,
+    .modal-shell__panel,
+    :where(.uk-modal-card, .employee-modal-card, .panels-modal .modal-card) {
+        --modal-density-gap: 10px;
+    }
+}
+
+@media (max-width: 1399px),
+       (max-height: 800px) and (min-width: 901px) {
+    :root {
+        --sidebar-width: 184px;
+        --page-padding-x: 16px;
+        --page-padding-top: 16px;
+        --page-padding-bottom: 24px;
+        --page-gap: 12px;
+        --card-padding: 13px;
+        --control-height: 38px;
+        --button-height: 38px;
+        --control-padding-x: 10px;
+        --control-font-size: 11px;
+        --filter-gap: 7px;
+        --table-row-height: 44px;
+        --inspector-width: clamp(280px, 22vw, 320px);
+        --font-size-ui: 11px;
+        --font-size-small: 10px;
+    }
+
+    .brand { height: 56px; padding: 6px 10px; }
+    .brand img { width: 170px; height: 48px; transform: scale(2.05); }
+    .sidebar-nav { gap: 3px; padding: 8px 6px; }
+    .nav-item { min-height: 39px; gap: 8px; padding: 7px 9px; font-size: 12px; border-radius: 10px; }
+    .nav-item svg { width: 19px; height: 19px; }
+    .sidebar-footer { padding: 12px; font-size: 10px; }
+    .topbar { height: 56px; gap: 10px; padding-inline: 12px; }
+    .topbar-left, .topbar-right { gap: 7px; }
+    .burger, .top-info, .user-pill { height: 38px; border-radius: 10px; }
+    .burger { width: 38px; }
+    .top-info { gap: 6px; padding-inline: 9px; font-size: 11px; }
+    .top-info svg, .user-pill svg { width: 18px; height: 18px; }
+    .user-pill { max-width: 190px; gap: 7px; padding-inline: 9px; }
+    .user-pill-text b { font-size: 11px; }
+    .top-title { font-size: 14px; }
+    .grid { gap: var(--page-gap); }
+
+    .panels-page { gap: var(--page-gap); }
+    .panels-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
+    .panel-stat { min-height: 62px; gap: 8px; padding: 8px 9px; }
+    .panel-stat-icon { width: 34px; height: 34px; border-radius: 9px; }
+    .panel-stat-icon svg { width: 18px; height: 18px; }
+    .panel-stat small { margin-bottom: 3px; font-size: 9px; }
+    .panel-stat b { font-size: 18px; }
+    .panels-toolbar { gap: 10px; padding: 9px 11px; }
+    .panels-toolbar-actions, .panels-toolbar-status { gap: 7px; }
+    .panels-toolbar .btn { min-height: var(--control-height); padding-inline: 10px; font-size: 10px; }
+    .panels-filters { padding: 8px 11px; }
+    .panels-main-grid { grid-template-columns: minmax(0, 1fr) var(--detail-sidebar-width); }
+    .panels-register { border-right: 1px solid var(--panels-border); border-bottom: 0; }
+    .panels-table { min-width: 720px; }
+    .panels-table th { padding: 8px 6px; font-size: 9px; }
+    .panels-table td { padding: 6px; }
+    .panels-table th:nth-child(6), .panels-table td:nth-child(6),
+    .panels-table th:nth-child(7), .panels-table td:nth-child(7),
+    .panels-table th:nth-child(8), .panels-table td:nth-child(8),
+    .panels-table th:nth-child(9), .panels-table td:nth-child(9) { display: none; }
+    .panel-address { font-size: 11px; }
+    .panel-mac { font-size: 10px; }
+    .panel-row-actions { gap: 2px; }
+    .panels-page .panel-row-actions a,
+    .panels-page .panel-row-actions button { width: 27px; height: 27px; min-height: 27px; }
+    .panel-inspector { display: block; max-height: clamp(430px, 68vh, 650px); }
+    .panel-inspector > header,
+    .panel-detail-list,
+    .panel-health,
+    .panel-quick-actions { padding: 12px 13px; }
+    .panel-inspector header h2 { font-size: 17px; }
+    .panel-camera { min-height: 190px; padding: 11px 13px 13px; border-right: 0; }
+    .panel-camera-placeholder,
+    .panel-camera img { height: 145px; }
+    .panel-detail-list { border-right: 0; }
+    .panel-detail-list > div,
+    .panel-health dl > div { grid-template-columns: 96px minmax(0, 1fr); gap: 8px; padding: 5px 0; }
+    .panel-detail-list dt, .panel-health dt { font-size: 10px; }
+    .panel-detail-list dd, .panel-health dd { font-size: 11px; }
+    .panel-health h3, .panel-quick-actions h3 { margin-bottom: 8px; font-size: 14px; }
+    .panel-quick-actions .btn { min-height: 36px; font-size: 11px; }
+
+    h1 { font-size: clamp(28px, 3vw, 38px); }
+    .page-eyebrow, .page-kicker { font-size: 10px; }
+
+    :where(.modal-card, .modal-shell__panel, .uk-modal-card, .employee-modal-card) {
+        max-height: calc(100dvh - 20px);
+    }
+
+    #ukAddModal .uk-modal-card > header,
+    #ukEditModal .uk-modal-card > header {
+        padding: 13px 18px 11px;
+    }
+
+    #ukAddModal .uk-profile-form,
+    #ukEditModal .uk-profile-form {
+        gap: 10px 12px;
+        padding: 13px 18px 15px;
+    }
+
+    #ukAddModal .uk-profile-form textarea,
+    #ukEditModal .uk-profile-form textarea {
+        min-height: 112px;
+        height: 112px;
+    }
+}
+
+@media (max-width: 1100px) {
+    .panels-main-grid { grid-template-columns: 1fr; }
+    .panels-register { border-right: 0; border-bottom: 1px solid var(--panels-border); }
+    .panel-inspector { max-height: none; }
+}
+
+/* The navigation becomes an overlay only at genuinely narrow CSS viewports. */
+@media (max-width: 900px) {
+    :root {
+        --page-padding-x: 14px;
+        --page-padding-top: 14px;
+        --inspector-width: min(100%, 410px);
+    }
+}

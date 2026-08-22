@@ -87,7 +87,7 @@
     const serverReady = writeForm.dataset.canWrite === "true";
     const hasUsedKeys = writeForm.dataset.hasUsedKeys === "true";
     const occupiedActionInputs = Array.from(
-        document.querySelectorAll("input[name='occupied_action']")
+        document.querySelectorAll("select[name='occupied_actions']")
     );
     const keyCheckRows = Array.from(
         document.querySelectorAll(".message-key-check")
@@ -98,7 +98,8 @@
     }
 
     function selectedOccupiedAction() {
-        return occupiedActionInputs.find((input) => input.checked)?.value || "";
+        const actions = occupiedActionInputs.map((input) => input.value).filter(Boolean);
+        return actions.length === 1 ? actions[0] : actions.length ? "mixed" : "";
     }
 
     function updateKeyPanelStates(checkedPanels) {
@@ -182,13 +183,13 @@
         } else if (unresolved.length) {
             ready = false;
             message = "Выберите тип для каждого неоднозначного ключа.";
-        } else if (hasUsedKeys && !occupiedAction) {
+        } else if (hasUsedKeys && occupiedActionInputs.some((input) => !input.value)) {
             ready = false;
-            message = "Ключ уже используется — выберите переназначение или добавление на новые панели.";
+            message = "Для каждого занятого ключа выберите отдельное действие.";
         } else if (hasUsedKeys && occupiedAction === "reassign") {
-            message = "Будет создано новое назначение; старые панели останутся без изменений.";
+            message = "Старое назначение будет удалено из CRM, после чего ключ будет записан на выбранный новый адрес и панели.";
         } else if (hasUsedKeys && occupiedAction === "add_panels") {
-            message = "Текущее назначение сохранится; запросы уйдут только на недостающие панели.";
+            message = "Текущее назначение сохранится. Ключ будет дополнительно записан на выбранные панели.";
         }
 
         if (writeButton) {
@@ -297,13 +298,9 @@
 
     typeSelectors.forEach((select) => {
         select.addEventListener("change", () => {
-            const hiddenInput = writeForm.querySelector(
-                `[data-key-type-for="${CSS.escape(select.dataset.keyNumber)}"]`
-            );
-            if (hiddenInput) {
-                hiddenInput.value = select.value;
-            }
-            updateWriteState();
+            if (!Number(select.value) || !correctionForm) return;
+            select.classList.add("is-loading");
+            correctionForm.requestSubmit();
         });
     });
     occupiedActionInputs.forEach((input) => {
@@ -332,11 +329,11 @@
             let confirmText = "Записать ключи";
             if (occupiedAction === "reassign") {
                 title = "Подтвердите переназначение ключа";
-                message = "Ключ уже назначен другому адресу. Его текущее назначение в CRM будет заменено новым. Запись на старых панелях сохранится, пока ключ не будет удалён с них отдельной операцией";
+                message = "Старое назначение будет удалено из CRM, после чего ключ будет записан на выбранный новый адрес и панели.";
                 confirmText = "Переназначить и записать";
             } else if (occupiedAction === "add_panels") {
                 title = "Подтвердите дополнительный доступ";
-                message = "Ключ уже используется. Он будет дополнительно записан на выбранные панели без изменения текущего назначения";
+                message = "Текущее назначение сохранится. Ключ будет дополнительно записан на выбранные панели.";
                 confirmText = "Добавить на панели";
             }
             confirmation = await window.showDangerConfirm({

@@ -149,51 +149,67 @@
             </div>
 
             {% if keys %}
-            <div class="table-scroll small-scroll message-key-table">
-                <table>
-                    <thead><tr><th>Из сообщения</th><th>Запись CRM</th><th>HEX</th><th>Состояние</th></tr></thead>
-                    <tbody>
-                    {% for key in keys %}
-                    <tr
+            <div class="message-key-list">
+                {% for key in keys %}
+                    <article
                         class="message-key-check"
                         data-key-used="{{ 'true' if key.write_context.is_used else 'false' }}"
                         data-key-conflict="{{ 'true' if key.ambiguous or key.identity_conflict else 'false' }}"
                         data-known-panels="{{ key.write_context.known_panel_ids_csv }}"
                     >
-                        <td class="message-key-source">
-                            <small>Тип из сообщения</small>
-                            <b>{{ key.requested_type_name or 'Не указан' }}</b>
-                            <span>Номер: №{{ key.number }}</span>
-                            {% if key.requested_hex %}<span>HEX: <code>{{ key.requested_hex }}</code></span>{% endif %}
-                        </td>
-                        <td>
+                        <header class="message-key-check__head">
+                            <div class="message-key-source">
+                                <small>Ключ из сообщения</small>
+                                <b>№{{ key.number }}</b>
+                                <span>{{ key.requested_type_name or 'Тип не распознан' }}</span>
+                            </div>
+                            <div class="message-key-check__state">
+                                {% if key.ambiguous %}<span class="badge warning">Нужно выбрать тип</span>
+                                {% elif key.identity_conflict %}<span class="badge error">Конфликт номера и HEX</span>
+                                {% elif key.item %}<span data-key-state-label>{{ status_badge(key.write_context.ui_status) }}</span>
+                                {% else %}<span class="badge error">Не найден в CRM</span>{% endif %}
+                            </div>
+                        </header>
+                        <div class="message-key-check__facts">
+                            <div class="message-key-check__fact message-key-check__type">
+                                <span>Тип и запись CRM</span>
                             {% if key.ambiguous %}
-                            <select class="message-key-type-select" data-key-number="{{ key.number }}">
-                                <option value="0">Выберите тип</option>
+                            <input type="hidden" name="ambiguous_key_numbers" value="{{ key.number }}" form="messageCorrectionForm">
+                            <select class="message-key-type-select" name="key_type_overrides" form="messageCorrectionForm" data-key-number="{{ key.number }}" aria-label="Выберите тип ключа №{{ key.number }}">
+                                <option value="0">Выберите тип ключа</option>
                                 {% for match in key.matches %}<option value="{{ match.key_type_id }}">{{ match.type_name }}</option>{% endfor %}
                             </select>
-                            {% elif key.item %}<b>{{ key.item.type_name or key.item.key_type or '—' }}</b><small>№{{ key.item.number }}</small>
-                            {% else %}<b>Не найден</b><small>Точной записи CRM нет</small>{% endif %}
-                        </td>
-                        <td><code>{{ key.item.hex_value if key.item else '—' }}</code></td>
-                        <td>
-                            {% if key.ambiguous %}<span class="badge warning">Нужно выбрать тип ключа</span>
-                            {% elif key.identity_conflict %}<span class="badge error">Номер не соответствует указанному HEX</span>
-                            {% elif key.item %}
-                            <span data-key-state-label>{{ status_badge(key.write_context.ui_status) }}</span>
-                            {% else %}<span class="badge error">Не найден</span>{% endif %}
-                        </td>
-                    </tr>
-                    {% if key.item and key.write_context.is_used %}
-                    <tr class="message-key-assignment-row">
-                        <td colspan="4">
+                            <small>После выбора проверка обновится автоматически</small>
+                            {% elif key.item %}<b>{{ key.item.type_name or key.item.key_type or '—' }}</b><small>Ключ №{{ key.item.number }} найден в CRM</small>
+                            {% else %}<b>Точной записи нет</b><small>Проверьте номер, тип или добавьте ключ в базу отдельно</small>{% endif %}
+                            {% if key.requested_type_id and not key.ambiguous %}
+                            <input type="hidden" name="ambiguous_key_numbers" value="{{ key.number }}" form="messageCorrectionForm">
+                            <input type="hidden" name="key_type_overrides" value="{{ key.requested_type_id }}" form="messageCorrectionForm">
+                            {% endif %}
+                            </div>
+                            <div class="message-key-check__fact">
+                                <span>HEX</span>
+                                <code>{{ key.item.hex_value if key.item else (key.requested_hex or '—') }}</code>
+                            </div>
+                        </div>
+                        {% if key.identity_conflict %}<p class="message-key-check__notice">Указанный номер не соответствует HEX существующего ключа. Запись заблокирована до исправления данных.</p>{% endif %}
+                        {% if key.item and key.write_context.is_used %}
+                        <div class="message-key-check__occupied">
                             {{ occupied_context(key.write_context, true) }}
-                        </td>
-                    </tr>
-                    {% endif %}
-                    {% endfor %}
-                    </tbody>
-                </table>
+                            <label class="message-key-action-select">
+                                <span>Действие для ключа №{{ key.item.number }}</span>
+                                <select name="occupied_actions" form="messageWriteForm" data-occupied-action-for="{{ key.item.id }}" required>
+                                    <option value="">Выберите действие</option>
+                                    <option value="reassign">Переназначить ключ</option>
+                                    <option value="add_panels">Только добавить на выбранные панели</option>
+                                </select>
+                                <small>Проверьте текущее назначение и выберите дальнейшее действие.</small>
+                                <input type="hidden" name="occupied_key_ids" value="{{ key.item.id }}" form="messageWriteForm">
+                            </label>
+                        </div>
+                        {% endif %}
+                    </article>
+                {% endfor %}
             </div>
             {% else %}
             <div class="message-empty-state">
@@ -224,9 +240,6 @@
                 Исправьте отмеченные выше данные и обновите подбор.
                 {% endif %}
             </span>
-            {% if has_used_keys %}
-            {{ action_selector('occupied_action', 'messageWriteForm', 'Выберите действие для уже используемых ключей') }}
-            {% endif %}
         </div>
         <form
             method="post"
@@ -244,6 +257,7 @@
             {% for key in keys %}
             <input type="hidden" name="key_numbers" value="{{ key.number }}">
             <input type="hidden" name="key_type_ids" value="{{ key.item.key_type_id if key.item and key.item.key_type_id else 0 }}" data-key-type-for="{{ key.number }}">
+            <input type="hidden" name="key_state_tokens" value="{{ key.state_token or '' }}">
             {% endfor %}
             <div id="selectedPanelsContainer"></div>
             <div class="message-final-actions">
@@ -262,8 +276,8 @@
     </section>
 </div>
 
-<div class="message-panel-picker" id="messagePanelPicker" hidden aria-hidden="true">
-    <section class="message-panel-picker__dialog panel modal-scroll" role="dialog" aria-modal="true" aria-labelledby="messagePanelPickerTitle">
+<div class="message-panel-picker app-panel-picker" id="messagePanelPicker" hidden aria-hidden="true">
+    <section class="message-panel-picker__dialog app-panel-picker__dialog panel modal-scroll" role="dialog" aria-modal="true" aria-labelledby="messagePanelPickerTitle">
         <header>
             <div><span class="page-eyebrow">Все панели CRM</span><h2 id="messagePanelPickerTitle">Добавить панели для записи</h2></div>
             <button type="button" class="message-panel-picker__close" id="close-panel-picker" aria-label="Закрыть">×</button>
@@ -288,5 +302,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/message.js?v=10"></script>
+<script src="/static/js/message.js?v=11"></script>
 {% endblock %}

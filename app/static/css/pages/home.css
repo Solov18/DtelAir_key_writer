@@ -23,11 +23,8 @@
 .dashboard-health {
     display: grid;
     grid-template-columns:
-        minmax(155px, .9fr)
-        minmax(190px, 1.12fr)
-        minmax(200px, 1.2fr)
-        minmax(160px, .9fr)
-        minmax(275px, 1.5fr);
+        repeat(6, minmax(145px, 1fr))
+        minmax(250px, 1.45fr);
     align-items: stretch;
     min-width: 0;
     padding: 18px 14px;
@@ -628,12 +625,7 @@
     }
 
     .dashboard-health {
-        grid-template-columns:
-            minmax(135px, .85fr)
-            minmax(165px, 1fr)
-            minmax(175px, 1.08fr)
-            minmax(135px, .85fr)
-            minmax(235px, 1.3fr);
+        grid-template-columns: repeat(4, minmax(150px, 1fr));
         padding-inline: 8px;
     }
 

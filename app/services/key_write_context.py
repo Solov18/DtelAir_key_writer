@@ -1,3 +1,6 @@
+import hashlib
+import json
+
 from app.repositories.key_repository import get_key_write_contexts
 from app.services.key_write_models import KeyWriteAction, KeyWriteContext, KeyWriteDecision
 
@@ -5,7 +8,44 @@ from app.services.key_write_models import KeyWriteAction, KeyWriteContext, KeyWr
 OCCUPIED_ACTIONS = {"reassign", "add_panels"}
 
 
+def key_write_state_token(context) -> str:
+    """Stable preview fingerprint used to reject a stale write plan."""
+    assignment = context.get("current_assignment") or context.get("assignment") or {}
+    payload = {
+        "key_id": int(context.get("key_id") or context.get("id") or 0),
+        "hex": str(context.get("hex_value") or context.get("key_hex") or ""),
+        "is_used": bool(context.get("is_used")),
+        "assignment_id": assignment.get("id") or context.get("assignment_id"),
+        "panel_ids": sorted(int(value) for value in context.get("panel_ids", []) or []),
+        "accesses": [
+            {
+                "id": item.get("id"),
+                "type": item.get("access_type"),
+                "address": item.get("address") or "",
+                "apartment": item.get("apartment") or "",
+                "primary": bool(item.get("is_primary")),
+            }
+            for item in context.get("accesses", []) or []
+        ],
+    }
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def describe_key_write_context(context) -> str:
+    accesses = list(context.get("accesses") or [])
+    if accesses:
+        descriptions = []
+        for access in accesses:
+            parts = ["Жилец" if access.get("access_type") == "resident" else "Служебный доступ"]
+            if access.get("address"):
+                parts.append(str(access["address"]))
+            if str(access.get("apartment") or "").strip():
+                parts.append(f"кв. {str(access['apartment']).strip()}")
+            if access.get("owner_name"):
+                parts.append(str(access["owner_name"]))
+            descriptions.append(", ".join(parts))
+        return "; ".join(descriptions)
     parts = [context.get("assignment_type_name") or "Назначение"]
     if context.get("assignment_address"):
         parts.append(context["assignment_address"])

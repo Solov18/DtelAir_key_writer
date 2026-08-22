@@ -508,6 +508,10 @@ _KEY_TYPE_ALIASES = {
     "простой": ("прост",),
     "премиум": ("преми",),
     "премиальный": ("преми",),
+    "син": ("син",),
+    "синий": ("син",),
+    "бесплатный": ("бесплат",),
+    "вездеход": ("вездеход",),
 }
 
 _KEY_GROUP_MARKERS = {
@@ -521,6 +525,14 @@ _KEY_GROUP_MARKERS = {
     "простой": ("прост",),
     "премиальные": ("преми",),
     "премиальный": ("преми",),
+    "синие": ("син",),
+    "синий": ("син",),
+    "бесплатные розовые": ("бесплат", "розов"),
+    "бесплатный розовый": ("бесплат", "розов"),
+    "розовые": ("розов",),
+    "розовый": ("розов",),
+    "вездеходы": ("вездеход",),
+    "вездеход": ("вездеход",),
 }
 
 
@@ -540,6 +552,19 @@ def _key_type_catalog() -> list[dict]:
 def _type_aliases(type_name: str) -> set[str]:
     normalized = _normalized_key_type(type_name)
     aliases = {normalized}
+    words = normalized.split()
+    plural_words: list[str] = []
+    changed = False
+    for word in words:
+        adjective = re.fullmatch(r"(.+?)(?:ый|ой|ий)", word)
+        if adjective:
+            stem = adjective.group(1)
+            plural_words.append(stem + ("ие" if word.endswith("ий") else "ые"))
+            changed = True
+        else:
+            plural_words.append(word)
+    if changed:
+        aliases.add(" ".join(plural_words))
     for alias, markers in _KEY_TYPE_ALIASES.items():
         if all(marker in normalized for marker in markers):
             aliases.add(alias)
@@ -555,47 +580,105 @@ def _catalog_type_by_markers(catalog: list[dict], markers: tuple[str, ...]) -> d
 
 
 def _extract_grouped_key_requests(source: str, catalog: list[dict]) -> list[dict]:
-    """Parse one-line key groups while preserving printed numbers and their types."""
+    """Parse typed key groups while preserving printed numbers and their types.
+
+    A type is a semantic boundary: numbers before/after it on the same key line
+    belong to that type, and the group ends at the next type or field line.
+    """
     grouped: list[dict] = []
-    line_pattern = re.compile(
-        r"(?im)^\s*(ключи|оранжевые?|стикеры?|уникальные?|простые|простой|"
-        r"премиальные|премиальный)\s*[:\-—–]\s*([^\r\n]*)"
-    )
     suffix_markers = {
         "ор": ("оранжев",), "оранж": ("оранжев",), "оранжевый": ("оранжев",),
         "ст": ("стикер",), "стикер": ("стикер",),
         "уник": ("уникальн",), "уникальный": ("уникальн",),
         "прост": ("прост",), "простой": ("прост",),
         "прем": ("преми",), "премиальный": ("преми",),
+        "син": ("син",), "синий": ("син",),
+        "бесплатный розовый": ("бесплат", "розов"),
+        "бесплатные розовые": ("бесплат", "розов"),
+        "вездеход": ("вездеход",),
     }
 
-    for match in line_pattern.finditer(source):
-        label = _normalized_key_type(match.group(1))
-        value = match.group(2).strip()
-        if not value or re.fullmatch(r"[-—–\s]*", value):
+    type_tokens: list[tuple[str, dict]] = []
+    for label, markers in {**_KEY_GROUP_MARKERS, **suffix_markers}.items():
+        key_type = _catalog_type_by_markers(catalog, markers)
+        if key_type:
+            type_tokens.append((label, key_type))
+    for key_type in catalog:
+        for alias in _type_aliases(key_type["name"]):
+            type_tokens.append((alias, key_type))
+    # Prefer the longest spelling so "уникальные" is not cut to "уник".
+    unique_tokens: dict[tuple[str, int], tuple[str, dict]] = {
+        (token, int(item["id"])): (token, item) for token, item in type_tokens
+    }
+    type_tokens = sorted(unique_tokens.values(), key=lambda row: len(row[0]), reverse=True)
+    if not type_tokens:
+        return grouped
+    token_patterns = [
+        r"\s+".join(re.escape(part) for part in token.split())
+        for token, _ in type_tokens
+    ]
+    type_pattern = re.compile(
+        "|".join(rf"(?<![\w]){pattern}(?![\w])" for pattern in token_patterns),
+        re.IGNORECASE,
+    )
+    token_candidates: dict[str, list[dict]] = {}
+    for token, item in type_tokens:
+        normalized_token = _normalized_key_type(token)
+        candidates = token_candidates.setdefault(normalized_token, [])
+        if not any(int(candidate["id"]) == int(item["id"]) for candidate in candidates):
+            candidates.append(item)
+    type_by_text: dict[str, dict] = {}
+    for token, candidates in token_candidates.items():
+        exact = [item for item in candidates if _normalized_key_type(item["name"]) == token]
+        if len(exact) == 1:
+            type_by_text[token] = exact[0]
+        elif len(candidates) == 1:
+            type_by_text[token] = candidates[0]
+
+    field_boundary = re.compile(
+        r"^\s*(?:адрес|квартир|кв\.?|тел(?:ефон)?|номер\s+тел|фио|подъезд|"
+        r"провайдер|дом|корпус)\b",
+        re.IGNORECASE,
+    )
+    offset = 0
+    for raw_line in source.splitlines(keepends=True):
+        line = raw_line.rstrip("\r\n")
+        if field_boundary.match(line):
+            offset += len(raw_line)
             continue
-        markers = _KEY_GROUP_MARKERS.get(label)
-        if markers:
-            key_type = _catalog_type_by_markers(catalog, markers)
+        matches = list(type_pattern.finditer(line))
+        # A match is built only from an enabled CRM key type (or one of its
+        # explicit human aliases), so a second hard-coded whitelist here would
+        # incorrectly discard valid catalog types such as "Синие".
+        if not matches:
+            offset += len(raw_line)
+            continue
+
+        # Human suffix form: "007414, 006801 Премиальные".
+        prefix = line[:matches[0].start()]
+        if re.search(r"\d", prefix):
+            key_type = type_by_text.get(_normalized_key_type(matches[0].group(0)))
+            if key_type:
+                for number_match in re.finditer(r"(?<!\d)(\d{1,7})(?!\d)", prefix):
+                    grouped.append({
+                        "number": number_match.group(1), "type_id": int(key_type["id"]),
+                        "type_name": key_type["name"], "type_text": matches[0].group(0),
+                        "hex_value": "", "position": offset + number_match.start(),
+                    })
+
+        for index, match in enumerate(matches):
+            key_type = type_by_text.get(_normalized_key_type(match.group(0)))
             if not key_type:
                 continue
+            end = matches[index + 1].start() if index + 1 < len(matches) else len(line)
+            value = line[match.end():end]
             for number_match in re.finditer(r"(?<!\d)(\d{1,7})(?!\d)", value):
                 grouped.append({
                     "number": number_match.group(1), "type_id": int(key_type["id"]),
-                    "type_name": key_type["name"], "type_text": match.group(1),
-                    "hex_value": "", "position": match.start(2) + number_match.start(),
+                    "type_name": key_type["name"], "type_text": match.group(0),
+                    "hex_value": "", "position": offset + match.end() + number_match.start(),
                 })
-            continue
-
-        for number_match in re.finditer(r"(?<!\d)(\d{1,7})(?!\d)\s*([a-zа-я]+)?", value, re.IGNORECASE):
-            suffix = _normalized_key_type(number_match.group(2) or "")
-            key_type = _catalog_type_by_markers(catalog, suffix_markers[suffix]) if suffix in suffix_markers else None
-            if key_type:
-                grouped.append({
-                    "number": number_match.group(1), "type_id": int(key_type["id"]),
-                    "type_name": key_type["name"], "type_text": number_match.group(2) or "",
-                    "hex_value": "", "position": match.start(2) + number_match.start(),
-                })
+        offset += len(raw_line)
     return grouped
 
 
@@ -629,7 +712,11 @@ def extract_key_requests(
     for alias, key_type in alias_rows:
         alias_pattern = r"\s+".join(re.escape(part) for part in alias.split())
         pattern = re.compile(
-            rf"(?<![\w])({alias_pattern})(?![\w])\s*(?:[-—–:]\s*)?(?:№|#)?\s*(\d{{1,7}})(?!\d)",
+            # A single typed item must stay on its physical line.  ``\s*``
+            # also consumes newlines and used to attach the first number of
+            # the next group to an empty group (for example ``Простые -`` +
+            # ``007414, 006801 Премиальные``).
+            rf"(?<![\w])({alias_pattern})(?![\w])[^\S\r\n]*(?:[-—–:][^\S\r\n]*)?(?:№|#)?[^\S\r\n]*(\d{{1,7}})(?!\d)",
             re.IGNORECASE,
         )
         for match in pattern.finditer(source):

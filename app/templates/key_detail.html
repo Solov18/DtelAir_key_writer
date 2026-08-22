@@ -18,7 +18,7 @@
             <p class="subtitle">Данные, текущее назначение и неизменяемая история использования.</p>
         </div>
         <div class="key-detail-hero-actions">
-            {% if key.hex_value and key.status not in ('blocked', 'lost', 'defective', 'archived') %}
+            {% if key.hex_value and key.status not in ('blocked', 'lost', 'defective', 'archived', 'replaced') %}
             <a class="btn" href="/write/manual?key_query={{ key.number|urlencode }}&key_type_id={{ key.key_type_id }}">Прописать на панели</a>
             {% endif %}
             <a class="btn btn-ghost" href="/keys?selected_key_id={{ key.id }}">К реестру</a>
@@ -51,17 +51,36 @@
                     <span class="key-card-section-icon"><svg viewBox="0 0 24 24"><path d="M12 21s7-5.2 7-12a7 7 0 1 0-14 0c0 6.8 7 12 7 12Z"/><circle cx="12" cy="9" r="2"/></svg></span>
                     <div><small>Актуальные данные</small><h2>Текущее назначение</h2></div>
                 </header>
-                {% if key.assignment_type %}
-                <div class="key-card-assignment-body key-card-assignment-overview">
-                    <div><small>Тип владельца</small><b><span class="key-assignment-kind">{{ assignment_type_names.get(key.assignment_type, key.assignment_type) }}</span></b></div>
-                    <div><small>Адрес</small><b>{{ key.assignment_address or 'не указан' }}</b></div>
-                    <div><small>Квартира</small><b>{{ key.assignment_apartment or 'не указана' }}</b></div>
-                    <div><small>Владелец / комментарий</small><b>{{ key.employee_name or key.uk_name or key.assignment_note or 'не указан' }}</b></div>
-                    <div><small>Дата назначения</small><b>{{ key.assigned_at|datetime }}</b></div>
+                {% if active_accesses %}
+                <div class="key-active-accesses">
+                    {% for access in active_accesses %}
+                    <article class="key-active-access{% if access.is_primary %} is-primary{% endif %}">
+                        <header>
+                            <div><span class="key-assignment-kind">{{ 'Жилец' if access.access_type == 'resident' else 'Служебный доступ' }}</span>{% if access.is_primary %}<em>Основное назначение</em>{% endif %}</div>
+                            <time>{{ access.assigned_at|datetime }}</time>
+                        </header>
+                        <dl>
+                            <div><dt>Адрес</dt><dd>{{ access.address or 'не указан' }}</dd></div>
+                            <div><dt>Квартира</dt><dd>{{ access.apartment or 'не указана' }}</dd></div>
+                            <div><dt>Владелец / комментарий</dt><dd>{{ access.owner_name or 'не указан' }}</dd></div>
+                        </dl>
+                        <div class="key-active-access__panels">
+                            <small>Активные точки доступа</small>
+                            {% for panel in access.panels %}
+                            <span><b>{{ panel.entrance or panel.name or ('Панель ' ~ panel.panel_id) }}</b> · {{ panel.address or access.address }}{% if panel.mac %} · <code>{{ panel.mac }}</code>{% endif %}</span>
+                            {% else %}<span>Подтверждённых панелей пока нет</span>{% endfor %}
+                        </div>
+                    </article>
+                    {% endfor %}
                 </div>
                 <details class="key-assignment-edit key-assignment-edit-wide" id="assignment-edit" {% if error %}open{% endif %}>
                     <summary class="btn">Редактировать назначение</summary>
                     <form method="post" action="/keys/{{ key.id }}/assignment" class="key-assignment-edit-form key-assignment-edit-form-wide">
+                        <fieldset class="key-assignment-action-choice is-wide">
+                            <legend>Что сделать с доступом</legend>
+                            <label><input type="radio" name="assignment_action" value="add_access" required><span><b>Добавить доступ</b><small>Текущий доступ сохранится. Ключ будет дополнительно записан на выбранные панели.</small></span></label>
+                            <label><input type="radio" name="assignment_action" value="reassign" required><span><b>Переназначить</b><small>Текущий доступ будет удалён, после чего ключ будет записан на выбранный новый адрес.</small></span></label>
+                        </fieldset>
                         <label class="key-assignment-owner-type">
                             <span>Тип владельца</span>
                             <select name="assignment_type" required>
@@ -100,7 +119,16 @@
                             <span>Причина изменения</span>
                             <textarea name="reason" rows="4" placeholder="Почему изменяется текущее назначение" required></textarea>
                         </label>
-                        <div class="key-assignment-edit-note is-wide">Изменяется только учётная запись в CRM. На физические панели запросы не отправляются.</div>
+                        <section class="key-assignment-target-panels is-wide">
+                            <div class="key-assignment-target-head">
+                                <div><b>Панели выбранного адреса</b><small>Адрес назначения и набор физических точек доступа выбираются отдельно.</small></div>
+                                <button class="btn secondary" type="button" id="assignmentPanelPickerOpen">Выбрать панели</button>
+                            </div>
+                            <div class="key-assignment-target-list" id="assignmentSelectedPanels">
+                                <div class="key-assignment-target-empty">Новый набор панелей ещё не выбран.</div>
+                            </div>
+                        </section>
+                        <div class="key-assignment-edit-note is-wide">«Добавить доступ» сохраняет все действующие назначения. «Переназначить» закрывает прежние доступы только после подтверждённого удаления в центральной CRM. Выбранные панели всегда должны принадлежать указанному адресу.</div>
                         <button class="btn is-wide" type="submit">Сохранить назначение</button>
                     </form>
                 </details>
@@ -108,7 +136,7 @@
                 <div class="key-card-free-state">
                     <span>✓</span><b>Ключ свободен</b><p>Его можно назначить жильцу, сотруднику или управляющей компании.</p>
                 </div>
-                {% if key.hex_value and key.status not in ('blocked', 'lost', 'defective', 'archived') %}
+                {% if key.hex_value and key.status not in ('blocked', 'lost', 'defective', 'archived', 'replaced') %}
                 <a class="btn key-card-primary-action" href="/write/manual?key_query={{ key.number|urlencode }}&key_type_id={{ key.key_type_id }}">Прописать на панель</a>
                 {% endif %}
                 {% endif %}
@@ -132,6 +160,24 @@
                 </form>
             </details>
 
+            {% if active_accesses %}
+            <details class="panel key-edit-disclosure key-edit-disclosure-compact" id="key-replace" {% if error and '#key-replace' in request.url.path %}open{% endif %}>
+                <summary>
+                    <span class="key-card-section-icon"><svg viewBox="0 0 24 24"><path d="M7 7h10v10H7z"/><path d="m4 9 3-3 3 3M20 15l-3 3-3-3"/></svg></span>
+                    <span><small>Физический носитель</small><b>Заменить ключ</b></span>
+                    <i>⌄</i>
+                </summary>
+                <form method="post" action="/keys/{{ key.id }}/replace" class="key-edit-form key-card-edit-form key-card-edit-form-compact" data-confirm="Старый ключ будет выведен из использования, а новый получит выбранные активные доступы. Продолжить?">
+                    <p class="key-edit-note">Старый ключ будет выведен из использования, а новый получит выбранные активные доступы.</p>
+                    <label><span>Номер или HEX нового ключа</span><input name="new_key_query" required autocomplete="off" placeholder="Свободный ключ из базы CRM"></label>
+                    <label><span>Тип нового ключа</span><select name="new_key_type_id"><option value="0">Определить автоматически</option>{% for item in key_types %}<option value="{{ item.id }}">{{ item.name }}</option>{% endfor %}</select></label>
+                    <label><span>Состояние старого ключа</span><select name="final_old_status"><option value="replaced">Заменён</option><option value="lost">Утерян</option><option value="defective">Брак</option><option value="archived">Архив</option></select></label>
+                    <label><span>Причина замены</span><textarea name="reason" rows="3" required placeholder="Почему заменяется физический ключ"></textarea></label>
+                    <button type="submit" class="btn">Заменить физический ключ</button>
+                </form>
+            </details>
+            {% endif %}
+
             <section class="panel key-card-status-actions">
                 <header class="key-card-section-head">
                     <span class="key-card-section-icon"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18"/></svg></span>
@@ -146,13 +192,38 @@
                 </div>
             </section>
 
-            {% if key.assignment_type %}
+            {% if active_accesses %}
             <form method="post" action="/keys/{{ key.id }}/release" class="panel key-card-assignment-action key-card-release-panel" data-confirm="Освободить ключ и завершить текущее назначение?">
                 <div><small>Текущее назначение</small><b>Завершить и освободить ключ</b></div>
                 <input name="note" value="Освобождён вручную" type="hidden">
                 <button class="btn btn-ghost" type="submit">Освободить ключ</button>
             </form>
             {% endif %}
+
+            <section class="panel key-assignment-history-panel">
+                <header class="key-card-section-head">
+                    <span class="key-card-section-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="19" r="2"/><path d="M12 7v10"/></svg></span>
+                    <div><small>Движение ключа</small><h2>История назначений</h2></div>
+                </header>
+                <div class="key-assignment-timeline">
+                    {% for item in assignment_changes %}
+                    <div class="is-change">
+                        <i></i>
+                        <span><b>Назначение изменено</b><small>{{ item.details_view or item.details }}</small><small>{{ item.created_at|datetime }} · {{ item.user_name }}</small></span>
+                        <em>Журнал</em>
+                    </div>
+                    {% endfor %}
+                    {% for item in assignments %}
+                    <div class="{% if item.active %}is-active{% endif %}">
+                        <i></i>
+                        <span><b>{{ item.assignment_type_name }}{% if item.owner_name %} · {{ item.owner_name }}{% endif %}</b><small>{{ item.address or 'Адрес не указан' }}{% if item.apartment %} / кв. {{ item.apartment }}{% else %} / квартира не указана{% endif %}</small><small>{{ item.assigned_at|datetime }}{% if item.released_at %} — {{ item.released_at|datetime }}{% endif %}</small></span>
+                        <em>{% if item.active %}Текущее{% else %}Завершено{% endif %}</em>
+                    </div>
+                    {% else %}
+                    <div class="is-empty"><span>Назначений пока не было.</span></div>
+                    {% endfor %}
+                </div>
+            </section>
         </aside>
     </div>
 
@@ -183,31 +254,202 @@
             </div>
         </section>
 
-        <section class="panel key-assignment-history-panel">
-            <header class="key-card-section-head">
-                <span class="key-card-section-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="19" r="2"/><path d="M12 7v10"/></svg></span>
-                <div><small>Движение ключа</small><h2>История назначений</h2></div>
-            </header>
-            <div class="key-assignment-timeline">
-                {% for item in assignment_changes %}
-                <div class="is-change">
-                    <i></i>
-                    <span><b>Назначение изменено</b><small>{{ item.details_view or item.details }}</small><small>{{ item.created_at|datetime }} · {{ item.user_name }}</small></span>
-                    <em>Журнал</em>
-                </div>
-                {% endfor %}
-                {% for item in assignments %}
-                <div class="{% if item.active %}is-active{% endif %}">
-                    <i></i>
-                    <span><b>{{ item.assignment_type_name }}{% if item.owner_name %} · {{ item.owner_name }}{% endif %}</b><small>{{ item.address or 'Адрес не указан' }}{% if item.apartment %} / кв. {{ item.apartment }}{% else %} / квартира не указана{% endif %}</small><small>{{ item.assigned_at|datetime }}{% if item.released_at %} — {{ item.released_at|datetime }}{% endif %}</small></span>
-                    <em>{% if item.active %}Текущее{% else %}Завершено{% endif %}</em>
-                </div>
-                {% else %}
-                <div class="is-empty"><span>Назначений пока не было.</span></div>
-                {% endfor %}
-            </div>
-        </section>
     </div>
 </div>
 
+<section class="panel-picker-modal app-panel-picker" id="assignmentPanelPicker" hidden aria-hidden="true">
+    <div class="panel-picker-modal__backdrop"></div>
+    <div class="panel-picker-modal__dialog app-panel-picker__dialog" role="dialog" aria-modal="true" aria-labelledby="assignmentPanelPickerTitle">
+        <header class="app-panel-picker__header"><div><small>ПАНЕЛИ НОВОГО АДРЕСА</small><h2 id="assignmentPanelPickerTitle">Выберите панели нового адреса</h2></div><button type="button" class="modal-close app-panel-picker__close" id="assignmentPanelPickerClose" aria-label="Закрыть">×</button></header>
+        <p class="app-panel-picker__note">Введите адрес и выберите конкретные панели. Основное назначение изменится только после сохранения формы.</p>
+        <div class="panel-picker-modal__search app-panel-picker__search"><input id="assignmentPanelSearch" type="search" autocomplete="off" data-smart-search="panels" data-smart-search-min-length="2" data-smart-search-limit="10" data-smart-submit="false" placeholder="Адрес, дом или корпус"><button type="button" class="btn secondary" id="assignmentPanelSearchButton">Найти панели</button></div>
+        <p class="app-panel-picker__status" id="assignmentPanelSearchStatus">Введите существующий адрес или выберите его из подсказок.</p>
+        <div class="panel-picker-modal__results app-panel-picker__results custom-scroll" id="assignmentPanelResults"></div>
+        <div class="panel-picker-modal__selection app-panel-picker__selection" id="assignmentPanelSelection" hidden><b>Выбрано: <span id="assignmentPanelSelectionCount">0</span></b><div id="assignmentPanelChips"></div></div>
+        <footer class="app-panel-picker__footer"><button type="button" class="btn secondary" id="assignmentPanelPickerCancel">Отмена</button><button type="button" class="btn" id="assignmentPanelPickerAdd" disabled>Добавить выбранные</button></footer>
+    </div>
+</section>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const root = document.getElementById("assignmentPanelPicker");
+    const selected = document.getElementById("assignmentSelectedPanels");
+    const addressInput = document.querySelector(".key-assignment-address-search input[name='address']");
+    const openButton = document.getElementById("assignmentPanelPickerOpen");
+    const searchInput = document.getElementById("assignmentPanelSearch");
+    const searchButton = document.getElementById("assignmentPanelSearchButton");
+    const statusNode = document.getElementById("assignmentPanelSearchStatus");
+    const resultsNode = document.getElementById("assignmentPanelResults");
+    const selectionNode = document.getElementById("assignmentPanelSelection");
+    const selectionCount = document.getElementById("assignmentPanelSelectionCount");
+    const chipsNode = document.getElementById("assignmentPanelChips");
+    const addButton = document.getElementById("assignmentPanelPickerAdd");
+    if (!root || !selected || !addressInput) return;
+    const escapeHtml = value => { const node = document.createElement("span"); node.textContent = String(value ?? ""); return node.innerHTML; };
+    const normalizeAddress = value => String(value || "").trim().replace(/\s+/g, " ").toLocaleLowerCase("ru-RU");
+    const selectedIds = () => new Set(Array.from(selected.querySelectorAll("input[name='target_panel_ids']")).map(node => Number(node.value)));
+    const refreshEmpty = () => {
+        const empty = selected.querySelector(".key-assignment-target-empty");
+        if (empty) empty.hidden = selectedIds().size > 0;
+    };
+
+    let availablePanels = [];
+    let loadedAddress = "";
+    let selectionAddress = "";
+    const clearSelected = () => {
+        selected.querySelectorAll(".key-assignment-target-panel").forEach(node => node.remove());
+        selectionAddress = "";
+        refreshEmpty();
+    };
+    const pendingIds = () => new Set(Array.from(resultsNode.querySelectorAll("input[type='checkbox']:checked:not(:disabled)")).map(node => Number(node.value)));
+    const updatePending = () => {
+        const ids = pendingIds();
+        selectionCount.textContent = String(ids.size);
+        selectionNode.hidden = ids.size === 0;
+        addButton.disabled = ids.size === 0;
+        chipsNode.innerHTML = availablePanels
+            .filter(panel => ids.has(Number(panel.id)))
+            .map(panel => "<span>" + escapeHtml(panel.entrance || panel.name || ("Панель " + panel.id)) + "</span>")
+            .join("");
+    };
+    const renderResults = panels => {
+        availablePanels = panels;
+        resultsNode.innerHTML = "";
+        if (!panels.length) {
+            statusNode.textContent = "У выбранного адреса нет доступных панелей.";
+            updatePending();
+            return;
+        }
+        statusNode.textContent = "Найдено панелей: " + panels.length + ".";
+        const already = selectedIds();
+        panels.forEach(panel => {
+            const label = document.createElement("label");
+            label.className = "panel-picker__item app-panel-picker__item";
+            const disabled = already.has(Number(panel.id));
+            label.innerHTML =
+                "<span class='panel-picker__body'><b>" + escapeHtml(panel.entrance || panel.name || ("Панель " + panel.id)) +
+                "</b><span>" + escapeHtml(panel.address || "") +
+                "</span><small>" + escapeHtml(panel.mac || "MAC не указан") +
+                "</small></span><span class='panel-picker__actions'><span class='badge " + (panel.status === "online" ? "success" : "muted") + "'>" +
+                escapeHtml(panel.status_name || "Не проверено") +
+                "</span><input type='checkbox' value='" + Number(panel.id) + "' aria-label='Выбрать панель'" +
+                (disabled ? " checked disabled" : "") + "></span>";
+            label.querySelector("input").addEventListener("change", updatePending);
+            resultsNode.appendChild(label);
+        });
+        updatePending();
+    };
+    const loadPanels = async (requestedAddress = searchInput.value) => {
+        const address = String(requestedAddress || "").trim();
+        resultsNode.innerHTML = "";
+        if (!address) {
+            availablePanels = [];
+            statusNode.textContent = "Сначала выберите существующий адрес.";
+            updatePending();
+            return;
+        }
+        statusNode.textContent = "Загружаем панели выбранного адреса…";
+        searchButton.disabled = true;
+        try {
+            const response = await fetch("/keys/panels-for-address?address=" + encodeURIComponent(address), {
+                headers: {"Accept": "application/json"}
+            });
+            const data = await response.json();
+            if (!response.ok || !data.ok) throw new Error(data.error || "Не удалось загрузить панели");
+            const canonicalAddress = String(data.address || "").trim();
+            if (selectionAddress && normalizeAddress(selectionAddress) !== normalizeAddress(canonicalAddress)) {
+                clearSelected();
+            }
+            loadedAddress = canonicalAddress;
+            addressInput.value = canonicalAddress;
+            searchInput.value = canonicalAddress;
+            renderResults(data.panels || []);
+        } catch (error) {
+            availablePanels = [];
+            resultsNode.innerHTML = "";
+            statusNode.textContent = error.message || "Не удалось загрузить панели выбранного адреса.";
+            updatePending();
+        } finally {
+            searchButton.disabled = false;
+        }
+    };
+    const openPicker = async () => {
+        root.hidden = false;
+        root.setAttribute("aria-hidden", "false");
+        searchInput.value = addressInput.value.trim();
+        searchInput.focus();
+        if (searchInput.value) await loadPanels(searchInput.value);
+    };
+    const closePicker = () => {
+        root.hidden = true;
+        root.setAttribute("aria-hidden", "true");
+    };
+    const addPanel = panel => {
+        if (selectedIds().has(Number(panel.id))) return;
+        if (!loadedAddress || normalizeAddress(panel.address) !== normalizeAddress(loadedAddress)) return;
+        if (selectionAddress && normalizeAddress(selectionAddress) !== normalizeAddress(loadedAddress)) {
+            clearSelected();
+        }
+        selectionAddress = loadedAddress;
+        const item = document.createElement("article");
+        item.className = "key-assignment-target-panel";
+        item.dataset.panelId = panel.id;
+        item.dataset.address = loadedAddress;
+        item.innerHTML =
+            "<label><input type='checkbox' name='target_panel_ids' value='" + Number(panel.id) +
+            "' checked><span><b>" + escapeHtml(panel.entrance || panel.name || "Точка доступа") +
+            "</b><small>" + escapeHtml(panel.address || "") +
+            "</small><small>" + escapeHtml(panel.mac || "MAC не указан") +
+            "</small></span></label><button type='button' data-remove-manual-panel title='Удалить из выбора' aria-label='Удалить из выбора'>×</button>";
+        item.querySelector("button").addEventListener("click", () => {
+            item.remove();
+            if (selectedIds().size === 0) selectionAddress = "";
+            refreshEmpty();
+        });
+        selected.appendChild(item);
+    };
+    addButton.addEventListener("click", () => {
+        const ids = pendingIds();
+        availablePanels.filter(panel => ids.has(Number(panel.id))).forEach(addPanel);
+        refreshEmpty();
+        closePicker();
+    });
+    openButton.addEventListener("click", openPicker);
+    searchButton.addEventListener("click", () => loadPanels(searchInput.value));
+    searchInput.addEventListener("keydown", event => {
+        if (event.key !== "Enter") return;
+        event.preventDefault();
+        loadPanels(searchInput.value);
+    });
+    searchInput.addEventListener("smart-autocomplete:select", event => {
+        event.preventDefault();
+        window.setTimeout(() => loadPanels(searchInput.value), 0);
+    });
+    [document.getElementById("assignmentPanelPickerClose"), document.getElementById("assignmentPanelPickerCancel")]
+        .forEach(button => button?.addEventListener("click", closePicker));
+    root.querySelector(".panel-picker-modal__backdrop")?.addEventListener("click", closePicker);
+    addressInput.addEventListener("smart-autocomplete:select", async () => {
+        clearSelected();
+        loadedAddress = "";
+        await openPicker();
+    });
+    addressInput.addEventListener("input", () => {
+        const currentAddress = normalizeAddress(addressInput.value);
+        if (selectionAddress && currentAddress !== normalizeAddress(selectionAddress)) {
+            clearSelected();
+        }
+        if (loadedAddress && currentAddress !== normalizeAddress(loadedAddress)) {
+            loadedAddress = "";
+            availablePanels = [];
+            resultsNode.innerHTML = "";
+            statusNode.textContent = "Адрес изменён. Сначала выберите точный адрес и заново загрузите его панели.";
+            updatePending();
+        }
+    });
+    refreshEmpty();
+});
+</script>
 {% endblock %}

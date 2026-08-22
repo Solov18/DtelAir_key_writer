@@ -7,7 +7,7 @@ from tests.postgres_test_case import PostgreSQLTestCase
 
 from app.db import db
 from app.repositories import uk_repository
-from app.repositories.key_repository import search_keys_for_selection
+from app.repositories.key_repository import get_key, search_keys_for_selection
 from app.routers.search import key_picker_search
 from app.routers.uk import uk_available_keys, uk_credentials_reveal, uk_detail, uk_page
 from app.services import uk_keys
@@ -499,6 +499,22 @@ class UkRegistryTests(PostgreSQLTestCase):
         self.assertEqual(result["error_count"], 1)
         self.assertEqual(crm_call.call_count, 2)
 
+    def test_issue_key_full_external_failure_does_not_assign_key_locally(self):
+        group_id, _, _, first_link, _ = self._company_with_panels()
+        key_id = self._key("456903", "ABCDEF16")
+        with patch(
+            "app.services.uk_keys.crm_add_key_for_company",
+            return_value={"ok": False, "status": "TIMEOUT", "response": "CRM timeout"},
+        ):
+            result = uk_keys.issue_key(
+                group_id=group_id,
+                key_id=key_id,
+                panel_link_id=first_link,
+            )
+        self.assertEqual(result["status"], "ERROR")
+        self.assertEqual(uk_repository.get_issue(result["issue_id"])["status"], "pending")
+        self.assertEqual(get_key(key_id)["status"], "free")
+
     def test_issue_key_to_forty_panels(self):
         group_id = uk_repository.save_group(
             "УК на сорок панелей",
@@ -682,6 +698,7 @@ class UkRegistryTests(PostgreSQLTestCase):
         programming = uk_repository.get_programming(result["programming_id"])
         self.assertEqual(issue["status"], "pending")
         self.assertEqual(programming["status"], "dry_run")
+        self.assertEqual(get_key(dry_key)["status"], "free")
 
     def test_archive_preserves_panels_keys_and_history_but_clears_credentials(self):
         group_id, first_panel, _, first_link, _ = self._company_with_panels()

@@ -1,7 +1,7 @@
 @import url("./base.css?v=4");
 @import url("./layout.css?v=4");
 @import url("./components.css?v=10");
-@import url("./forms.css");
+@import url("./forms.css?v=2");
 @import url("./tables.css?v=2");
 @import url("./smart-search.css?v=3");
 @import url("./global-loader.css?v=2");
@@ -20,3 +20,4 @@
 @import url("./pages/users.css?v=9");
 @import url("./pages/settings.css?v=4");
 @import url("./scroll.css?v=3");
+@import url("./desktop-density.css?v=1");

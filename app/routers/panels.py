@@ -208,18 +208,6 @@ def panels_monitor_start(request: Request):
             status_code=409,
         )
     state, created = request_monitor_cycle(_user_name(request))
-    log_event(
-        request=request,
-        action="panel_monitor_request",
-        object_type="Панели",
-        object_name="Общий мониторинг",
-        details=(
-            "Поставлен в очередь общий цикл мониторинга"
-            if created
-            else "Используется уже запущенный общий цикл мониторинга"
-        ),
-        status="success",
-    )
     return JSONResponse(
         jsonable_encoder({
             "ok": True,
@@ -315,18 +303,6 @@ def panel_check(request: Request, panel_id: int):
     result = check_panel(panel)
     update_panel_api_status(panel_id, result)
     updated_panel = get_panel_by_id(panel_id)
-    log_event(
-        request=request,
-        action="panel_check",
-        object_type="Панель",
-        object_name=panel.get("name") or str(panel_id),
-        details=f"Ручная проверка панели ID {panel_id}",
-        status="success" if result.get("status") == "online" else "warning",
-        panel_id=panel_id,
-        address=panel.get("address", ""),
-        panel_name=panel.get("name", ""),
-        mac=panel.get("mac", ""),
-    )
     return JSONResponse(
         jsonable_encoder(
             {

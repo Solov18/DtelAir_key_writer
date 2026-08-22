@@ -441,8 +441,14 @@ class PresentationTests(unittest.TestCase):
         self.assertIn("data-known-panels", template)
         self.assertIn("'partial': 'Выполнено частично'", key_write_ui)
         self.assertIn("Уже записан на всех выбранных панелях", script)
-        self.assertIn("Его текущее назначение в CRM будет заменено новым", script)
-        self.assertIn("без изменения текущего назначения", script)
+        self.assertIn(
+            "Старое назначение будет удалено из CRM, после чего ключ будет записан",
+            script,
+        )
+        self.assertIn(
+            "Текущее назначение сохранится. Ключ будет дополнительно записан",
+            script,
+        )
         shared_styles = Path("app/static/css/components.css").read_text(encoding="utf-8")
         self.assertIn(".key-write-actions", shared_styles)
         self.assertIn("body.light-theme", styles)
@@ -453,6 +459,11 @@ class PresentationTests(unittest.TestCase):
         self.assertIn('id="messageManualPanelList"', template)
         self.assertIn('id="messagePanelPickerSelection"', template)
         self.assertIn('id="messagePanelPickerChips"', template)
+        self.assertIn('class="message-key-list"', template)
+        self.assertIn('class="message-key-check__occupied"', template)
+        self.assertIn("После выбора проверка обновится автоматически", template)
+        self.assertNotIn('class="table-scroll small-scroll message-key-table"', template)
+        self.assertIn(".message-keys-card { order: -1; }", styles)
         self.assertIn("Добавлена вручную", script)
         self.assertIn("Панель уже выбрана", picker_script)
         self.assertIn("grid-template-columns: repeat(2", styles)
@@ -540,6 +551,34 @@ class PresentationTests(unittest.TestCase):
         self.assertNotIn("new AbortController()", manual)
         self.assertNotIn("async function searchPanels", message)
         self.assertNotIn("async function searchPanels", manual)
+
+    def test_key_assignment_picker_is_scoped_to_selected_address(self):
+        template = Path("app/templates/key_detail.html").read_text(encoding="utf-8")
+        styles = Path("app/static/css/pages/keys_log.css").read_text(encoding="utf-8")
+
+        self.assertIn("/keys/panels-for-address?address=", template)
+        self.assertIn("assignmentPanelSearch", template)
+        self.assertNotIn('id="assignmentPanelSearch" placeholder="Сначала выберите адрес в форме" readonly', template)
+        self.assertIn('data-smart-search="panels"', template)
+        self.assertIn('searchInput.addEventListener("keydown"', template)
+        self.assertIn('searchInput.addEventListener("smart-autocomplete:select"', template)
+        self.assertIn("panel-picker__body", template)
+        self.assertIn("panel-picker__actions", template)
+        self.assertIn('name=\'target_panel_ids\'', template)
+        self.assertIn('smart-autocomplete:select', template)
+        self.assertIn("selected.querySelectorAll(\".key-assignment-target-panel\")", template)
+        self.assertIn("normalizeAddress", template)
+        self.assertIn("selectionAddress", template)
+        self.assertIn('item.dataset.address = loadedAddress', template)
+        self.assertIn('addressInput.addEventListener("input"', template)
+        self.assertIn(".key-assignment-target-panel > label", styles)
+        self.assertIn('action="/keys/{{ key.id }}/replace"', template)
+        self.assertIn('name="new_key_query"', template)
+        self.assertIn('name="final_old_status"', template)
+        self.assertIn(
+            "Старый ключ будет выведен из использования, а новый получит выбранные активные доступы.",
+            template,
+        )
 
     def test_remote_smart_search_contract_is_centralized(self):
         smart_search = Path("app/static/js/smart-search.js").read_text(encoding="utf-8")

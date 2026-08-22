@@ -4,7 +4,7 @@
     --panels-border: rgba(0, 169, 255, .25);
     --panels-row: rgba(2, 20, 35, .72);
     display: grid;
-    gap: 18px;
+    gap: var(--page-gap, 18px);
     min-width: 0;
 }
 
@@ -82,7 +82,7 @@
 
 .panels-stats {
     display: grid;
-    grid-template-columns: repeat(8, minmax(118px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
     gap: 12px;
 }
 
@@ -153,6 +153,9 @@ a.panel-stat.is-error.is-active {
 .panel-stat.is-offline .panel-stat-icon { color: #f3ad32; border-color: rgba(243,173,50,.35); background: rgba(243,173,50,.08); }
 .panel-stat.is-error .panel-stat-icon { color: #ff5c70; border-color: rgba(255,92,112,.35); background: rgba(255,92,112,.08); }
 .panel-stat.is-sip .panel-stat-icon { color: #ff5c70; border-color: rgba(255,92,112,.35); background: rgba(255,92,112,.08); }
+.panel-stat.is-voltage .panel-stat-icon { color: #ffb626; border-color: rgba(255,182,38,.38); background: rgba(255,182,38,.09); }
+.panel-stat.is-temperature .panel-stat-icon,
+.panel-stat.is-uptime .panel-stat-icon { color: #ff6377; border-color: rgba(255,99,119,.38); background: rgba(255,99,119,.09); }
 .panel-stat.is-disabled .panel-stat-icon { color: #8aa1b7; border-color: rgba(138,161,183,.3); background: rgba(138,161,183,.07); }
 .panel-stat.is-unchecked .panel-stat-icon { color: #7da5c3; border-color: rgba(125,165,195,.32); background: rgba(125,165,195,.08); }
 .panel-stat.is-stale .panel-stat-icon { color: #d497ff; border-color: rgba(194,113,255,.3); background: rgba(194,113,255,.08); }
@@ -233,12 +236,12 @@ a.panel-stat.is-error.is-active {
     overflow: auto;
     overscroll-behavior: contain;
 }
-.panels-table { width: 100%; min-width: 1280px; border-collapse: collapse; font-size: 13px; }
+.panels-table { width: 100%; min-width: 1040px; border-collapse: collapse; font-size: var(--font-size-ui, 13px); table-layout: auto; }
 .panels-table th {
     position: sticky;
     top: 0;
     z-index: 4;
-    padding: 12px 11px;
+    padding: 10px 9px;
     color: var(--muted);
     border-bottom: 1px solid var(--panels-border);
     background: rgba(3, 23, 41, .96);
@@ -250,8 +253,8 @@ a.panel-stat.is-error.is-active {
     white-space: nowrap;
 }
 .panels-table td {
-    height: 56px;
-    padding: 9px 11px;
+    height: var(--table-row-height, 56px);
+    padding: 8px 9px;
     color: var(--text);
     border-bottom: 1px solid rgba(102, 166, 205, .12);
     background: var(--panels-row);
@@ -272,6 +275,13 @@ a.panel-stat.is-error.is-active {
 .panel-power-row b.is-alert { color: #ff6377 !important; }
 .panel-voltage.is-missing,
 .panel-power-row b.is-missing { color: var(--muted) !important; }
+.panel-temperature.is-alert,
+.panel-uptime.is-alert,
+.panel-health dd.is-alert { color: #ff6377 !important; font-weight: 900; }
+.panel-temperature.is-normal,
+.panel-uptime.is-normal { color: var(--text); }
+.panel-temperature.is-missing,
+.panel-uptime.is-missing { color: var(--muted); }
 .panel-stale-flag {
     display: block;
     margin-top: 4px;

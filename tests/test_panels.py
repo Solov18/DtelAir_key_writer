@@ -13,6 +13,7 @@ from starlette.requests import Request
 from tests.postgres_test_case import PostgreSQLTestCase
 
 import app.db as database
+from app.panel_health import SUPPLY_VOLTAGE_MAX, SUPPLY_VOLTAGE_MIN
 from app.repositories import panel_repository
 from app.routers import panels as panels_router
 from app.services.importer import import_panels_excel
@@ -256,6 +257,37 @@ class PanelRepositoryTests(PostgreSQLTestCase):
         self.assertEqual(page["total"], 1)
         self.assertEqual(page["items"][0]["id"], low["id"])
 
+    def test_timeout_is_presented_and_counted_as_offline(self):
+        timed_out = self._create("Полтавская 21А", "Корпус 1", "08:13:CD:00:41:03", "10.0.41.3")
+        panel_repository.update_panel_api_status(
+            timed_out["id"], {"status": "timeout", "last_error": "Тайм-аут"}
+        )
+
+        item = panel_repository.get_panel_by_id(timed_out["id"])
+        page = panel_repository.get_panel_page(status="offline")
+
+        self.assertEqual(item["network_status"], "offline")
+        self.assertEqual(item["diagnostic_status"], "timeout")
+        self.assertEqual(item["status_name"], "Нет связи")
+        self.assertEqual(page["total"], 1)
+        self.assertEqual(panel_repository.get_panel_statistics()["offline"], 1)
+
+    def test_temperature_and_uptime_alert_filters_and_tones(self):
+        hot = self._create("Полтавская 21А", "Горячая", "08:13:CD:00:41:04", "10.0.41.4")
+        short = self._create("Полтавская 21А", "После рестарта", "08:13:CD:00:41:05", "10.0.41.5")
+        long = self._create("Полтавская 21А", "Давно работает", "08:13:CD:00:41:06", "10.0.41.6")
+        panel_repository.update_panel_api_status(hot["id"], {"status": "online", "temperature": 100.1, "uptime_seconds": 3600})
+        panel_repository.update_panel_api_status(short["id"], {"status": "sip_auth_error", "sip_registered": False, "temperature": 70, "uptime_seconds": 599})
+        panel_repository.update_panel_api_status(long["id"], {"status": "online", "temperature": 80, "uptime_seconds": 30 * 86400 + 1})
+
+        hot_item = panel_repository.get_panel_by_id(hot["id"])
+        self.assertEqual(hot_item["temperature_tone"], "alert")
+        self.assertEqual(panel_repository.get_panel_page(status="temperature_alert")["total"], 1)
+        self.assertEqual(panel_repository.get_panel_page(status="uptime_alert")["total"], 2)
+        stats = panel_repository.get_panel_statistics()
+        self.assertEqual(stats["temperature_alert"], 1)
+        self.assertEqual(stats["uptime_alert"], 2)
+
     def test_unchecked_and_voltage_boundaries_are_not_reported_as_offline(self):
         unchecked = self._create("Мира 8", "1", "08:13:CD:00:00:07")
         item = panel_repository.get_panel_by_id(unchecked["id"])
@@ -265,10 +297,10 @@ class PanelRepositoryTests(PostgreSQLTestCase):
 
         for value, expected in (
             (None, "missing"),
-            (12.79, "alert"),
-            (12.8, "normal"),
-            (13.5, "normal"),
-            (13.51, "alert"),
+            (SUPPLY_VOLTAGE_MIN - 0.01, "alert"),
+            (SUPPLY_VOLTAGE_MIN, "normal"),
+            (SUPPLY_VOLTAGE_MAX, "normal"),
+            (SUPPLY_VOLTAGE_MAX + 0.01, "alert"),
         ):
             row = {**unchecked, "supply_voltage": value}
             normalized = panel_repository.normalize_panel_row(row)
@@ -394,8 +426,9 @@ class PanelApiTests(unittest.TestCase):
             patch.object(panel_api.settings, "panel_api_password", "password"),
             patch("app.services.panel_api._http_request", side_effect=requests.Timeout()),
         ):
-            timeout_result = panel_api.check_panel(self.panel)
-        self.assertEqual(timeout_result["status"], "offline")
+            timeout_result = panel_api.check_panel(self.panel, retry_delay=0)
+        self.assertEqual(timeout_result["status"], "timeout")
+        self.assertEqual(timeout_result["attempts"], 2)
 
         with (
             patch.object(panel_api.settings, "panel_api_login", "user"),
@@ -406,7 +439,39 @@ class PanelApiTests(unittest.TestCase):
             ),
         ):
             auth_result = panel_api.check_panel(self.panel)
-        self.assertEqual(auth_result["status"], "auth_error")
+        self.assertEqual(auth_result["status"], "other_error")
+
+    def test_transient_timeout_is_retried_and_does_not_create_false_offline(self):
+        responses = [
+            requests.Timeout(),
+            self._response(payload={"deviceModel": "ISCom", "registerStatus": True}),
+            self._response(payload={"power": {"dc": 13.0}}),
+            self._response(payload={"opt": {"name": "2.5.0"}}),
+        ]
+        with (
+            patch.object(panel_api.settings, "panel_api_login", "user"),
+            patch.object(panel_api.settings, "panel_api_password", "password"),
+            patch("app.services.panel_api._http_request", side_effect=responses) as request_mock,
+        ):
+            result = panel_api.check_panel(self.panel, retry_delay=0)
+        self.assertEqual(result["status"], "online")
+        self.assertEqual(result["attempts"], 2)
+        self.assertEqual(request_mock.call_count, 4)
+
+    def test_sip_registration_failure_is_distinct_from_offline(self):
+        responses = [
+            self._response(payload={"deviceModel": "ISCom", "registerStatus": False}),
+            self._response(payload={"power": {"dc": 13.0}}),
+            self._response(payload={"opt": {"name": "2.5.0"}}),
+        ]
+        with (
+            patch.object(panel_api.settings, "panel_api_login", "user"),
+            patch.object(panel_api.settings, "panel_api_password", "password"),
+            patch("app.services.panel_api._http_request", side_effect=responses),
+        ):
+            result = panel_api.check_panel(self.panel, retry_delay=0)
+        self.assertEqual(result["status"], "sip_auth_error")
+        self.assertFalse(result["sip_registered"])
 
     def test_snapshot_and_reboot_use_documented_endpoints(self):
         snapshot = self._response(
@@ -439,6 +504,8 @@ class PanelApiTests(unittest.TestCase):
         self.assertNotIn("<th>Последний онлайн</th>", source)
         self.assertNotIn('<img src="/panels/', source)
         self.assertIn("loadPanelSnapshot", source)
+        script = Path("app/static/js/panels.js").read_text(encoding="utf-8")
+        self.assertIn("if (!snapshotButton.disabled) loadSelectedSnapshot()", script)
 
 
 if __name__ == "__main__":

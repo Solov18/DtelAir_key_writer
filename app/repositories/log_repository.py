@@ -38,6 +38,7 @@ ACTION_NAMES = {
     "key_assignment_update": "Изменение назначения ключа",
     "key_status_change": "Изменение статуса ключа",
     "key_release": "Освобождение ключа",
+    "key_panel_delete": "Удаление записи ключа из CRM",
     "write_free_key": "Запись свободного ключа",
     "reassign_to_new_address": "Переназначение ключа",
     "add_selected_panels": "Дополнительная запись ключа",
@@ -74,6 +75,54 @@ ACTION_NAMES = {
     "uk_key_unlink": "Удаление учётной связи ключа УК",
     "uk_key_remove_from_panel": "Удаление ключа УК из CRM панели",
 }
+
+
+# The dashboard is an operational summary, not a second copy of the audit
+# journal.  Keep only user-visible changes to keys and the panel registry here;
+# background checks, monitor cycles and connection diagnostics remain
+# available in the full journal.
+DASHBOARD_ACTIONS = (
+    "resident_manual",
+    "resident",
+    "message",
+    "uk",
+    "employee",
+    "import_keys",
+    "legacy_issued_import",
+    "legacy_free_import",
+    "key_type_create",
+    "key_type_update",
+    "keys_prepare",
+    "key_update",
+    "key_assignment_update",
+    "key_status_change",
+    "key_release",
+    "key_panel_delete",
+    "write_free_key",
+    "reassign_to_new_address",
+    "add_selected_panels",
+    "key_write_decision",
+    "employee_key_issue",
+    "employee_key_close",
+    "employee_key_remove",
+    "uk_key_program",
+    "uk_key_unlink",
+    "uk_key_remove_from_panel",
+    "panel_create",
+    "panel_import",
+    "import_panels",
+)
+
+# Read-only diagnostics are retained in the database for technical audit, but
+# are deliberately hidden from the operator journal. They otherwise displace
+# actual key and registry changes with repetitive monitor rows.
+JOURNAL_NOISE_ACTIONS = (
+    "panel_check",
+    "panel_monitor_request",
+    "panel_status_refresh",
+    "settings_crm_check",
+    "settings_panel_api_check",
+)
 
 OBJECT_TYPE_NAMES = {
     "user": "Пользователь",
@@ -125,8 +174,9 @@ def _build_operation_filters(
     status: str | None = None,
     search: str | None = None,
 ) -> tuple[str, list[object]]:
-    conditions: list[str] = []
-    params: list[object] = []
+    noise_placeholders = ", ".join("?" for _ in JOURNAL_NOISE_ACTIONS)
+    conditions: list[str] = [f"action NOT IN ({noise_placeholders})"]
+    params: list[object] = list(JOURNAL_NOISE_ACTIONS)
 
     start_date = _iso_date(date_from)
     end_date = _iso_date(date_to)
@@ -421,8 +471,10 @@ def get_operation_actions() -> list[dict]:
             SELECT DISTINCT action
             FROM operation_log
             WHERE COALESCE(action, '') <> ''
+              AND action NOT IN (?, ?, ?, ?, ?)
             ORDER BY action
-            """
+            """,
+            JOURNAL_NOISE_ACTIONS,
         ).fetchall()
     items = [
         {"value": str(row[0]), "label": ACTION_NAMES.get(str(row[0]), str(row[0]))}
@@ -436,7 +488,20 @@ def get_last_operations(limit: int = 500) -> list[dict]:
 
 
 def get_recent_operations(limit: int = 5) -> list[dict]:
-    return get_last_operations(limit)
+    safe_limit = max(1, min(int(limit), 50))
+    placeholders = ", ".join("?" for _ in DASHBOARD_ACTIONS)
+    with db() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT *
+            FROM operation_log
+            WHERE action IN ({placeholders})
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?
+            """,
+            (*DASHBOARD_ACTIONS, safe_limit),
+        ).fetchall()
+    return [normalize_operation_row(dict(row)) for row in rows]
 
 
 def get_employee_operations(employee_id: int, limit: int = 100) -> list[dict]:

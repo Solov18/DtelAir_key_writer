@@ -11,12 +11,13 @@ from app.services.panels import (
     get_panels,
     split_panel_address,
 )
-from app.services.crm import crm_add_key
+from app.services.crm import crm_add_key, crm_remove_key
 from app.services.writer import write_key_to_panels
 from app.services.key_write_context import (
     describe_key_write_context,
     enrich_key_write_rows,
     get_key_write_context,
+    key_write_state_token,
     resolve_key_write_decision,
 )
 from app.services.key_write_models import (

@@ -7,13 +7,21 @@ from app.search_utils import normalize_search_text
 from app.panel_health import (
     SUPPLY_VOLTAGE_MAX,
     SUPPLY_VOLTAGE_MIN,
+    TEMPERATURE_ALERT_C,
+    UPTIME_ALERT_MAX_SECONDS,
+    UPTIME_ALERT_MIN_SECONDS,
     supply_voltage_tone,
+    temperature_tone,
+    uptime_tone,
 )
 
 
 PANEL_STATUS_LABELS = {
     "online": "В сети",
     "offline": "Нет связи",
+    "timeout": "Тайм-аут",
+    "sip_auth_error": "Ошибка SIP-авторизации",
+    "other_error": "Другая ошибка",
     "auth_error": "Ошибка доступа",
     "error": "Ошибка API",
     "no_ip": "Нет IP",
@@ -26,6 +34,9 @@ PANEL_STATUS_LABELS = {
 PANEL_STATUS_TONES = {
     "online": "success",
     "offline": "warning",
+    "timeout": "warning",
+    "sip_auth_error": "error",
+    "other_error": "error",
     "auth_error": "error",
     "error": "error",
     "no_ip": "muted",
@@ -80,13 +91,23 @@ def normalize_panel_row(
         status = item.get("api_status") or "unknown"
     if status not in PANEL_STATUS_LABELS:
         status = "error"
-    item["network_status"] = status
-    item["status_name"] = PANEL_STATUS_LABELS[status]
-    item["status_tone"] = PANEL_STATUS_TONES[status]
+    # A timeout means that the panel could not be reached.  Keep the persisted
+    # diagnostic status for support, but present it consistently as offline.
+    display_status = "offline" if status == "timeout" else status
+    item["network_status"] = display_status
+    item["diagnostic_status"] = status
+    item["status_name"] = PANEL_STATUS_LABELS[display_status]
+    item["status_tone"] = PANEL_STATUS_TONES[display_status]
     item["uptime_text"] = format_uptime(item.get("uptime_seconds"))
     item["voltage_tone"] = _voltage_tone(item.get("supply_voltage"))
+    item["temperature_tone"] = temperature_tone(item.get("temperature"))
+    item["uptime_tone"] = uptime_tone(
+        item.get("uptime_seconds"),
+        is_reachable=status in {"online", "sip_auth_error"},
+    )
     item["is_stale"] = bool(
         item.get("enabled")
+        and display_status == "online"
         and item.get("last_checked_at")
         and _is_stale(item.get("last_checked_at"), stale_after_seconds)
     )
@@ -262,14 +283,14 @@ def get_panel_statistics(stale_after_seconds: int = 600) -> dict:
             SELECT
                 COUNT(*) AS total,
                 SUM(CASE WHEN enabled = 1 AND last_checked_at IS NOT NULL AND api_status = 'online' THEN 1 ELSE 0 END) AS online,
-                SUM(CASE WHEN enabled = 1 AND last_checked_at IS NOT NULL AND api_status = 'offline' THEN 1 ELSE 0 END) AS offline,
-                SUM(CASE WHEN enabled = 1 AND last_checked_at IS NOT NULL AND api_status IN ('auth_error', 'error', 'no_ip', 'not_configured') THEN 1 ELSE 0 END) AS errors,
+                SUM(CASE WHEN enabled = 1 AND last_checked_at IS NOT NULL AND api_status IN ('offline', 'timeout') THEN 1 ELSE 0 END) AS offline,
+                SUM(CASE WHEN enabled = 1 AND last_checked_at IS NOT NULL AND api_status IN ('other_error', 'auth_error', 'error', 'no_ip', 'not_configured') THEN 1 ELSE 0 END) AS errors,
                 SUM(CASE WHEN enabled = 0 THEN 1 ELSE 0 END) AS disabled,
                 SUM(
                     CASE
                         WHEN enabled = 1
                          AND last_checked_at IS NOT NULL
-                         AND sip_registered = 0
+                         AND (api_status = 'sip_auth_error' OR sip_registered = 0)
                         THEN 1 ELSE 0
                     END
                 ) AS sip_failed,
@@ -284,14 +305,25 @@ def get_panel_statistics(stale_after_seconds: int = 600) -> dict:
                     CASE
                         WHEN enabled = 1
                          AND last_checked_at IS NOT NULL
+                         AND api_status = 'online'
                          AND last_checked_at < CURRENT_TIMESTAMP - (? * INTERVAL '1 second')
                         THEN 1 ELSE 0
                     END
                 ) AS stale,
+                SUM(CASE WHEN enabled = 1 AND last_checked_at IS NOT NULL AND supply_voltage IS NOT NULL AND supply_voltage NOT BETWEEN ? AND ? THEN 1 ELSE 0 END) AS voltage_alert,
+                SUM(CASE WHEN enabled = 1 AND last_checked_at IS NOT NULL AND temperature > ? THEN 1 ELSE 0 END) AS temperature_alert,
+                SUM(CASE WHEN enabled = 1 AND last_checked_at IS NOT NULL AND api_status IN ('online', 'sip_auth_error') AND uptime_seconds IS NOT NULL AND (uptime_seconds < ? OR uptime_seconds > ?) THEN 1 ELSE 0 END) AS uptime_alert,
                 MAX(last_checked_at) AS last_checked_at
             FROM panels
             """,
-            (max(30, int(stale_after_seconds)),),
+            (
+                max(30, int(stale_after_seconds)),
+                SUPPLY_VOLTAGE_MIN,
+                SUPPLY_VOLTAGE_MAX,
+                TEMPERATURE_ALERT_C,
+                UPTIME_ALERT_MIN_SECONDS,
+                UPTIME_ALERT_MAX_SECONDS,
+            ),
         ).fetchone()
     result = dict(row)
     for key in (
@@ -303,6 +335,9 @@ def get_panel_statistics(stale_after_seconds: int = 600) -> dict:
         "sip_failed",
         "unchecked",
         "stale",
+        "voltage_alert",
+        "temperature_alert",
+        "uptime_alert",
     ):
         result[key] = int(result.get(key) or 0)
     result["online_percent"] = (
@@ -345,6 +380,43 @@ def get_panel_filter_options() -> dict:
         "address_options": [(value, value) for value in addresses],
         "entrance_options": [(value, value) for value in entrances],
     }
+
+
+def resolve_exact_panel_address(address: str) -> str | None:
+    """Return the canonical registry address for an exact normalized match."""
+    clean_address = (address or "").strip()
+    if not clean_address:
+        return None
+    with db() as conn:
+        row = conn.execute(
+            """
+            SELECT MIN(address) AS address
+            FROM panels
+            WHERE SMART_NORM(address) = SMART_NORM(?)
+              AND BTRIM(COALESCE(address, '')) <> ''
+            """,
+            (clean_address,),
+        ).fetchone()
+    return str(row[0]) if row and row[0] else None
+
+
+def get_panels_for_exact_address(address: str) -> list[dict]:
+    """Return enabled panels belonging to exactly one registry address."""
+    canonical = resolve_exact_panel_address(address)
+    if not canonical:
+        return []
+    with db() as conn:
+        rows = conn.execute(
+            """
+            SELECT *
+            FROM panels
+            WHERE enabled = 1
+              AND SMART_NORM(address) = SMART_NORM(?)
+            ORDER BY entrance, name, id
+            """,
+            (canonical,),
+        ).fetchall()
+    return [normalize_panel_row(row) for row in rows]
 
 
 def get_panel_page(
@@ -394,17 +466,24 @@ def get_panel_page(
     elif status == "online":
         conditions.append("enabled = 1 AND last_checked_at IS NOT NULL AND api_status = 'online'")
     elif status == "offline":
-        conditions.append("enabled = 1 AND last_checked_at IS NOT NULL AND api_status = 'offline'")
+        conditions.append("enabled = 1 AND last_checked_at IS NOT NULL AND api_status IN ('offline', 'timeout')")
+    elif status == "timeout":
+        conditions.append("enabled = 1 AND last_checked_at IS NOT NULL AND api_status = 'timeout'")
+    elif status == "sip_auth_error":
+        conditions.append("enabled = 1 AND last_checked_at IS NOT NULL AND api_status = 'sip_auth_error'")
+    elif status == "other_error":
+        conditions.append("enabled = 1 AND last_checked_at IS NOT NULL AND api_status = 'other_error'")
     elif status == "error":
         conditions.append(
             "enabled = 1 AND last_checked_at IS NOT NULL "
-            "AND api_status IN ('auth_error', 'error', 'no_ip', 'not_configured')"
+            "AND api_status IN ('other_error', 'auth_error', 'error', 'no_ip', 'not_configured')"
         )
     elif status == "unchecked":
         conditions.append("enabled = 1 AND last_checked_at IS NULL")
     elif status == "stale":
         conditions.append(
             "enabled = 1 AND last_checked_at IS NOT NULL "
+            "AND api_status = 'online' "
             "AND last_checked_at < CURRENT_TIMESTAMP - (? * INTERVAL '1 second')"
         )
         params.append(max(30, int(stale_after_seconds)))
@@ -415,10 +494,21 @@ def get_panel_page(
             "AND supply_voltage NOT BETWEEN ? AND ?"
         )
         params.extend([SUPPLY_VOLTAGE_MIN, SUPPLY_VOLTAGE_MAX])
+    elif status == "temperature_alert":
+        conditions.append(
+            "enabled = 1 AND last_checked_at IS NOT NULL AND temperature > ?"
+        )
+        params.append(TEMPERATURE_ALERT_C)
+    elif status == "uptime_alert":
+        conditions.append(
+            "enabled = 1 AND last_checked_at IS NOT NULL AND api_status IN ('online', 'sip_auth_error') "
+            "AND uptime_seconds IS NOT NULL AND (uptime_seconds < ? OR uptime_seconds > ?)"
+        )
+        params.extend([UPTIME_ALERT_MIN_SECONDS, UPTIME_ALERT_MAX_SECONDS])
     elif status == "sip_error":
         conditions.append(
             "enabled = 1 AND last_checked_at IS NOT NULL "
-            "AND sip_registered = 0"
+            "AND (api_status = 'sip_auth_error' OR sip_registered = 0)"
         )
 
     where_sql = " AND ".join(conditions)
@@ -504,7 +594,7 @@ def update_panel_api_status(panel_id: int, result: dict) -> None:
     status = result.get("status", "error")
     last_online_sql = (
         "CURRENT_TIMESTAMP"
-        if status == "online"
+        if status in {"online", "sip_auth_error"}
         else "last_online_at"
     )
     sip_registered = result.get("sip_registered")
